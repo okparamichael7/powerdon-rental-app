@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatTime, formatNumber } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/volt/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useDashboardStats, useSessions, useStations } from '@/hooks/use-services';
@@ -14,10 +12,6 @@ import {
   Euro, 
   Gift, 
   Radio, 
-  TrendingUp, 
-  Clock,
-  ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -419,51 +413,35 @@ export default function AdminOverviewPage() {
       )}
 
       {/* Real-time Activity Feed */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold">Live Activity</CardTitle>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs text-muted-foreground">Real-time</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {[
-              { type: 'rental_start', user: 'alex@email.com', station: 'A-001', time: '2 min ago', icon: Zap },
-              { type: 'return', user: 'maria@email.com', station: 'B-003', time: '5 min ago', icon: Radio },
-              { type: 'reward', user: 'john@email.com', station: '-', time: '8 min ago', icon: Gift },
-              { type: 'rental_start', user: 'sam@email.com', station: 'A-002', time: '12 min ago', icon: Zap },
-              { type: 'return', user: 'lisa@email.com', station: 'C-001', time: '15 min ago', icon: Radio },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                <div className={`p-1.5 rounded-lg ${
-                  activity.type === 'rental_start' ? 'bg-blue-50' :
-                  activity.type === 'return' ? 'bg-emerald-50' : 'bg-amber-50'
-                }`}>
-                  <activity.icon size={14} className={
-                    activity.type === 'rental_start' ? 'text-blue-600' :
-                    activity.type === 'return' ? 'text-emerald-600' : 'text-amber-600'
-                  } />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">
-                    {activity.type === 'rental_start' && `New rental started by ${activity.user}`}
-                    {activity.type === 'return' && `Power bank returned by ${activity.user}`}
-                    {activity.type === 'reward' && `Reward claimed by ${activity.user}`}
-                  </p>
-                  {activity.station !== '-' && (
-                    <p className="text-xs text-muted-foreground">Station {activity.station}</p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground flex-shrink-0">{activity.time}</span>
+      <div>
+        <div className="flex items-baseline justify-between mb-6">
+          <h2 className="text-sm font-medium text-foreground">Live Activity</h2>
+          <span className="text-xs text-muted-foreground">Real-time</span>
+        </div>
+        <div className="space-y-0">
+          {[
+            { type: 'rental_start', user: 'alex@email.com', station: 'A-001', time: '2m' },
+            { type: 'return', user: 'maria@email.com', station: 'B-003', time: '5m' },
+            { type: 'reward', user: 'john@email.com', station: '-', time: '8m' },
+            { type: 'rental_start', user: 'sam@email.com', station: 'A-002', time: '12m' },
+            { type: 'return', user: 'lisa@email.com', station: 'C-001', time: '15m' },
+          ].map((activity, index) => (
+            <div key={index} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground">
+                  {activity.type === 'rental_start' && 'Rental started'}
+                  {activity.type === 'return' && 'Power bank returned'}
+                  {activity.type === 'reward' && 'Reward claimed'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {activity.user}{activity.station !== '-' && ` · ${activity.station}`}
+                </p>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <span className="text-xs text-muted-foreground">{activity.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

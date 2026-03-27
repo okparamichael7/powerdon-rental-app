@@ -181,56 +181,44 @@ function NoSessionView({
     >
       <MobileHeader subtitle="STATUS" />
       
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center mb-6"
+          className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
         >
-          <PowerBankIcon size={40} className="text-muted-foreground" />
+          <PowerBankIcon size={28} className="text-muted-foreground" />
         </motion.div>
 
-        <div className="text-center max-w-sm mb-8">
-          <h1 className="text-xl font-semibold text-foreground mb-2">No Active Rental</h1>
-          <p className="text-muted-foreground">
-            You don&apos;t have any active power bank rentals right now. Start a new rental to stay charged.
+        <div className="text-center max-w-xs mb-10">
+          <h1 className="text-lg font-medium text-foreground mb-2">No Active Rental</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Start a rental to stay charged.
           </p>
         </div>
 
-        <div className="w-full max-w-sm space-y-3">
+        <div className="w-full max-w-xs space-y-3">
           <Button 
             onClick={onStartRental}
             className="w-full h-12 text-sm font-medium"
           >
-            <PowerDonLogo size={18} />
-            Start New Rental
+            Start Rental
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="w-full h-12 text-sm font-medium"
+            className="w-full h-10 text-sm"
           >
             {isRefreshing ? (
               <>
-                <Spinner className="w-5 h-5" />
-                Refreshing...
+                <Spinner className="w-4 h-4" />
+                Refreshing
               </>
             ) : (
-              <>
-                <RefreshIcon size={18} className="animate-none" />
-                Refresh Status
-              </>
+              'Refresh'
             )}
           </Button>
-        </div>
-
-        <div className="mt-8 p-4 bg-muted rounded-lg w-full max-w-sm">
-          <p className="text-sm text-muted-foreground text-center">
-            <span className="font-medium text-foreground">Looking for your rental?</span>
-            <br />
-            Make sure you&apos;re using the same email address you registered with.
-          </p>
         </div>
       </main>
     </motion.div>
@@ -281,70 +269,45 @@ function ActiveSessionView({
     >
       <MobileHeader subtitle={`${session.campaignName.toUpperCase()} • ACTIVE`} />
       
-      <main className="flex-1 px-5 py-6 space-y-6">
+      <main className="flex-1 px-6 py-8 space-y-8">
         {/* Connection Status Banner */}
         {!isOnline && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-3"
-          >
-            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <XCircleIcon size={16} className="text-amber-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800">Connection Lost</p>
-              <p className="text-xs text-amber-600">Your rental continues. Data will sync when reconnected.</p>
-            </div>
-          </motion.div>
+          <div className="bg-muted rounded-md px-4 py-3 flex items-center gap-3">
+            <XCircleIcon size={16} className="text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Offline - data will sync when reconnected</p>
+          </div>
         )}
 
         {/* Status Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center"
+          className="text-center pt-4"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full mb-4">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-medium uppercase tracking-wide">Rental Active</span>
-          </div>
-          <h1 className="text-4xl font-bold text-foreground tabular-nums">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Active</p>
+          <h1 className="text-4xl font-medium text-foreground tabular-nums">
             {formatDuration(session.elapsedMinutes)}
           </h1>
-          <p className="text-muted-foreground mt-1">Session in progress</p>
         </motion.div>
 
-        {/* Power Bank Card */}
+        {/* Power Bank Info */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg p-5 text-white"
+          className="bg-foreground text-background rounded-md p-5"
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-medium tracking-wide text-white/60 uppercase">Power Bank</p>
-              <p className="text-lg font-bold mt-1">PowerDon Pro 10000</p>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex items-center gap-1.5 text-emerald-400">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs font-medium">In use</span>
-                </div>
-              </div>
+              <p className="text-xs text-background/60 uppercase tracking-wide">Power Bank</p>
+              <p className="text-sm font-medium mt-1">PowerDon Pro</p>
             </div>
-            <PowerBankIcon size={48} className="text-white/20" />
+            <PowerBankIcon size={32} className="text-background/20" />
           </div>
           
-          <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-white/60">From Station</p>
-              <p className="font-medium">{session.stationName}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-white/60">Slot</p>
-              <p className="font-medium">{session.stationId}-{String(session.slotNumber).padStart(2, '0')}</p>
-            </div>
+          <div className="mt-4 pt-4 border-t border-background/10 flex items-center justify-between text-sm">
+            <span className="text-background/60">{session.stationName}</span>
+            <span>Slot {session.slotNumber}</span>
           </div>
         </motion.div>
 
@@ -353,48 +316,34 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card rounded-lg border border-border p-5 space-y-4"
+          className="space-y-4"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <GiftIcon size={18} className="text-primary" />
-              <span className="font-semibold text-foreground">Reward Progress</span>
-            </div>
+            <p className="text-sm font-medium text-foreground">Reward Progress</p>
             {isQualified ? (
-              <span className="text-xs font-medium px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full">
-                Qualified!
+              <span className="text-xs font-medium px-2 py-0.5 bg-foreground text-background rounded-full">
+                Qualified
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground">
-                {session.rewardThreshold - session.elapsedMinutes} min left
+              <span className="text-xs text-muted-foreground">
+                {session.rewardThreshold - session.elapsedMinutes}m left
               </span>
             )}
           </div>
           
           <div className="space-y-2">
-            <Progress value={rewardProgress} className="h-3" />
+            <Progress value={rewardProgress} className="h-1.5" />
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>0 min</span>
-              <span className="text-primary font-medium">{session.rewardThreshold} min goal</span>
+              <span>0m</span>
+              <span>{session.rewardThreshold}m</span>
             </div>
           </div>
 
-          <div className={`p-3 rounded-xl ${isQualified ? 'bg-emerald-50' : 'bg-secondary'}`}>
-            <p className="text-sm">
-              {isQualified ? (
-                <span className="text-emerald-700 font-medium">
-                  Congratulations! You&apos;ve qualified for a {formatCurrency(10)} merch voucher. Return your power bank to claim it.
-                </span>
-              ) : (
-                <>
-                  <span className="font-medium text-primary">Keep going!</span>{' '}
-                  <span className="text-muted-foreground">
-                    Rent for {session.rewardThreshold - session.elapsedMinutes} more minutes to earn your {formatCurrency(10)} voucher.
-                  </span>
-                </>
-              )}
+          {isQualified && (
+            <p className="text-xs text-muted-foreground">
+              Return to claim your {formatCurrency(10)} voucher.
             </p>
-          </div>
+          )}
         </motion.div>
 
         {/* Cost Summary */}
@@ -402,141 +351,48 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-card rounded-lg border border-border p-5"
+          className="space-y-3 py-4 border-t border-border"
         >
-          <h3 className="font-semibold text-foreground mb-3">Current Charges</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Rental ({formatDuration(session.elapsedMinutes)})</span>
-              <span className="font-medium text-foreground">{formatCurrency(currentCharge)}</span>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Current charge</span>
+            <span className="font-medium text-foreground tabular-nums">{formatCurrency(currentCharge)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Deposit (held)</span>
-              <span className="font-medium text-primary">{formatCurrency(session.depositAmount)}</span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Deposit held</span>
+              <span className="text-foreground tabular-nums">{formatCurrency(session.depositAmount)}</span>
             </div>
-            <div className="border-t border-border pt-2 mt-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-foreground">On return</span>
-                <span className="font-bold text-emerald-600">
-                  {formatCurrency(estimatedRefund)} refund
-                </span>
-              </div>
+            <div className="flex items-center justify-between text-sm pt-2 border-t border-border/50">
+              <span className="text-muted-foreground">Est. refund</span>
+              <span className="font-medium text-foreground tabular-nums">{formatCurrency(estimatedRefund)}</span>
             </div>
-          </div>
         </motion.div>
 
-        {/* Session Details Card */}
+        {/* Session Details */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="bg-card rounded-lg border border-border overflow-hidden"
+          className="space-y-3"
         >
-          <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Session Info</span>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">Session</p>
             <button 
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               aria-label="Refresh status"
             >
-              {isRefreshing ? (
-                <Spinner className="w-3 h-3" />
-              ) : (
-                <RefreshIcon size={12} className="animate-none" />
-              )}
-              <span>Refresh</span>
+              {isRefreshing ? <Spinner className="w-3 h-3" /> : 'Refresh'}
             </button>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Session ID</span>
-              <span className="font-mono font-medium text-foreground">{session.sessionCode}</span>
+              <span className="text-muted-foreground">ID</span>
+              <span className="font-mono text-foreground">{session.sessionCode}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Started</span>
               <span className="text-foreground">{formatTime(session.startTime)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Status</span>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-emerald-600 font-medium">Live</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Last Sync</span>
-              <span className="text-foreground">{formatTime(lastSync)}</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Session Timeline */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-card rounded-lg border border-border overflow-hidden"
-        >
-          <div className="px-4 py-3 bg-muted/50 border-b border-border">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Activity Timeline</span>
-          </div>
-          <div className="p-4">
-            <div className="space-y-4">
-              {/* Scan Event */}
-              <div className="flex gap-3">
-                <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <CheckCircleIcon size={14} className="text-emerald-600" />
-                  </div>
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
-                </div>
-                <div className="flex-1 pb-2">
-                  <p className="text-sm font-medium text-foreground">QR Code Scanned</p>
-                  <p className="text-xs text-muted-foreground">{formatTime(session.startTime)} at Station {session.stationId}</p>
-                </div>
-              </div>
-              
-              {/* Payment Event */}
-              <div className="flex gap-3">
-                <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <CheckCircleIcon size={14} className="text-emerald-600" />
-                  </div>
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
-                </div>
-                <div className="flex-1 pb-2">
-                  <p className="text-sm font-medium text-foreground">Deposit Authorized</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(session.depositAmount)} hold placed</p>
-                </div>
-              </div>
-              
-              {/* Unlock Event */}
-              <div className="flex gap-3">
-                <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <CheckCircleIcon size={14} className="text-emerald-600" />
-                  </div>
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
-                </div>
-                <div className="flex-1 pb-2">
-                  <p className="text-sm font-medium text-foreground">Power Bank Unlocked</p>
-                  <p className="text-xs text-muted-foreground">Slot {session.slotNumber} at {session.stationName}</p>
-                </div>
-              </div>
-              
-              {/* In Progress Event */}
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                  <ClockIcon size={14} className="text-primary animate-pulse" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">Rental In Progress</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDuration(session.elapsedMinutes)} elapsed • {formatCurrency(currentCharge)} accrued
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
         </motion.div>
@@ -546,17 +402,16 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45 }}
-          className="space-y-3"
+          className="space-y-3 pt-4"
         >
           <Button 
             onClick={onReturn}
             className="w-full h-12 text-sm font-medium"
           >
-            <MapPinIcon size={18} />
             Return Power Bank
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Return to any {session.campaignName} station to end your rental
+            Return at any station to end rental
           </p>
         </motion.div>
 
@@ -565,24 +420,16 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-muted/50 rounded-lg p-4"
+          className="bg-muted rounded-md p-4"
         >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-background rounded-xl flex items-center justify-center flex-shrink-0">
-              <HeadphonesIcon size={18} className="text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-foreground">Need assistance?</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Our support team is available 24/7 to help with any issues.
-              </p>
-              <button
-                onClick={onSupport}
-                className="text-sm text-primary font-medium mt-2 hover:underline"
-              >
-                Contact Support
-              </button>
-            </div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Need help?</p>
+            <button
+              onClick={onSupport}
+              className="text-sm text-foreground font-medium hover:underline"
+            >
+              Contact Support
+            </button>
           </div>
         </motion.div>
       </main>
@@ -610,18 +457,17 @@ function ReturningView({
     >
       <MobileHeader subtitle="RETURNING" />
       
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 mb-6"
+          className="w-12 h-12 mb-8"
         >
-          <RefreshIcon size={64} className="text-primary" />
+          <RefreshIcon size={48} className="text-muted-foreground" />
         </motion.div>
 
         <div className="text-center mb-8">
-          <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Processing Return</p>
-          <h1 className="text-xl font-semibold text-foreground">Verifying Return...</h1>
+          <h1 className="text-lg font-medium text-foreground">Processing return</h1>
           <p className="mt-2 text-muted-foreground">
             Please wait while we verify your power bank has been returned to the station.
           </p>

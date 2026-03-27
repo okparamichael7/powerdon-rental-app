@@ -249,22 +249,22 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
+            className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
           >
-            <XCircleIcon size={40} className="text-destructive" />
+            <XCircleIcon size={28} className="text-muted-foreground" />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-center max-w-sm"
+            className="text-center max-w-xs"
           >
-            <h1 className="text-xl font-semibold text-foreground mb-2">{config.title}</h1>
-            <p className="text-muted-foreground">{config.description}</p>
+            <h1 className="text-lg font-medium text-foreground mb-2">{config.title}</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed">{config.description}</p>
           </motion.div>
 
-          <div className="w-full max-w-sm space-y-3 mt-8">
+          <div className="w-full max-w-xs space-y-3 mt-10">
             <Button 
               onClick={handleErrorAction}
               className="w-full h-12 text-sm font-medium"
@@ -383,19 +383,19 @@ function ActiveWarningStep({
     >
       <MobileHeader />
       
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-amber-50 rounded-lg flex items-center justify-center mb-6"
+          className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
         >
-          <PowerDonLogo size={40} className="text-amber-600" />
+          <PowerDonLogo size={28} className="text-foreground" />
         </motion.div>
 
-        <div className="text-center max-w-sm mb-8">
-          <h1 className="text-xl font-semibold text-foreground mb-2">Active Rental Detected</h1>
-          <p className="text-muted-foreground">
-            You already have an active power bank rental. Would you like to view its status or continue browsing?
+        <div className="text-center max-w-xs mb-10">
+          <h1 className="text-lg font-medium text-foreground mb-2">Active Rental</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You have an active rental. View its status or continue browsing.
           </p>
         </div>
 
@@ -449,16 +449,16 @@ function LandingStep({
           />
         </motion.div>
 
-        <div className="flex-1 px-5 py-6 space-y-6">
+        <div className="flex-1 px-6 py-8 space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="text-center"
           >
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Stay charged.</h1>
-            <p className="mt-2 text-muted-foreground text-balance">
-              Rent a high-capacity power bank in seconds and never miss a moment of {station.campaignName}.
+            <h1 className="text-2xl font-medium text-foreground">Stay charged.</h1>
+            <p className="mt-2 text-sm text-muted-foreground text-balance leading-relaxed">
+              Rent a power bank in seconds.
             </p>
           </motion.div>
 
@@ -466,21 +466,19 @@ function LandingStep({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-card rounded-lg border border-border p-5"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between py-4">
               <div>
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Festival Rate</p>
-                <p className="text-xl font-semibold text-foreground">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Rate</p>
+                <p className="text-xl font-medium text-foreground mt-1">
                   {formatCurrency(station.hourlyRate)}
-                  <span className="text-base font-normal text-muted-foreground">/hr</span>
+                  <span className="text-sm font-normal text-muted-foreground">/hr</span>
                 </p>
               </div>
-              <div className="h-10 w-px bg-border" />
               <div className="text-right">
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Deposit</p>
-                <p className="text-xl font-semibold text-foreground">{formatCurrency(station.depositAmount)}</p>
-                <p className="text-xs font-medium text-primary uppercase">Refundable</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Deposit</p>
+                <p className="text-xl font-medium text-foreground mt-1">{formatCurrency(station.depositAmount)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Refundable</p>
               </div>
             </div>
           </motion.div>
@@ -489,15 +487,13 @@ function LandingStep({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-primary text-primary-foreground rounded-lg p-4"
+            className="bg-muted rounded-md p-4"
           >
             <div className="flex items-start gap-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-primary-foreground/10 rounded-xl flex-shrink-0">
-                <GiftIcon size={20} />
-              </div>
+              <GiftIcon size={18} className="text-foreground mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-semibold">{station.campaignName} Merch Reward</p>
-                <p className="text-sm text-primary-foreground/80">{station.rewardDescription}</p>
+                <p className="text-sm font-medium text-foreground">Merch Reward</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{station.rewardDescription}</p>
               </div>
             </div>
           </motion.div>
@@ -508,59 +504,38 @@ function LandingStep({
             transition={{ delay: 0.4 }}
             className="space-y-4"
           >
-            <h2 className="text-xs font-medium tracking-wider text-muted-foreground uppercase text-center">
-              How It Works
-            </h2>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {[
-                { step: 1, title: 'Scan to Start', desc: "Scan the station QR or tap 'Start' to begin your rental journey." },
-                { step: 2, title: 'Unlock Power Bank', desc: `Pick up your designated PowerDon power bank from the assigned slot.` },
-                { step: 3, title: 'Return Anywhere', desc: `Drop the bank at any ${station.campaignName} station when you're done.` },
+                { step: 1, title: 'Scan', desc: 'Start your rental' },
+                { step: 2, title: 'Unlock', desc: 'Pick up your power bank' },
+                { step: 3, title: 'Return', desc: 'Drop at any station' },
               ].map((item) => (
-                <div key={item.step} className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-foreground font-semibold text-sm flex-shrink-0">
+                <div key={item.step} className="flex items-center gap-4">
+                  <span className="w-6 h-6 rounded-full bg-foreground text-background text-xs font-medium flex items-center justify-center flex-shrink-0">
                     {item.step}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.desc}</p>
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-sm font-medium text-foreground">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="flex items-center justify-center gap-6 py-2"
-          >
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <ShieldCheckIcon size={16} />
-              <span className="text-xs font-medium uppercase tracking-wide">Secure SSL</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <PowerDonLogo size={16} />
-              <span className="text-xs font-medium uppercase tracking-wide">No Hidden Fees</span>
-            </div>
-          </motion.div>
         </div>
 
-        <div className="sticky bottom-20 p-5 pb-8 bg-gradient-to-t from-background via-background to-transparent">
+        <div className="sticky bottom-20 px-6 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
           <Button 
             onClick={onStart}
             className="w-full h-12 text-sm font-medium"
           >
             Start rental
-            <ArrowRightIcon size={18} />
+            <ArrowRightIcon size={16} />
           </Button>
-          <div className="flex items-center justify-center gap-2 mt-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-xs text-muted-foreground">
-              STATION {station.id} • {station.availableSlots} slots available
-            </span>
-          </div>
+          <p className="text-center text-xs text-muted-foreground mt-3">
+            {station.availableSlots} slots available
+          </p>
         </div>
       </main>
     </motion.div>
@@ -604,36 +579,29 @@ function InfoStep({
     >
       <MobileHeader title="Your Info" showBack onBack={onBack} />
       
-      <main className="flex-1 px-5 py-6 space-y-6">
+      <main className="flex-1 px-6 py-8 space-y-8">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Complete your profile</h1>
-          <p className="mt-1 text-muted-foreground">
-            Enter your details to start your rental at {station.campaignName}.
+          <h1 className="text-lg font-medium text-foreground">Your details</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enter your email to continue.
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border border-border p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-xl">
-              <PowerDonLogo size={24} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Active Rate</span>
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Refundable Deposit</span>
-              </div>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-lg font-bold text-foreground">{formatCurrency(station.hourlyRate)}/hour</span>
-                <span className="text-lg font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
-              </div>
-            </div>
+        <div className="flex items-center justify-between py-4 border-b border-border/50">
+          <div>
+            <p className="text-xs text-muted-foreground">Rate</p>
+            <p className="text-sm font-medium text-foreground">{formatCurrency(station.hourlyRate)}/hr</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Deposit</p>
+            <p className="text-sm font-medium text-foreground">{formatCurrency(station.depositAmount)}</p>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wide">
-              Email Address
+            <label htmlFor="email" className="block text-xs text-muted-foreground mb-2">
+              Email
             </label>
             <Input
               id="email"
@@ -641,18 +609,18 @@ function InfoStep({
               placeholder="email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={`h-14 text-base rounded-xl ${formErrors.email ? 'border-destructive' : ''}`}
+              className={formErrors.email ? 'border-destructive' : ''}
               aria-invalid={!!formErrors.email}
               aria-describedby={formErrors.email ? 'email-error' : undefined}
             />
             {formErrors.email && (
-              <p id="email-error" className="mt-1 text-sm text-destructive">{formErrors.email}</p>
+              <p id="email-error" className="mt-1.5 text-xs text-destructive">{formErrors.email}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wide">
-              Name <span className="text-muted-foreground font-normal normal-case">(optional)</span>
+            <label htmlFor="name" className="block text-xs text-muted-foreground mb-2">
+              Name <span className="text-muted-foreground/60">(optional)</span>
             </label>
             <Input
               id="name"
@@ -660,7 +628,6 @@ function InfoStep({
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-14 text-base rounded-xl"
             />
           </div>
 
@@ -670,18 +637,18 @@ function InfoStep({
                 id="terms"
                 checked={termsAccepted}
                 onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-                className="mt-1"
+                className="mt-0.5"
                 aria-invalid={!!formErrors.terms}
               />
-              <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
+              <label htmlFor="terms" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
                 I agree to the{' '}
-                <a href="#" className="text-primary underline">Terms of Service</a>
+                <a href="#" className="text-foreground underline">Terms</a>
                 {' '}and{' '}
-                <a href="#" className="text-primary underline">Privacy Policy</a>
+                <a href="#" className="text-foreground underline">Privacy Policy</a>
               </label>
             </div>
             {formErrors.terms && (
-              <p className="text-sm text-destructive ml-7">{formErrors.terms}</p>
+              <p className="text-xs text-destructive ml-7">{formErrors.terms}</p>
             )}
 
             <div className="flex items-start gap-3">
@@ -689,22 +656,22 @@ function InfoStep({
                 id="marketing"
                 checked={marketingConsent}
                 onCheckedChange={(checked) => setMarketingConsent(checked === true)}
-                className="mt-1"
+                className="mt-0.5"
               />
-              <label htmlFor="marketing" className="text-sm text-muted-foreground cursor-pointer">
-                Send me updates about rewards and exclusive offers
+              <label htmlFor="marketing" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
+                Send me updates about rewards
               </label>
             </div>
           </div>
         </div>
 
-        <div className="pt-4">
+        <div className="pt-6">
           <Button 
             onClick={onSubmit}
             className="w-full h-12 text-sm font-medium"
           >
-            Continue to Payment
-            <ArrowRightIcon size={18} />
+            Continue
+            <ArrowRightIcon size={16} />
           </Button>
         </div>
       </main>
