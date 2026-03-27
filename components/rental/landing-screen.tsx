@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { VoltLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon } from '@/components/volt/icons';
+import { PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { useRental } from '@/lib/rental-context';
 
@@ -24,20 +24,13 @@ export function LandingScreen() {
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="relative w-full aspect-[4/3] bg-gradient-to-b from-slate-900 to-slate-800 overflow-hidden"
+          className="relative w-full aspect-[4/3] overflow-hidden"
         >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative">
-              {/* Simulated power bank image */}
-              <div className="w-20 h-40 bg-gradient-to-b from-slate-700 to-slate-900 rounded-xl shadow-2xl border border-slate-600">
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                  <span className="text-slate-400 text-xs font-medium tracking-widest">VOLT</span>
-                </div>
-              </div>
-              {/* Glow effect */}
-              <div className="absolute inset-0 bg-primary/20 blur-3xl -z-10 scale-150" />
-            </div>
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/powerbanks.png-n6OHfLGwW8PS0RkEAFHCgSp1h0fhk6.jpeg"
+            alt="PowerDon power banks"
+            className="w-full h-full object-cover"
+          />
         </motion.div>
 
         {/* Content */}
@@ -109,7 +102,7 @@ export function LandingScreen() {
             <div className="space-y-4">
               {[
                 { step: 1, title: 'Scan to Start', desc: "Scan the station QR or tap 'Start' to begin your rental journey." },
-                { step: 2, title: 'Unlock Bank', desc: `Pick up your designated Volt power bank from slot ${flow.stationId}-${flow.slotNumber || '04'}.` },
+                { step: 2, title: 'Unlock Power Bank', desc: `Pick up your designated PowerDon power bank from slot ${flow.stationId}-${flow.slotNumber || '04'}.` },
                 { step: 3, title: 'Return Anywhere', desc: 'Drop the bank at any Sundance station when you\'re done.' },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-4">
@@ -137,7 +130,7 @@ export function LandingScreen() {
               <span className="text-xs font-medium uppercase tracking-wide">Secure SSL</span>
             </div>
             <div className="flex items-center gap-1.5 text-muted-foreground">
-              <VoltLogo size={16} />
+              <PowerDonLogo size={16} />
               <span className="text-xs font-medium uppercase tracking-wide">No Hidden Fees</span>
             </div>
           </motion.div>

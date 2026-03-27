@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { CheckCircleIcon, ShieldCheckIcon, WalletIcon, BuildingIcon } from '@/components/volt/icons';
+import { CheckCircleIcon, ShieldCheckIcon, WalletIcon, BuildingIcon, PowerDonLogo } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { useRental } from '@/lib/rental-context';
 
@@ -17,7 +17,7 @@ export function ReturnCompleteScreen() {
   const handleDone = () => {
     if (isQualified) {
       // Generate reward code
-      setRewardCode(`SUNDANCE-VOLT-${new Date().getFullYear()}`);
+      setRewardCode(`SUNDANCE-POWERDON-${new Date().getFullYear()}`);
       setFlow((prev) => ({ ...prev, step: 'reward' }));
     } else {
       // Reset to landing
@@ -120,7 +120,7 @@ export function ReturnCompleteScreen() {
           <div className="px-5 py-3 bg-muted/50 border-t border-border">
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <ShieldCheckIcon size={14} />
-              <span className="text-xs font-medium uppercase tracking-wide">Volt Protocol Secured</span>
+              <span className="text-xs font-medium uppercase tracking-wide">PowerDon Secured</span>
             </div>
           </div>
         </motion.div>

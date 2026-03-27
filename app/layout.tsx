@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'VOLT - Power Bank Rental',
+  title: 'PowerDon - Power Bank Rental',
   description: 'Rent a high-capacity power bank in seconds. QR-based rental and rewards platform for events and festivals.',
   generator: 'v0.app',
   icons: {

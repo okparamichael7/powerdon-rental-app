@@ -38,7 +38,7 @@
   --sidebar-border: oklch(0.92 0 0);
   --sidebar-ring: oklch(0.55 0.22 264);
   
-  /* VOLT custom tokens */
+  /* PowerDon custom tokens */
   --volt-blue: oklch(0.55 0.22 264);
   --volt-blue-light: oklch(0.92 0.04 264);
   --volt-success: oklch(0.6 0.15 160);

@@ -151,7 +151,7 @@ export const mockSessions: RentalSession[] = [
     paymentMethod: 'Apple Pay',
     paymentStatus: 'refunded',
     rewardStatus: 'issued',
-    rewardCode: 'SUNDANCE-VOLT-2024',
+    rewardCode: 'SUNDANCE-POWERDON-2024',
     campaignId: 'CMP-001',
     campaignName: 'Sundance Merch Reward',
   },
@@ -310,7 +310,7 @@ export const mockUsers: User[] = [
 export const mockRewards: Reward[] = [
   {
     id: 'RWD-001',
-    code: 'SUNDANCE-VOLT-2024',
+    code: 'SUNDANCE-POWERDON-2024',
     sessionId: 'SES-882193',
     userId: 'USR-002',
     userEmail: 'marcus.j@gmail.com',

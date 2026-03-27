@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { VoltLogo, ChevronDownIcon } from '@/components/volt/icons';
+import { PowerDonLogo, ChevronDownIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -60,8 +60,8 @@ export default function AdminLayout({
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-border">
             <Link href="/admin" className="flex items-center gap-2">
-              <VoltLogo size={28} className="text-primary" />
-              <span className="font-bold text-lg text-foreground">VOLT</span>
+              <PowerDonLogo size={28} className="text-primary" />
+              <span className="font-bold text-lg text-foreground">POWERDON</span>
               <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded">
                 Admin
               </span>

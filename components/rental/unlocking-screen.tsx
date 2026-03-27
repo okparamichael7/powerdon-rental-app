@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { VoltLogo, LightbulbIcon, XCircleIcon, HeadphonesIcon } from '@/components/volt/icons';
+import { PowerDonLogo, LightbulbIcon, XCircleIcon, HeadphonesIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { useRental } from '@/lib/rental-context';
 
@@ -78,7 +78,7 @@ export function UnlockingScreen() {
             </svg>
           </motion.div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <VoltLogo size={32} className="text-primary" />
+            <PowerDonLogo size={32} className="text-primary" />
           </div>
         </motion.div>
 
@@ -92,7 +92,7 @@ export function UnlockingScreen() {
           <p className="text-xs font-medium tracking-wider text-primary uppercase">Connecting</p>
           <h1 className="text-2xl font-bold text-foreground">Unlocking...</h1>
           <p className="text-muted-foreground">
-            Securely connecting to <span className="font-semibold text-foreground">{flow.campaignName} Node</span>.
+            Securely connecting to <span className="font-semibold text-foreground">{flow.campaignName} Charging Station</span>.
             <br />Stand by your slot.
           </p>
         </motion.div>

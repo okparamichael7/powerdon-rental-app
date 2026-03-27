@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { VoltLogo, ShieldCheckIcon, ArrowRightIcon, ClockIcon, CalendarIcon, WalletIcon } from '@/components/volt/icons';
+import { PowerDonLogo, ShieldCheckIcon, ArrowRightIcon, ClockIcon, CalendarIcon, WalletIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRental } from '@/lib/rental-context';
@@ -106,7 +106,7 @@ export function PaymentScreen() {
           <div className="flex items-center justify-between px-2 pt-2">
             {[
               { icon: ArrowRightIcon, label: 'Return Bank', active: false },
-              { icon: VoltLogo, label: 'To Station', active: false },
+              { icon: PowerDonLogo, label: 'To Station', active: false },
               { icon: WalletIcon, label: 'Instant Refund', active: true },
             ].map((step, idx) => (
               <div key={step.label} className="flex flex-col items-center gap-2">
@@ -210,7 +210,7 @@ export function PaymentScreen() {
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
             Authorize & Unlock
-            <VoltLogo size={18} />
+            <PowerDonLogo size={18} />
           </Button>
 
           <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import { BottomNav } from '@/components/volt/bottom-nav';
-import { VoltLogo, CopyIcon, CheckCircleIcon, ClockIcon, MapPinIcon, ReceiptIcon } from '@/components/volt/icons';
+import { PowerDonLogo, CopyIcon, CheckCircleIcon, ClockIcon, MapPinIcon, ReceiptIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { useRental } from '@/lib/rental-context';
 
@@ -99,7 +99,7 @@ export function RewardScreen() {
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-8 h-8 bg-background rounded flex items-center justify-center">
-                    <VoltLogo size={16} className="text-primary" />
+                    <PowerDonLogo size={16} className="text-primary" />
                   </div>
                 </div>
               </div>
@@ -163,11 +163,11 @@ export function RewardScreen() {
         >
           <div className="flex items-center gap-2">
             <div className="h-px w-8 bg-border" />
-            <VoltLogo size={12} className="text-muted-foreground" />
+            <PowerDonLogo size={12} className="text-muted-foreground" />
             <div className="h-px w-8 bg-border" />
           </div>
           <p className="text-xs text-muted-foreground font-mono tracking-wider">
-            VOLT PROTOCOL V4.2 // ENCRYPTED REWARD
+            POWERDON V4.2 // ENCRYPTED REWARD
           </p>
         </motion.div>
       </main>

@@ -1,4 +1,4 @@
-// Core domain types for VOLT rental platform
+// Core domain types for PowerDon rental platform
 
 export type SessionStatus = 'pending' | 'active' | 'completed' | 'expired' | 'failed';
 export type StationStatus = 'online' | 'offline' | 'maintenance' | 'low-battery';

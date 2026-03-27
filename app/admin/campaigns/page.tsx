@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { mockCampaigns } from '@/lib/mock-data';
 import type { Campaign } from '@/lib/types';
+import { formatDate } from '@/lib/utils';
 import { 
   Plus, 
   Edit, 
@@ -80,7 +81,7 @@ export default function CampaignsPage() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar size={14} />
                 <span>
-                  {new Date(campaign.startDate).toLocaleDateString()} - {new Date(campaign.endDate).toLocaleDateString()}
+                  {formatDate(new Date(campaign.startDate))} - {formatDate(new Date(campaign.endDate))}
                 </span>
               </div>
 

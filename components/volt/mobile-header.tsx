@@ -1,6 +1,6 @@
 'use client';
 
-import { VoltLogo, ArrowLeftIcon, HelpCircleIcon } from './icons';
+import { PowerDonLogo, ArrowLeftIcon, HelpCircleIcon } from './icons';
 import { cn } from '@/lib/utils';
 
 interface MobileHeaderProps {
@@ -35,8 +35,8 @@ export function MobileHeader({
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <VoltLogo size={24} className="text-primary" />
-            <span className="font-semibold text-primary tracking-tight">VOLT</span>
+            <PowerDonLogo size={24} className="text-primary" />
+            <span className="font-semibold text-foreground tracking-tight">POWERDON</span>
           </div>
         )}
         {title && (

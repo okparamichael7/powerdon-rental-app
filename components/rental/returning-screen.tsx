@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { VoltLogo } from '@/components/volt/icons';
+import { PowerDonLogo } from '@/components/volt/icons';
 
 export function ReturningScreen() {
   return (
@@ -46,7 +46,7 @@ export function ReturningScreen() {
             </svg>
           </motion.div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <VoltLogo size={28} className="text-primary" />
+            <PowerDonLogo size={28} className="text-primary" />
           </div>
         </motion.div>
 

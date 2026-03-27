@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/volt/status-badge';
 import { 
@@ -265,9 +266,9 @@ export default function AdminOverviewPage() {
                           <p className="font-medium text-foreground font-mono text-sm">
                             {session.sessionCode}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(session.startTime).toLocaleTimeString()}
-                          </p>
+<p className="text-xs text-muted-foreground">
+                                            {formatTime(new Date(session.startTime))}
+                                          </p>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -307,7 +308,7 @@ export default function AdminOverviewPage() {
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{session.stationName}</span>
-                    <span>{new Date(session.startTime).toLocaleTimeString()}</span>
+                    <span>{formatTime(new Date(session.startTime))}</span>
                   </div>
                 </div>
               ))}

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { VoltLogo, ArrowRightIcon, GiftIcon, ShieldCheckIcon } from '@/components/volt/icons';
+import { PowerDonLogo, ArrowRightIcon, GiftIcon, ShieldCheckIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,7 +67,7 @@ export function UserInfoScreen() {
           {/* Rate Summary */}
           <div className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border">
             <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-xl">
-              <VoltLogo size={24} className="text-primary" />
+              <PowerDonLogo size={24} className="text-primary" />
             </div>
             <div className="flex-1 flex items-center justify-between">
               <div>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import { BottomNav } from '@/components/volt/bottom-nav';
-import { VoltLogo, GiftIcon, MapPinIcon, PowerBankIcon } from '@/components/volt/icons';
+import { PowerDonLogo, GiftIcon, MapPinIcon, PowerBankIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useRental } from '@/lib/rental-context';
@@ -71,7 +71,7 @@ export function ActiveRentalScreen() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium tracking-wide text-white/60 uppercase">Power Bank</p>
-              <p className="text-lg font-bold mt-1">Volt Pro 10000</p>
+              <p className="text-lg font-bold mt-1">PowerDon Pro 10000</p>
               <div className="flex items-center gap-2 mt-2">
                 <div className="flex items-center gap-1.5 text-emerald-400">
                   <div className="w-2 h-2 rounded-full bg-emerald-400" />

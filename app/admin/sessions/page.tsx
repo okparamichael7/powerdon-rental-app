@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { mockSessions, mockTimelineEvents } from '@/lib/mock-data';
 import type { RentalSession } from '@/lib/types';
+import { formatDateTime, formatTime } from '@/lib/utils';
 import { 
   Search, 
   Filter, 
@@ -171,7 +172,7 @@ export default function SessionsPage() {
                           {session.sessionCode}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(session.startTime).toLocaleString()}
+                          {formatDateTime(new Date(session.startTime))}
                         </p>
                       </div>
                     </td>
@@ -228,7 +229,7 @@ export default function SessionsPage() {
                       {session.sessionCode}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(session.startTime).toLocaleString()}
+                      {formatDateTime(new Date(session.startTime))}
                     </p>
                   </div>
                   <StatusBadge status={session.status} size="sm" />
@@ -258,7 +259,7 @@ export default function SessionsPage() {
               <SheetHeader>
                 <SheetTitle className="font-mono">{selectedSession.sessionCode}</SheetTitle>
                 <SheetDescription>
-                  Session started {new Date(selectedSession.startTime).toLocaleString()}
+                  Session started {formatDateTime(new Date(selectedSession.startTime))}
                 </SheetDescription>
               </SheetHeader>
 
@@ -389,7 +390,7 @@ export default function SessionsPage() {
                             <div className="flex-1 pb-4">
                               <p className="text-sm font-medium text-foreground">{event.description}</p>
                               <p className="text-xs text-muted-foreground">
-                                {new Date(event.timestamp).toLocaleTimeString()}
+                                {formatTime(new Date(event.timestamp))}
                               </p>
                             </div>
                           </div>
