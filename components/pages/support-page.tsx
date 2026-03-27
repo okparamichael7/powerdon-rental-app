@@ -773,14 +773,28 @@ function ContactFormView({
           </Button>
         </motion.div>
 
+        {/* Response time and status */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="text-center text-sm text-muted-foreground"
+          className="bg-card rounded-xl border border-border p-4 space-y-3"
         >
-          <p>Average response time: &lt; 1 hour</p>
-          <p className="mt-1">Available 24/7 during festival hours</p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Avg. Response Time</span>
+            <span className="text-sm font-medium text-foreground">&lt; 1 hour</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Support Status</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-sm font-medium text-emerald-600">Online</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Queue Position</span>
+            <span className="text-sm font-medium text-foreground">~3 ahead</span>
+          </div>
         </motion.div>
       </main>
     </div>

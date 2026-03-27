@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
 import { formatDuration, formatCurrency, type UserReward } from '@/lib/session-store';
+import { formatDate } from '@/lib/utils';
 
 interface RewardsPageProps {
   isOnline: boolean;
@@ -685,7 +686,7 @@ function RedeemedDetailView({
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Redeemed</span>
               <span className="font-semibold text-foreground">
-                {reward.redeemedAt.toLocaleDateString()}
+                {formatDate(reward.redeemedAt)}
               </span>
             </div>
           )}

@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
 import { formatCurrency } from '@/lib/session-store';
+import { formatTime } from '@/lib/utils';
 
 type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
@@ -917,6 +918,9 @@ function SuccessStep({
   assignedSlot: number;
   onContinue: () => void;
 }) {
+  const sessionCode = `VR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  const startTime = new Date();
+  
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -924,7 +928,7 @@ function SuccessStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader />
+      <MobileHeader subtitle="CONFIRMED" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -936,22 +940,43 @@ function SuccessStep({
           <CheckCircleIcon size={48} className="text-emerald-600" />
         </motion.div>
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-foreground mb-2">You&apos;re all set!</h1>
           <p className="text-muted-foreground">
             Your power bank is ready. Pick it up from slot {assignedSlot} at station {station.id}.
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 w-full max-w-sm mb-8">
-          <div className="text-center">
-            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase mb-1">Collect from</p>
-            <p className="text-4xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
-            <p className="text-sm text-muted-foreground mt-1">Station {station.id} • {station.campaignName}</p>
+        {/* Slot Collection Card */}
+        <div className="bg-card rounded-2xl border border-border overflow-hidden w-full max-w-sm mb-4">
+          <div className="px-4 py-3 bg-muted/50 border-b border-border">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Collect from</span>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-xs text-emerald-600">Ready</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 text-center">
+            <p className="text-5xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
+            <p className="text-sm text-muted-foreground mt-2">Station {station.id} • {station.campaignName}</p>
           </div>
         </div>
 
-        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 w-full max-w-sm mb-8">
+        {/* Session Details */}
+        <div className="bg-muted/50 rounded-xl p-3 w-full max-w-sm mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Session ID</span>
+            <span className="font-mono font-medium text-foreground">{sessionCode}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-muted-foreground">Started</span>
+            <span className="text-foreground">{formatTime(startTime)}</span>
+          </div>
+        </div>
+
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 w-full max-w-sm mb-6">
           <div className="flex items-start gap-3">
             <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
             <p className="text-sm text-foreground">
@@ -987,6 +1012,39 @@ function ErrorStep({
   onSupport: () => void;
 }) {
   const config = errorConfigs[error];
+  const errorCode = `ERR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+
+  const troubleshootingTips: Record<ErrorType, string[]> = {
+    station_unavailable: [
+      'Check if the station LED is lit',
+      'Try scanning the QR code again',
+      'Look for another nearby station',
+    ],
+    duplicate_session: [
+      'Return your current power bank first',
+      'Check your active session in Status tab',
+    ],
+    payment_failed: [
+      'Verify your card details are correct',
+      'Ensure sufficient funds available',
+      'Try a different payment method',
+    ],
+    network: [
+      'Check your internet connection',
+      'Move closer to a WiFi access point',
+      'Wait a moment and try again',
+    ],
+    unlock_failed: [
+      'Ensure you are near the station',
+      'Try a different slot if available',
+      'Wait 10 seconds and try again',
+    ],
+    general: [
+      'Try refreshing the page',
+      'Check your internet connection',
+      'Contact support if issue persists',
+    ],
+  };
 
   return (
     <motion.div
@@ -995,7 +1053,7 @@ function ErrorStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader />
+      <MobileHeader subtitle="ERROR" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -1006,9 +1064,28 @@ function ErrorStep({
           <XCircleIcon size={40} className="text-destructive" />
         </motion.div>
 
-        <div className="text-center max-w-sm mb-8">
+        <div className="text-center max-w-sm mb-4">
           <h1 className="text-2xl font-bold text-foreground mb-2">{config.title}</h1>
           <p className="text-muted-foreground">{customMessage || config.description}</p>
+        </div>
+
+        {/* Error Reference */}
+        <div className="bg-muted/50 rounded-lg px-3 py-2 mb-4">
+          <span className="text-xs text-muted-foreground">Reference: </span>
+          <span className="font-mono text-xs text-foreground">{errorCode}</span>
+        </div>
+
+        {/* Troubleshooting Tips */}
+        <div className="bg-card rounded-xl border border-border p-4 w-full max-w-sm mb-6">
+          <p className="text-sm font-medium text-foreground mb-3">Quick troubleshooting:</p>
+          <ul className="space-y-2">
+            {troubleshootingTips[error].map((tip, index) => (
+              <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="text-primary font-medium">{index + 1}.</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="w-full max-w-sm space-y-3">
@@ -1016,6 +1093,7 @@ function ErrorStep({
             onClick={onAction}
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
+            <RefreshIcon size={18} />
             {config.action}
           </Button>
           <Button

@@ -134,16 +134,39 @@ export default function AdminOverviewPage() {
             Monitor your rental operations in real-time
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Badge variant="outline" className="gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live
+            All Systems Operational
           </Badge>
           <span className="text-sm text-muted-foreground">
             Last updated: Just now
           </span>
         </div>
       </div>
+
+      {/* Alerts Banner */}
+      {dashboardStats && dashboardStats.stationsOnline < dashboardStats.stationsTotal && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                <Radio size={18} className="text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-amber-800">Station Offline Alert</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  {dashboardStats.stationsTotal - dashboardStats.stationsOnline} station(s) currently offline. 
+                  Check the Stations page for details.
+                </p>
+              </div>
+              <a href="/admin/stations" className="text-sm font-medium text-amber-700 hover:text-amber-800 flex-shrink-0">
+                View Stations
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -466,6 +489,53 @@ export default function AdminOverviewPage() {
           </Card>
         </div>
       )}
+
+      {/* Real-time Activity Feed */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Live Activity</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs text-muted-foreground">Real-time</span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {[
+              { type: 'rental_start', user: 'alex@email.com', station: 'A-001', time: '2 min ago', icon: Zap },
+              { type: 'return', user: 'maria@email.com', station: 'B-003', time: '5 min ago', icon: Radio },
+              { type: 'reward', user: 'john@email.com', station: '-', time: '8 min ago', icon: Gift },
+              { type: 'rental_start', user: 'sam@email.com', station: 'A-002', time: '12 min ago', icon: Zap },
+              { type: 'return', user: 'lisa@email.com', station: 'C-001', time: '15 min ago', icon: Radio },
+            ].map((activity, index) => (
+              <div key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                <div className={`p-1.5 rounded-lg ${
+                  activity.type === 'rental_start' ? 'bg-blue-50' :
+                  activity.type === 'return' ? 'bg-emerald-50' : 'bg-amber-50'
+                }`}>
+                  <activity.icon size={14} className={
+                    activity.type === 'rental_start' ? 'text-blue-600' :
+                    activity.type === 'return' ? 'text-emerald-600' : 'text-amber-600'
+                  } />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground truncate">
+                    {activity.type === 'rental_start' && `New rental started by ${activity.user}`}
+                    {activity.type === 'return' && `Power bank returned by ${activity.user}`}
+                    {activity.type === 'reward' && `Reward claimed by ${activity.user}`}
+                  </p>
+                  {activity.station !== '-' && (
+                    <p className="text-xs text-muted-foreground">Station {activity.station}</p>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground flex-shrink-0">{activity.time}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

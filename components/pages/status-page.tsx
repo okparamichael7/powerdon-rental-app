@@ -258,6 +258,7 @@ function ActiveSessionView({
     depositAmount: number;
     rewardThreshold: number;
     campaignName: string;
+    lastSyncTime?: Date;
   };
   isOnline: boolean;
   isRefreshing: boolean;
@@ -269,6 +270,7 @@ function ActiveSessionView({
   const isQualified = session.elapsedMinutes >= session.rewardThreshold;
   const currentCharge = calculateCharge(session.elapsedMinutes, session.hourlyRate, session.dailyCap);
   const estimatedRefund = Math.max(0, session.depositAmount - currentCharge);
+  const lastSync = session.lastSyncTime || session.startTime;
 
   return (
     <motion.div
@@ -280,6 +282,23 @@ function ActiveSessionView({
       <MobileHeader subtitle={`${session.campaignName.toUpperCase()} • ACTIVE`} />
       
       <main className="flex-1 px-5 py-6 space-y-6">
+        {/* Connection Status Banner */}
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-3"
+          >
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <XCircleIcon size={16} className="text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">Connection Lost</p>
+              <p className="text-xs text-amber-600">Your rental continues. Data will sync when reconnected.</p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Status Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -294,13 +313,6 @@ function ActiveSessionView({
             {formatDuration(session.elapsedMinutes)}
           </h1>
           <p className="text-muted-foreground mt-1">Session in progress</p>
-          
-          {!isOnline && (
-            <div className="mt-2 inline-flex items-center gap-1 text-amber-600 text-sm">
-              <XCircleIcon size={14} />
-              <span>Offline - data may be outdated</span>
-            </div>
-          )}
         </motion.div>
 
         {/* Power Bank Card */}
@@ -413,37 +425,118 @@ function ActiveSessionView({
           </div>
         </motion.div>
 
-        {/* Session Details */}
+        {/* Session Details Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="bg-muted rounded-2xl p-4"
+          className="bg-card rounded-2xl border border-border overflow-hidden"
         >
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Session ID</span>
-            <span className="font-mono text-foreground">{session.sessionCode}</span>
+          <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Session Info</span>
+            <button 
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs"
+              aria-label="Refresh status"
+            >
+              {isRefreshing ? (
+                <Spinner className="w-3 h-3" />
+              ) : (
+                <RefreshIcon size={12} className="animate-none" />
+              )}
+              <span>Refresh</span>
+            </button>
           </div>
-          <div className="flex items-center justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Started</span>
-            <span className="text-foreground">{formatTime(session.startTime)}</span>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Session ID</span>
+              <span className="font-mono font-medium text-foreground">{session.sessionCode}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Started</span>
+              <span className="text-foreground">{formatTime(session.startTime)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Status</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-emerald-600 font-medium">Live</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Last Sync</span>
+              <span className="text-foreground">{formatTime(lastSync)}</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Status</span>
-            <div className="flex items-center gap-2">
-              <span className="text-foreground">Live</span>
-              <button 
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="text-primary hover:text-primary/80"
-                aria-label="Refresh status"
-              >
-                {isRefreshing ? (
-                  <Spinner className="w-4 h-4" />
-                ) : (
-                  <RefreshIcon size={14} className="animate-none" />
-                )}
-              </button>
+        </motion.div>
+
+        {/* Session Timeline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-card rounded-2xl border border-border overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-muted/50 border-b border-border">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Activity Timeline</span>
+          </div>
+          <div className="p-4">
+            <div className="space-y-4">
+              {/* Scan Event */}
+              <div className="flex gap-3">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircleIcon size={14} className="text-emerald-600" />
+                  </div>
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
+                </div>
+                <div className="flex-1 pb-2">
+                  <p className="text-sm font-medium text-foreground">QR Code Scanned</p>
+                  <p className="text-xs text-muted-foreground">{formatTime(session.startTime)} at Station {session.stationId}</p>
+                </div>
+              </div>
+              
+              {/* Payment Event */}
+              <div className="flex gap-3">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircleIcon size={14} className="text-emerald-600" />
+                  </div>
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
+                </div>
+                <div className="flex-1 pb-2">
+                  <p className="text-sm font-medium text-foreground">Deposit Authorized</p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(session.depositAmount)} hold placed</p>
+                </div>
+              </div>
+              
+              {/* Unlock Event */}
+              <div className="flex gap-3">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircleIcon size={14} className="text-emerald-600" />
+                  </div>
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-border" />
+                </div>
+                <div className="flex-1 pb-2">
+                  <p className="text-sm font-medium text-foreground">Power Bank Unlocked</p>
+                  <p className="text-xs text-muted-foreground">Slot {session.slotNumber} at {session.stationName}</p>
+                </div>
+              </div>
+              
+              {/* In Progress Event */}
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <ClockIcon size={14} className="text-primary animate-pulse" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">Rental In Progress</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDuration(session.elapsedMinutes)} elapsed • {formatCurrency(currentCharge)} accrued
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -452,7 +545,7 @@ function ActiveSessionView({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.45 }}
           className="space-y-3"
         >
           <Button 
@@ -465,13 +558,32 @@ function ActiveSessionView({
           <p className="text-center text-xs text-muted-foreground">
             Return to any {session.campaignName} station to end your rental
           </p>
-          <button
-            onClick={onSupport}
-            className="flex items-center justify-center gap-2 w-full text-muted-foreground hover:text-foreground py-2"
-          >
-            <HeadphonesIcon size={16} />
-            <span className="text-sm">Having issues? Get help</span>
-          </button>
+        </motion.div>
+
+        {/* Help Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-muted/50 rounded-2xl p-4"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-background rounded-xl flex items-center justify-center flex-shrink-0">
+              <HeadphonesIcon size={18} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">Need assistance?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Our support team is available 24/7 to help with any issues.
+              </p>
+              <button
+                onClick={onSupport}
+                className="text-sm text-primary font-medium mt-2 hover:underline"
+              >
+                Contact Support
+              </button>
+            </div>
+          </div>
         </motion.div>
       </main>
     </motion.div>
@@ -553,6 +665,8 @@ function CompletedView({
     hourlyRate: number;
     dailyCap: number;
     depositAmount: number;
+    stationName?: string;
+    startTime?: Date;
   };
   qualifiedForReward: boolean;
   onViewRewards: () => void;
@@ -560,6 +674,7 @@ function CompletedView({
 }) {
   const finalCharge = calculateCharge(session.elapsedMinutes, session.hourlyRate, session.dailyCap);
   const refundAmount = Math.max(0, session.depositAmount - finalCharge);
+  const completedAt = new Date();
 
   return (
     <motion.div
@@ -568,7 +683,7 @@ function CompletedView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader />
+      <MobileHeader subtitle="COMPLETED" />
       
       <main className="flex-1 px-5 py-6 space-y-6">
         {/* Success Animation */}
@@ -590,24 +705,46 @@ function CompletedView({
           </p>
         </div>
 
-        {/* Summary Card */}
-        <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Total Duration</span>
-            <span className="font-semibold text-foreground">{formatDuration(session.elapsedMinutes)}</span>
+        {/* Receipt Card */}
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</span>
+            <span className="font-mono text-xs text-foreground">{session.sessionCode}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Rental Fee</span>
-            <span className="font-semibold text-foreground">{formatCurrency(finalCharge)}</span>
-          </div>
-          <div className="border-t border-border pt-4">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-foreground">Deposit Refund</span>
-              <span className="font-bold text-emerald-600 text-lg">{formatCurrency(refundAmount)}</span>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Completed</span>
+              <span className="text-foreground">{formatTime(completedAt)}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Refund will be processed within 1-5 business days
-            </p>
+            {session.stationName && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Returned At</span>
+                <span className="text-foreground">{session.stationName}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total Duration</span>
+              <span className="font-medium text-foreground">{formatDuration(session.elapsedMinutes)}</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 border-t border-border space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Rental Fee</span>
+              <span className="text-foreground">{formatCurrency(finalCharge)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Deposit Held</span>
+              <span className="text-foreground">{formatCurrency(session.depositAmount)}</span>
+            </div>
+          </div>
+          <div className="px-4 py-4 bg-emerald-50 border-t border-emerald-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-emerald-800">Deposit Refund</span>
+                <p className="text-xs text-emerald-600 mt-0.5">Processing in 1-5 business days</p>
+              </div>
+              <span className="font-bold text-emerald-700 text-xl">{formatCurrency(refundAmount)}</span>
+            </div>
           </div>
         </div>
 
@@ -679,6 +816,8 @@ function ErrorView({
   onRetry: () => void;
   onSupport: () => void;
 }) {
+  const errorCode = `ERR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -686,7 +825,7 @@ function ErrorView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader />
+      <MobileHeader subtitle="ERROR" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -697,11 +836,41 @@ function ErrorView({
           <XCircleIcon size={40} className="text-destructive" />
         </motion.div>
 
-        <div className="text-center max-w-sm mb-8">
+        <div className="text-center max-w-sm mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">Something Went Wrong</h1>
           <p className="text-muted-foreground">
             {error || 'We encountered an error processing your request. Please try again.'}
           </p>
+        </div>
+
+        {/* Error Details */}
+        <div className="w-full max-w-sm bg-muted/50 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="text-muted-foreground">Error Reference</span>
+            <span className="font-mono text-foreground">{errorCode}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            If this issue persists, please contact support with this reference code for faster assistance.
+          </p>
+        </div>
+
+        {/* Quick Troubleshooting */}
+        <div className="w-full max-w-sm bg-card rounded-xl border border-border p-4 mb-6">
+          <p className="text-sm font-medium text-foreground mb-3">Quick troubleshooting:</p>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <span className="text-primary">1.</span>
+              <span>Check your internet connection is stable</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary">2.</span>
+              <span>Ensure the power bank is fully inserted into the slot</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary">3.</span>
+              <span>Try a different slot if available</span>
+            </li>
+          </ul>
         </div>
 
         <div className="w-full max-w-sm space-y-3">
@@ -709,6 +878,7 @@ function ErrorView({
             onClick={onRetry}
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
+            <RefreshIcon size={18} />
             Try Again
           </Button>
           <Button
@@ -716,6 +886,7 @@ function ErrorView({
             onClick={onSupport}
             className="w-full h-14 text-base font-semibold rounded-2xl"
           >
+            <HeadphonesIcon size={18} />
             Contact Support
           </Button>
         </div>
