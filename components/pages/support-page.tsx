@@ -10,6 +10,9 @@ import {
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { useAppState } from '@/lib/app-state';
+import { formatDuration, formatCurrency } from '@/lib/session-store';
 
 interface SupportPageProps {
   isOnline: boolean;
@@ -60,6 +63,8 @@ const issueCategories: { id: IssueCategory; label: string; icon: typeof PowerBan
 ];
 
 export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
+  const { activeSession } = useAppState();
+  
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
   const [sessionLookup, setSessionLookup] = useState('');
@@ -68,7 +73,10 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [contactFormVisible, setContactFormVisible] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Toggle FAQ
   const toggleFAQ = (index: number) => {
@@ -93,8 +101,10 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
         throw new Error('Network unavailable');
       }
 
-      // Simulate lookup result
-      if (sessionLookup.toUpperCase().startsWith('VR-')) {
+      // Check if it matches active session
+      if (activeSession && sessionLookup.toUpperCase() === activeSession.sessionCode) {
+        setLookupResult('found');
+      } else if (sessionLookup.toUpperCase().startsWith('VR-')) {
         setLookupResult('found');
       } else {
         setLookupResult('not_found');
@@ -106,13 +116,40 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
     }
   };
 
+  // Validate email
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   // Handle contact form submission
   const handleContactSubmit = async () => {
-    if (!contactMessage.trim()) return;
+    const errors: Record<string, string> = {};
+    
+    if (!contactEmail.trim()) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(contactEmail)) {
+      errors.email = 'Please enter a valid email';
+    }
+    
+    if (!contactMessage.trim()) {
+      errors.message = 'Please describe your issue';
+    } else if (contactMessage.trim().length < 10) {
+      errors.message = 'Please provide more details';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setFormErrors({});
+    setIsSubmitting(true);
 
     // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     setContactSubmitted(true);
+    setIsSubmitting(false);
   };
 
   // Render issue detail view
@@ -122,6 +159,10 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
         category={selectedCategory}
         onBack={() => setSelectedCategory(null)}
         onNavigate={onNavigate}
+        onContactSupport={() => {
+          setSelectedCategory(null);
+          setContactFormVisible(true);
+        }}
         isOnline={isOnline}
       />
     );
@@ -131,14 +172,21 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
   if (contactFormVisible) {
     return (
       <ContactFormView
+        email={contactEmail}
+        setEmail={setContactEmail}
         message={contactMessage}
         setMessage={setContactMessage}
         submitted={contactSubmitted}
+        isSubmitting={isSubmitting}
+        formErrors={formErrors}
         onSubmit={handleContactSubmit}
+        activeSessionCode={activeSession?.sessionCode}
         onBack={() => {
           setContactFormVisible(false);
           setContactSubmitted(false);
           setContactMessage('');
+          setContactEmail('');
+          setFormErrors({});
         }}
       />
     );
@@ -164,6 +212,38 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           </p>
         </motion.div>
 
+        {/* Active Session Banner */}
+        {activeSession && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <PowerBankIcon size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Active Rental</p>
+                  <p className="text-sm text-muted-foreground">
+                    Session {activeSession.sessionCode} - {formatDuration(activeSession.elapsedMinutes)}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onNavigate('status')}
+                className="text-emerald-700"
+              >
+                View
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Session Lookup */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -178,32 +258,55 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           <div className="flex gap-2">
             <Input
               value={sessionLookup}
-              onChange={(e) => setSessionLookup(e.target.value)}
+              onChange={(e) => {
+                setSessionLookup(e.target.value);
+                setLookupError(null);
+                setLookupResult(null);
+              }}
               placeholder="e.g., VR-882194B"
               className="h-12 rounded-xl font-mono"
+              onKeyDown={(e) => e.key === 'Enter' && handleSessionLookup()}
             />
             <Button 
               onClick={handleSessionLookup}
-              disabled={isLookingUp}
+              disabled={isLookingUp || !isOnline}
               className="h-12 px-6 rounded-xl"
             >
-              {isLookingUp ? 'Looking...' : 'Look up'}
+              {isLookingUp ? <Spinner className="w-5 h-5" /> : 'Look up'}
             </Button>
           </div>
           {lookupError && (
             <p className="text-sm text-destructive">{lookupError}</p>
           )}
           {lookupResult === 'found' && (
-            <div className="bg-emerald-50 text-emerald-800 rounded-xl p-3 flex items-center gap-2">
-              <CheckCircleIcon size={16} />
-              <span className="text-sm">Session found. Tap to view details.</span>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="bg-emerald-50 text-emerald-800 rounded-xl p-3 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircleIcon size={16} />
+                <span className="text-sm">Session found!</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onNavigate('status')}
+                className="text-emerald-700"
+              >
+                View Details
+              </Button>
+            </motion.div>
           )}
           {lookupResult === 'not_found' && (
-            <div className="bg-amber-50 text-amber-800 rounded-xl p-3 flex items-center gap-2">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="bg-amber-50 text-amber-800 rounded-xl p-3 flex items-center gap-2"
+            >
               <XCircleIcon size={16} />
               <span className="text-sm">Session not found. Please check the ID and try again.</span>
-            </div>
+            </motion.div>
           )}
         </motion.div>
 
@@ -333,11 +436,13 @@ function IssueDetailView({
   category,
   onBack,
   onNavigate,
+  onContactSupport,
   isOnline,
 }: {
   category: IssueCategory;
   onBack: () => void;
   onNavigate: (tab: 'rent' | 'status' | 'rewards' | 'support') => void;
+  onContactSupport: () => void;
   isOnline: boolean;
 }) {
   const categoryInfo = issueCategories.find(c => c.id === category);
@@ -493,7 +598,7 @@ function IssueDetailView({
           <p className="text-sm text-muted-foreground">
             Issue not resolved? Contact our support team for personalized help.
           </p>
-          <Button className="rounded-xl">
+          <Button onClick={onContactSupport} className="rounded-xl">
             <HeadphonesIcon size={16} />
             Contact Support
           </Button>
@@ -505,18 +610,30 @@ function IssueDetailView({
 
 // Contact Form View
 function ContactFormView({
+  email,
+  setEmail,
   message,
   setMessage,
   submitted,
+  isSubmitting,
+  formErrors,
+  activeSessionCode,
   onSubmit,
   onBack,
 }: {
+  email: string;
+  setEmail: (v: string) => void;
   message: string;
   setMessage: (v: string) => void;
   submitted: boolean;
+  isSubmitting: boolean;
+  formErrors: Record<string, string>;
+  activeSessionCode?: string;
   onSubmit: () => void;
   onBack: () => void;
 }) {
+  const ticketId = `SUP-${Date.now().toString(36).toUpperCase()}`;
+
   if (submitted) {
     return (
       <div className="flex flex-col min-h-screen bg-background pb-20">
@@ -526,6 +643,7 @@ function ContactFormView({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
             className="w-20 h-20 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6"
           >
             <CheckCircleIcon size={40} className="text-emerald-600" />
@@ -538,10 +656,15 @@ function ContactFormView({
             </p>
           </div>
 
-          <div className="mt-8 bg-muted rounded-xl p-4 w-full max-w-sm">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Reference:</span> SUP-{Date.now().toString(36).toUpperCase()}
-            </p>
+          <div className="mt-8 bg-card rounded-xl border border-border p-4 w-full max-w-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Ticket Reference</span>
+              <span className="font-mono font-medium text-foreground">{ticketId}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Status</span>
+              <span className="text-sm font-medium text-emerald-600">Submitted</span>
+            </div>
           </div>
 
           <Button 
@@ -570,12 +693,42 @@ function ContactFormView({
           </p>
         </motion.div>
 
+        {activeSessionCode && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-primary/5 border border-primary/20 rounded-xl p-3"
+          >
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Active session detected:</span>{' '}
+              <span className="font-mono">{activeSessionCode}</span>
+            </p>
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="space-y-4"
         >
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Your Email
+            </label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@example.com"
+              className={`h-12 rounded-xl ${formErrors.email ? 'border-destructive' : ''}`}
+            />
+            {formErrors.email && (
+              <p className="mt-1 text-sm text-destructive">{formErrors.email}</p>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
               Your Message
@@ -585,8 +738,11 @@ function ContactFormView({
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Please describe your issue in detail. Include your session ID if you have one."
               rows={6}
-              className="w-full px-4 py-3 bg-background border border-input rounded-xl text-base resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              className={`w-full px-4 py-3 bg-background border rounded-xl text-base resize-none focus:outline-none focus:ring-2 focus:ring-ring ${formErrors.message ? 'border-destructive' : 'border-input'}`}
             />
+            {formErrors.message && (
+              <p className="mt-1 text-sm text-destructive">{formErrors.message}</p>
+            )}
           </div>
 
           <div className="bg-muted rounded-xl p-4">
@@ -603,10 +759,17 @@ function ContactFormView({
         >
           <Button 
             onClick={onSubmit}
-            disabled={!message.trim()}
+            disabled={isSubmitting}
             className="w-full h-14 text-base font-semibold rounded-2xl"
           >
-            Send Message
+            {isSubmitting ? (
+              <>
+                <Spinner className="w-5 h-5" />
+                Sending...
+              </>
+            ) : (
+              'Send Message'
+            )}
           </Button>
         </motion.div>
 

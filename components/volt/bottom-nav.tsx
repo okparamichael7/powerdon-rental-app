@@ -8,6 +8,8 @@ type NavTab = 'rent' | 'status' | 'rewards' | 'support';
 interface BottomNavProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
+  showStatusBadge?: boolean;
+  rewardsBadgeCount?: number;
   className?: string;
 }
 
@@ -18,7 +20,13 @@ const tabs: { id: NavTab; label: string; icon: typeof QRScanIcon; ariaLabel: str
   { id: 'support', label: 'Support', icon: HeadphonesIcon, ariaLabel: 'Get help and support' },
 ];
 
-export function BottomNav({ activeTab, onTabChange, className }: BottomNavProps) {
+export function BottomNav({ 
+  activeTab, 
+  onTabChange, 
+  showStatusBadge = false,
+  rewardsBadgeCount = 0,
+  className 
+}: BottomNavProps) {
   return (
     <nav 
       className={cn(
@@ -31,6 +39,9 @@ export function BottomNav({ activeTab, onTabChange, className }: BottomNavProps)
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
+          const showBadge = (tab.id === 'status' && showStatusBadge) || 
+                           (tab.id === 'rewards' && rewardsBadgeCount > 0);
+          const badgeCount = tab.id === 'rewards' ? rewardsBadgeCount : 0;
           
           return (
             <button
@@ -44,7 +55,24 @@ export function BottomNav({ activeTab, onTabChange, className }: BottomNavProps)
               aria-label={tab.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
             >
-              <Icon size={20} />
+              <div className="relative">
+                <Icon size={20} />
+                {showBadge && (
+                  <span 
+                    className={cn(
+                      'absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold',
+                      badgeCount > 0 ? 'min-w-[16px] h-4 px-1' : 'w-2.5 h-2.5'
+                    )}
+                    aria-label={
+                      tab.id === 'status' 
+                        ? 'Active rental' 
+                        : `${badgeCount} pending reward${badgeCount !== 1 ? 's' : ''}`
+                    }
+                  >
+                    {badgeCount > 0 ? (badgeCount > 9 ? '9+' : badgeCount) : null}
+                  </span>
+                )}
+              </div>
               <span className="text-xs font-medium">{tab.label}</span>
               {isActive && (
                 <span 

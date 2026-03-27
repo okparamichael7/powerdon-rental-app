@@ -5,21 +5,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import { 
   PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon, 
-  XCircleIcon, RefreshIcon, LightbulbIcon, CheckCircleIcon 
+  XCircleIcon, RefreshIcon, CheckCircleIcon, ChevronLeftIcon
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
-import { 
-  mockStation, 
-  formatCurrency,
-  type StationInfo,
-  type UserInfo,
-  type ActiveSession,
-} from '@/lib/session-store';
+import { useAppState } from '@/lib/app-state';
+import { formatCurrency } from '@/lib/session-store';
 
-type RentStep = 'landing' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
+type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
 
 interface RentPageProps {
@@ -74,17 +69,18 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 };
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
+  const { activeSession, currentStation, user, startRental, setUser, setActiveSession } = useAppState();
+  
   const [step, setStep] = useState<RentStep>('landing');
-  const [station, setStation] = useState<StationInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ErrorType | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // User info form state
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [email, setEmail] = useState(user?.email || '');
+  const [name, setName] = useState(user?.name || '');
+  const [termsAccepted, setTermsAccepted] = useState(user?.termsAccepted || false);
+  const [marketingConsent, setMarketingConsent] = useState(user?.marketingConsent || false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Payment state
@@ -95,50 +91,45 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   const [unlockProgress, setUnlockProgress] = useState(0);
   const [assignedSlot, setAssignedSlot] = useState<number | null>(null);
 
-  // Load station data
-  const loadStation = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      if (!isOnline) {
-        throw new Error('network');
-      }
-
-      // Check for active session (demo: randomly simulate)
-      const hasActiveSession = false; // In production, check API
-      if (hasActiveSession) {
-        setError('duplicate_session');
-        setIsLoading(false);
-        return;
-      }
-
-      // Simulate occasional station unavailability for demo
-      if (retryCount === 0 && Math.random() < 0.1) {
-        setError('station_unavailable');
-        setIsLoading(false);
-        return;
-      }
-
-      setStation(mockStation);
-    } catch {
-      setError('network');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isOnline, retryCount]);
-
+  // Initialize page based on state
   useEffect(() => {
-    loadStation();
-  }, [loadStation]);
+    const initPage = async () => {
+      setIsLoading(true);
+      
+      // Simulate loading station data
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (!isOnline) {
+        setError('network');
+        setIsLoading(false);
+        return;
+      }
+
+      // Check for active session
+      if (activeSession) {
+        setStep('active_warning');
+        setIsLoading(false);
+        return;
+      }
+
+      // Pre-fill form if user exists
+      if (user) {
+        setEmail(user.email);
+        setName(user.name || '');
+        setTermsAccepted(user.termsAccepted);
+        setMarketingConsent(user.marketingConsent);
+      }
+
+      setIsLoading(false);
+    };
+
+    initPage();
+  }, [isOnline, activeSession, user]);
 
   // Validate email
-  const validateEmail = (email: string): boolean => {
+  const validateEmail = (emailValue: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return emailRegex.test(emailValue);
   };
 
   // Handle form submission
@@ -177,35 +168,37 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         throw new Error('network');
       }
 
-      // Simulate occasional payment failure for demo
-      if (Math.random() < 0.1) {
-        setError('payment_failed');
-        setStep('error');
-        return;
-      }
-
-      // Payment successful, proceed to unlocking
+      // Proceed to unlocking
       setStep('unlocking');
       setAssignedSlot(Math.floor(Math.random() * 12) + 1);
       
       // Simulate unlock process
       let progress = 0;
-      const interval = setInterval(() => {
+      const interval = setInterval(async () => {
         progress += 10;
         setUnlockProgress(progress);
         
         if (progress >= 100) {
           clearInterval(interval);
-          // Simulate occasional unlock failure
-          if (Math.random() < 0.05) {
-            setError('unlock_failed');
-            setStep('error');
-          } else {
+          
+          // Start the actual rental
+          const result = await startRental({
+            email,
+            name: name || undefined,
+            termsAccepted,
+            marketingConsent,
+          });
+
+          if (result.success) {
             setStep('success');
+          } else {
+            setErrorMessage(result.error || 'Failed to start rental');
+            setError('general');
+            setStep('error');
           }
         }
       }, 400);
-    } catch {
+    } catch (err) {
       setError('network');
       setStep('error');
     } finally {
@@ -225,12 +218,8 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     }
 
     if (config.canRetry) {
-      setRetryCount(prev => prev + 1);
       setError(null);
-      if (step === 'error') {
-        setStep('landing');
-        loadStation();
-      }
+      setStep('landing');
     }
   };
 
@@ -249,7 +238,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     );
   }
 
-  // Render error state
+  // Render error state (initial errors)
   if (error && step !== 'error') {
     const config = errorConfigs[error];
     return (
@@ -298,18 +287,26 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   return (
     <div className="flex flex-col min-h-screen bg-background pb-20">
       <AnimatePresence mode="wait">
-        {step === 'landing' && station && (
+        {step === 'active_warning' && (
+          <ActiveWarningStep
+            key="active_warning"
+            onViewRental={() => onNavigate('status')}
+            onContinueAnyway={() => setStep('landing')}
+          />
+        )}
+
+        {step === 'landing' && currentStation && (
           <LandingStep
             key="landing"
-            station={station}
+            station={currentStation}
             onStart={() => setStep('info')}
           />
         )}
 
-        {step === 'info' && station && (
+        {step === 'info' && currentStation && (
           <InfoStep
             key="info"
-            station={station}
+            station={currentStation}
             email={email}
             setEmail={setEmail}
             name={name}
@@ -324,10 +321,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           />
         )}
 
-        {step === 'payment' && station && (
+        {step === 'payment' && currentStation && (
           <PaymentStep
             key="payment"
-            station={station}
+            station={currentStation}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
             isProcessing={isProcessing}
@@ -336,23 +333,19 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           />
         )}
 
-        {step === 'unlocking' && station && (
+        {step === 'unlocking' && currentStation && (
           <UnlockingStep
             key="unlocking"
-            station={station}
+            station={currentStation}
             assignedSlot={assignedSlot || 4}
             progress={unlockProgress}
-            onCancel={() => {
-              setStep('landing');
-              setUnlockProgress(0);
-            }}
           />
         )}
 
-        {step === 'success' && station && (
+        {step === 'success' && currentStation && (
           <SuccessStep
             key="success"
-            station={station}
+            station={currentStation}
             assignedSlot={assignedSlot || 4}
             onContinue={() => onNavigate('status')}
           />
@@ -362,6 +355,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           <ErrorStep
             key="error"
             error={error}
+            customMessage={errorMessage}
             onAction={handleErrorAction}
             onSupport={() => onNavigate('support')}
           />
@@ -371,12 +365,65 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   );
 }
 
+// Active Warning Step
+function ActiveWarningStep({
+  onViewRental,
+  onContinueAnyway,
+}: {
+  onViewRental: () => void;
+  onContinueAnyway: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex flex-col min-h-screen"
+    >
+      <MobileHeader />
+      
+      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mb-6"
+        >
+          <PowerDonLogo size={40} className="text-amber-600" />
+        </motion.div>
+
+        <div className="text-center max-w-sm mb-8">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Active Rental Detected</h1>
+          <p className="text-muted-foreground">
+            You already have an active power bank rental. Would you like to view its status or continue browsing?
+          </p>
+        </div>
+
+        <div className="w-full max-w-sm space-y-3">
+          <Button 
+            onClick={onViewRental}
+            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+          >
+            View Active Rental
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onContinueAnyway}
+            className="w-full h-14 text-base font-semibold rounded-2xl"
+          >
+            Continue Browsing
+          </Button>
+        </div>
+      </main>
+    </motion.div>
+  );
+}
+
 // Landing Step Component
 function LandingStep({ 
   station, 
   onStart 
 }: { 
-  station: StationInfo; 
+  station: { id: string; campaignName: string; hourlyRate: number; depositAmount: number; rewardDescription: string; availableSlots: number };
   onStart: () => void;
 }) {
   return (
@@ -534,7 +581,7 @@ function InfoStep({
   onBack,
   onSubmit,
 }: {
-  station: StationInfo;
+  station: { campaignName: string; hourlyRate: number; depositAmount: number };
   email: string;
   setEmail: (v: string) => void;
   name: string;
@@ -604,77 +651,62 @@ function InfoStep({
 
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wide">
-              Full Name <span className="text-muted-foreground font-normal">(Optional)</span>
+              Name <span className="text-muted-foreground font-normal normal-case">(optional)</span>
             </label>
             <Input
               id="name"
               type="text"
-              placeholder="John Doe"
+              placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-14 text-base rounded-xl"
             />
           </div>
-        </div>
 
-        <div className="bg-secondary rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-primary/20 rounded-xl flex-shrink-0">
-              <GiftIcon size={18} className="text-primary" />
+          <div className="space-y-3 pt-2">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="terms"
+                checked={termsAccepted}
+                onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                className="mt-1"
+                aria-invalid={!!formErrors.terms}
+              />
+              <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
+                I agree to the{' '}
+                <a href="#" className="text-primary underline">Terms of Service</a>
+                {' '}and{' '}
+                <a href="#" className="text-primary underline">Privacy Policy</a>
+              </label>
             </div>
-            <p className="text-sm">
-              <span className="font-semibold text-primary">Festival Reward:</span>{' '}
-              <span className="text-muted-foreground">{station.rewardDescription}</span>
-            </p>
+            {formErrors.terms && (
+              <p className="text-sm text-destructive ml-7">{formErrors.terms}</p>
+            )}
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="marketing"
+                checked={marketingConsent}
+                onCheckedChange={(checked) => setMarketingConsent(checked === true)}
+                className="mt-1"
+              />
+              <label htmlFor="marketing" className="text-sm text-muted-foreground cursor-pointer">
+                Send me updates about rewards and exclusive offers
+              </label>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="terms"
-              checked={termsAccepted}
-              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-              className="mt-1"
-              aria-describedby={formErrors.terms ? 'terms-error' : undefined}
-            />
-            <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
-              I agree to the <button type="button" className="text-primary hover:underline">Terms</button> and{' '}
-              <button type="button" className="text-primary hover:underline">Privacy Policy</button>
-            </label>
-          </div>
-          {formErrors.terms && (
-            <p id="terms-error" className="text-sm text-destructive ml-7">{formErrors.terms}</p>
-          )}
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="marketing"
-              checked={marketingConsent}
-              onCheckedChange={(checked) => setMarketingConsent(checked === true)}
-              className="mt-1"
-            />
-            <label htmlFor="marketing" className="text-sm text-muted-foreground cursor-pointer">
-              Keep me updated with festival rewards and news
-            </label>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 text-muted-foreground">
-          <ShieldCheckIcon size={14} />
-          <span className="text-xs font-medium uppercase tracking-wide">Secure Encrypted Transaction</span>
+        <div className="pt-4">
+          <Button 
+            onClick={onSubmit}
+            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+          >
+            Continue to Payment
+            <ArrowRightIcon size={18} />
+          </Button>
         </div>
       </main>
-
-      <div className="sticky bottom-20 p-5 pb-8 bg-gradient-to-t from-background via-background to-transparent">
-        <Button 
-          onClick={onSubmit}
-          className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
-        >
-          Continue to Payment
-          <ArrowRightIcon size={18} />
-        </Button>
-      </div>
     </motion.div>
   );
 }
@@ -688,7 +720,7 @@ function PaymentStep({
   onBack,
   onSubmit,
 }: {
-  station: StationInfo;
+  station: { depositAmount: number };
   paymentMethod: 'card' | 'apple_pay' | 'google_pay';
   setPaymentMethod: (v: 'card' | 'apple_pay' | 'google_pay') => void;
   isProcessing: boolean;
@@ -702,147 +734,114 @@ function PaymentStep({
       exit={{ opacity: 0, x: -20 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader title="Secure Payment" showBack onBack={onBack} showSecure />
+      <MobileHeader title="Payment" showBack onBack={onBack} />
       
       <main className="flex-1 px-5 py-6 space-y-6">
-        <div className="bg-secondary text-secondary-foreground rounded-full py-2 px-4 flex items-center justify-center gap-2">
-          <ShieldCheckIcon size={16} className="text-primary" />
-          <span className="text-sm font-medium uppercase tracking-wide">Refund Protection Enabled</span>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Authorize payment</h1>
+          <p className="mt-1 text-muted-foreground">
+            A hold will be placed on your card. You&apos;ll only be charged for actual usage.
+          </p>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground">Order Summary</h2>
-            <span className="text-xs font-medium px-2 py-1 bg-primary/10 text-primary rounded-full uppercase">Hold</span>
+            <span className="text-muted-foreground">Security deposit</span>
+            <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
           </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Security Deposit</span>
-              <span className="font-medium text-foreground">{formatCurrency(station.depositAmount)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Processing Fee</span>
-              <span className="font-medium text-primary uppercase">Free</span>
-            </div>
-            <div className="border-t border-dashed border-border pt-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-foreground">To Authorize</span>
-                <span className="text-2xl font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
-              </div>
-            </div>
+          <div className="border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              This amount will be held on your card and refunded when you return the power bank. 
+              Actual charges will be calculated based on your rental duration.
+            </p>
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-xl flex-shrink-0">
-              <ShieldCheckIcon size={18} className="text-primary" />
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium text-foreground uppercase tracking-wide">Payment Method</h2>
+          
+          <button
+            onClick={() => setPaymentMethod('apple_pay')}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
+              paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5' : 'border-border'
+            }`}
+          >
+            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white text-sm font-semibold">
+              Pay
             </div>
-            <div>
-              <p className="font-semibold text-foreground">100% Refundable Deposit</p>
-              <p className="text-sm text-muted-foreground">
-                This amount is temporarily held to unlock the power bank. It returns to your account instantly upon return.
-              </p>
+            <div className="text-left">
+              <p className="font-medium text-foreground">Apple Pay</p>
+              <p className="text-sm text-muted-foreground">Fast and secure</p>
             </div>
-          </div>
+            {paymentMethod === 'apple_pay' && (
+              <CheckCircleIcon size={20} className="ml-auto text-primary" />
+            )}
+          </button>
 
-          <div className="flex items-center justify-around py-2">
-            {[
-              { label: 'Return Bank', active: false },
-              { label: 'To Station', active: false },
-              { label: 'Instant Refund', active: true },
-            ].map((step, i) => (
-              <div key={i} className="flex flex-col items-center gap-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  step.active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {i === 0 && <ArrowRightIcon size={16} className="rotate-180" />}
-                  {i === 1 && <PowerDonLogo size={16} />}
-                  {i === 2 && <CheckCircleIcon size={16} />}
-                </div>
-                <span className={`text-xs font-medium uppercase ${
-                  step.active ? 'text-primary' : 'text-muted-foreground'
-                }`}>
-                  {step.label}
-                </span>
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => setPaymentMethod('google_pay')}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
+              paymentMethod === 'google_pay' ? 'border-primary bg-primary/5' : 'border-border'
+            }`}
+          >
+            <div className="w-10 h-10 bg-white border border-border rounded-lg flex items-center justify-center text-sm font-semibold">
+              G
+            </div>
+            <div className="text-left">
+              <p className="font-medium text-foreground">Google Pay</p>
+              <p className="text-sm text-muted-foreground">Fast checkout</p>
+            </div>
+            {paymentMethod === 'google_pay' && (
+              <CheckCircleIcon size={20} className="ml-auto text-primary" />
+            )}
+          </button>
+
+          <button
+            onClick={() => setPaymentMethod('card')}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
+              paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border'
+            }`}
+          >
+            <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+              <svg width="20" height="16" viewBox="0 0 20 16" fill="none" className="text-muted-foreground">
+                <rect x="1" y="1" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2"/>
+                <path d="M1 5H19" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+            </div>
+            <div className="text-left">
+              <p className="font-medium text-foreground">Credit or Debit Card</p>
+              <p className="text-sm text-muted-foreground">Visa, Mastercard, Amex</p>
+            </div>
+            {paymentMethod === 'card' && (
+              <CheckCircleIcon size={20} className="ml-auto text-primary" />
+            )}
+          </button>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Current Rental Rates</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
-              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                <PowerDonLogo size={14} className="text-primary" />
-              </div>
-              <div>
-                <p className="font-bold text-foreground">{formatCurrency(station.hourlyRate)}</p>
-                <p className="text-xs text-muted-foreground">per hour</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
-              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                <GiftIcon size={14} className="text-primary" />
-              </div>
-              <div>
-                <p className="font-bold text-foreground">{formatCurrency(station.dailyCap)}</p>
-                <p className="text-xs text-muted-foreground">daily cap</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center gap-4 text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <ShieldCheckIcon size={12} />
-            <span className="text-xs uppercase tracking-wide">Visa Secure</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <ShieldCheckIcon size={12} />
-            <span className="text-xs uppercase tracking-wide">Mastercard ID</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <ShieldCheckIcon size={12} />
-            <span className="text-xs uppercase tracking-wide">256-bit SSL</span>
-          </div>
+        <div className="pt-4">
+          <Button 
+            onClick={onSubmit}
+            disabled={isProcessing}
+            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+          >
+            {isProcessing ? (
+              <>
+                <Spinner className="w-5 h-5" />
+                Authorizing...
+              </>
+            ) : (
+              <>
+                Authorize {formatCurrency(station.depositAmount)}
+                <ArrowRightIcon size={18} />
+              </>
+            )}
+          </Button>
+          <p className="text-center text-xs text-muted-foreground mt-3">
+            <ShieldCheckIcon size={12} className="inline mr-1" />
+            Secure payment powered by Stripe
+          </p>
         </div>
       </main>
-
-      <div className="sticky bottom-20 p-5 pb-8 bg-gradient-to-t from-background via-background to-transparent space-y-3">
-        <Button 
-          variant="outline"
-          className="w-full h-14 text-base font-semibold rounded-2xl"
-          onClick={() => setPaymentMethod('apple_pay')}
-          disabled={isProcessing}
-        >
-          Apple Pay / Google Pay
-        </Button>
-        <Button 
-          onClick={onSubmit}
-          className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <Spinner className="w-5 h-5" />
-              Processing...
-            </>
-          ) : (
-            <>
-              Authorize & Unlock
-              <PowerDonLogo size={18} />
-            </>
-          )}
-        </Button>
-        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <button type="button" className="hover:text-foreground">Credit Card</button>
-          <span>|</span>
-          <button type="button" className="hover:text-foreground">Google Pay</button>
-        </div>
-      </div>
     </motion.div>
   );
 }
@@ -852,12 +851,10 @@ function UnlockingStep({
   station,
   assignedSlot,
   progress,
-  onCancel,
 }: {
-  station: StationInfo;
+  station: { id: string };
   assignedSlot: number;
   progress: number;
-  onCancel: () => void;
 }) {
   return (
     <motion.div
@@ -866,7 +863,7 @@ function UnlockingStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader title="Unlocking" />
+      <MobileHeader subtitle="UNLOCKING" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -878,62 +875,32 @@ function UnlockingStep({
         </motion.div>
 
         <div className="text-center mb-8">
-          <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Connecting</p>
-          <h1 className="text-2xl font-bold text-foreground">Unlocking...</h1>
+          <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Unlocking Power Bank</p>
+          <h1 className="text-2xl font-bold text-foreground">Please wait...</h1>
           <p className="mt-2 text-muted-foreground">
-            Securely connecting to <span className="font-semibold text-foreground">{station.campaignName} Charging Station</span>. Stand by your slot.
+            The power bank at slot {assignedSlot} is being released.
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 w-full max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Station ID</p>
-              <p className="text-xl font-bold text-primary">{station.id}</p>
-            </div>
-            <div className="h-8 w-px bg-border" />
-            <div className="text-right">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Slot</p>
-              <p className="text-xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
-            </div>
-          </div>
-
-          <div className="bg-secondary rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <LightbulbIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-foreground">Look for the flashing light</p>
-                <p className="text-sm text-muted-foreground">
-                  The LED on Slot {String(assignedSlot).padStart(2, '0')} will pulse blue when your power bank is ready to pull.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 bg-muted rounded-full h-2 overflow-hidden">
+        <div className="w-full max-w-sm">
+          <div className="bg-muted rounded-full h-3 overflow-hidden mb-4">
             <motion.div
               className="h-full bg-primary"
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
             />
           </div>
-        </div>
-
-        <div className="mt-auto pt-8 w-full max-w-sm space-y-3">
-          <p className="text-center text-sm text-muted-foreground">
-            Taking too long? <button type="button" className="text-primary hover:underline">Try again</button>
-          </p>
-          <Button 
-            variant="secondary"
-            onClick={onCancel}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-foreground text-background hover:bg-foreground/90"
-          >
-            <XCircleIcon size={18} />
-            Cancel Request
-          </Button>
-          <button type="button" className="flex items-center justify-center gap-2 w-full text-muted-foreground hover:text-foreground">
-            <span className="text-sm">Contact Support</span>
-          </button>
+          
+          <div className="bg-card rounded-2xl border border-border p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Station</span>
+              <span className="font-mono text-foreground">{station.id}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-2">
+              <span className="text-muted-foreground">Slot</span>
+              <span className="font-mono font-bold text-primary">{String(assignedSlot).padStart(2, '0')}</span>
+            </div>
+          </div>
         </div>
       </main>
     </motion.div>
@@ -946,7 +913,7 @@ function SuccessStep({
   assignedSlot,
   onContinue,
 }: {
-  station: StationInfo;
+  station: { id: string; campaignName: string };
   assignedSlot: number;
   onContinue: () => void;
 }) {
@@ -964,22 +931,33 @@ function SuccessStep({
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="w-24 h-24 bg-emerald-100 rounded-3xl flex items-center justify-center mb-6"
+          className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6"
         >
           <CheckCircleIcon size={48} className="text-emerald-600" />
         </motion.div>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Power Bank Unlocked!</h1>
-          <p className="mt-2 text-muted-foreground">
-            Pull your power bank from <span className="font-semibold text-foreground">Slot {String(assignedSlot).padStart(2, '0')}</span> at <span className="font-semibold text-foreground">{station.name}</span>.
+          <h1 className="text-3xl font-bold text-foreground mb-2">You&apos;re all set!</h1>
+          <p className="text-muted-foreground">
+            Your power bank is ready. Pick it up from slot {assignedSlot} at station {station.id}.
           </p>
         </div>
 
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 w-full max-w-sm mb-8">
-          <p className="text-sm text-emerald-800 text-center">
-            Your rental has started. Enjoy your charge!
-          </p>
+        <div className="bg-card rounded-2xl border border-border p-5 w-full max-w-sm mb-8">
+          <div className="text-center">
+            <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase mb-1">Collect from</p>
+            <p className="text-4xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
+            <p className="text-sm text-muted-foreground mt-1">Station {station.id} • {station.campaignName}</p>
+          </div>
+        </div>
+
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 w-full max-w-sm mb-8">
+          <div className="flex items-start gap-3">
+            <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-foreground">
+              <span className="font-semibold">Remember:</span> Rent for at least 60 minutes to earn your free merch voucher!
+            </p>
+          </div>
         </div>
 
         <div className="w-full max-w-sm">
@@ -987,7 +965,7 @@ function SuccessStep({
             onClick={onContinue}
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
-            View Active Rental
+            View Rental Status
             <ArrowRightIcon size={18} />
           </Button>
         </div>
@@ -999,10 +977,12 @@ function SuccessStep({
 // Error Step Component
 function ErrorStep({
   error,
+  customMessage,
   onAction,
   onSupport,
 }: {
   error: ErrorType;
+  customMessage?: string;
   onAction: () => void;
   onSupport: () => void;
 }) {
@@ -1028,13 +1008,7 @@ function ErrorStep({
 
         <div className="text-center max-w-sm mb-8">
           <h1 className="text-2xl font-bold text-foreground mb-2">{config.title}</h1>
-          <p className="text-muted-foreground">{config.description}</p>
-        </div>
-
-        <div className="bg-muted rounded-xl p-4 w-full max-w-sm mb-8">
-          <p className="text-xs font-mono text-muted-foreground">
-            Error Code: {error.toUpperCase().replace('_', '-')}-001
-          </p>
+          <p className="text-muted-foreground">{customMessage || config.description}</p>
         </div>
 
         <div className="w-full max-w-sm space-y-3">

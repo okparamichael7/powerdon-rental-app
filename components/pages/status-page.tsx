@@ -1,28 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import { 
   PowerDonLogo, GiftIcon, MapPinIcon, PowerBankIcon, 
   CheckCircleIcon, XCircleIcon, RefreshIcon, ClockIcon,
-  ShieldCheckIcon, WalletIcon, HeadphonesIcon
+  HeadphonesIcon
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
-import { 
-  type ActiveSession,
-  type RentalState,
-  createMockActiveSession,
-  formatDuration,
-  formatCurrency,
-  calculateCharge,
-  calculateRewardProgress,
-} from '@/lib/session-store';
+import { useAppState } from '@/lib/app-state';
+import { formatDuration, formatCurrency, calculateCharge, calculateRewardProgress } from '@/lib/session-store';
 import { formatTime } from '@/lib/utils';
-
-type StatusView = 'loading' | 'no_session' | 'active' | 'unlocking' | 'returning' | 'completed' | 'expired' | 'error';
 
 interface StatusPageProps {
   isOnline: boolean;
@@ -30,83 +21,32 @@ interface StatusPageProps {
 }
 
 export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
-  const [view, setView] = useState<StatusView>('loading');
-  const [session, setSession] = useState<ActiveSession | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const { activeSession, completedSession, completeRental, setCompletedSession } = useAppState();
+  
+  const [isReturning, setIsReturning] = useState(false);
   const [returnProgress, setReturnProgress] = useState(0);
+  const [returnComplete, setReturnComplete] = useState(false);
+  const [qualifiedForReward, setQualifiedForReward] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Load session data
-  const loadSession = useCallback(async (showLoading = true) => {
-    if (showLoading) setView('loading');
-    setError(null);
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      if (!isOnline) {
-        throw new Error('Network unavailable');
-      }
-
-      // For demo: randomly have a session or not
-      const hasSession = Math.random() > 0.3;
-      
-      if (hasSession) {
-        const mockSession = createMockActiveSession();
-        setSession(mockSession);
-        setView('active');
-      } else {
-        setSession(null);
-        setView('no_session');
-      }
-
-      setLastRefresh(new Date());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load session');
-      setView('error');
-    }
-  }, [isOnline]);
-
-  useEffect(() => {
-    loadSession();
-  }, [loadSession]);
-
-  // Auto-refresh session timer when active
-  useEffect(() => {
-    if (view !== 'active' || !session) return;
-
-    const interval = setInterval(() => {
-      setSession(prev => {
-        if (!prev) return prev;
-        const newElapsed = prev.elapsedMinutes + 1;
-        return {
-          ...prev,
-          elapsedMinutes: newElapsed,
-          currentCharge: calculateCharge(newElapsed, prev.hourlyRate, prev.dailyCap),
-        };
-      });
-    }, 1000); // 1 second = 1 minute for demo
-
-    return () => clearInterval(interval);
-  }, [view, session]);
 
   // Handle refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadSession(false);
+    // Simulate refresh
+    await new Promise(resolve => setTimeout(resolve, 500));
     setIsRefreshing(false);
   };
 
   // Handle return initiation
   const handleReturn = async () => {
-    if (!session) return;
+    if (!activeSession) return;
 
-    setView('returning');
+    setIsReturning(true);
     setReturnProgress(0);
+    setError(null);
 
-    // Simulate return process
+    // Simulate return progress
     const interval = setInterval(() => {
       setReturnProgress(prev => {
         if (prev >= 100) {
@@ -115,68 +55,105 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
         }
         return prev + 10;
       });
-    }, 500);
+    }, 400);
 
-    // Complete return after progress
-    setTimeout(() => {
-      setSession(prev => prev ? { ...prev, status: 'completed' as RentalState } : prev);
-      setView('completed');
-    }, 5500);
+    // Wait for progress to complete
+    await new Promise(resolve => setTimeout(resolve, 4500));
+
+    // Complete the rental
+    try {
+      const result = await completeRental();
+      if (result.success) {
+        setQualifiedForReward(result.qualifiedForReward);
+        setReturnComplete(true);
+      } else {
+        setError('Failed to complete return. Please try again.');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsReturning(false);
+    }
   };
 
-  // Render based on view
+  // Handle dismissing completed view
+  const handleDismissCompleted = () => {
+    setReturnComplete(false);
+    setCompletedSession(null);
+  };
+
+  // No session state
+  if (!activeSession && !returnComplete) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background pb-20">
+        <NoSessionView
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          onStartRental={() => onNavigate('rent')}
+        />
+      </div>
+    );
+  }
+
+  // Returning state
+  if (isReturning) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background pb-20">
+        <ReturningView
+          session={activeSession!}
+          progress={returnProgress}
+        />
+      </div>
+    );
+  }
+
+  // Return complete state
+  if (returnComplete && completedSession) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background pb-20">
+        <CompletedView
+          session={completedSession}
+          qualifiedForReward={qualifiedForReward}
+          onViewRewards={() => {
+            handleDismissCompleted();
+            onNavigate('rewards');
+          }}
+          onStartNew={() => {
+            handleDismissCompleted();
+            onNavigate('rent');
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background pb-20">
+        <ErrorView
+          error={error}
+          onRetry={() => {
+            setError(null);
+            handleReturn();
+          }}
+          onSupport={() => onNavigate('support')}
+        />
+      </div>
+    );
+  }
+
+  // Active session state
   return (
     <div className="flex flex-col min-h-screen bg-background pb-20">
       <AnimatePresence mode="wait">
-        {view === 'loading' && (
-          <LoadingView key="loading" />
-        )}
-
-        {view === 'no_session' && (
-          <NoSessionView
-            key="no_session"
-            isRefreshing={isRefreshing}
-            lastRefresh={lastRefresh}
-            onRefresh={handleRefresh}
-            onStartRental={() => onNavigate('rent')}
-          />
-        )}
-
-        {view === 'active' && session && (
+        {activeSession && (
           <ActiveSessionView
-            key="active"
-            session={session}
+            session={activeSession}
             isOnline={isOnline}
             isRefreshing={isRefreshing}
-            lastRefresh={lastRefresh}
             onRefresh={handleRefresh}
             onReturn={handleReturn}
-            onSupport={() => onNavigate('support')}
-          />
-        )}
-
-        {view === 'returning' && session && (
-          <ReturningView
-            key="returning"
-            session={session}
-            progress={returnProgress}
-          />
-        )}
-
-        {view === 'completed' && session && (
-          <CompletedView
-            key="completed"
-            session={session}
-            onViewRewards={() => onNavigate('rewards')}
-            onStartNew={() => onNavigate('rent')}
-          />
-        )}
-
-        {view === 'error' && (
-          <ErrorView
-            key="error"
-            error={error}
-            onRetry={() => loadSession()}
             onSupport={() => onNavigate('support')}
           />
         )}
@@ -185,35 +162,13 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   );
 }
 
-// Loading View
-function LoadingView() {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col"
-    >
-      <MobileHeader subtitle="Loading..." />
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Spinner className="w-8 h-8 mx-auto text-primary" />
-          <p className="text-muted-foreground">Checking your session...</p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 // No Active Session View
 function NoSessionView({
   isRefreshing,
-  lastRefresh,
   onRefresh,
   onStartRental,
 }: {
   isRefreshing: boolean;
-  lastRefresh: Date | null;
   onRefresh: () => void;
   onStartRental: () => void;
 }) {
@@ -241,12 +196,6 @@ function NoSessionView({
             You don&apos;t have any active power bank rentals right now. Start a new rental to stay charged.
           </p>
         </div>
-
-        {lastRefresh && (
-          <p className="text-xs text-muted-foreground mb-6">
-            Last checked: {formatTime(lastRefresh)}
-          </p>
-        )}
 
         <div className="w-full max-w-sm space-y-3">
           <Button 
@@ -293,15 +242,25 @@ function ActiveSessionView({
   session,
   isOnline,
   isRefreshing,
-  lastRefresh,
   onRefresh,
   onReturn,
   onSupport,
 }: {
-  session: ActiveSession;
+  session: {
+    sessionCode: string;
+    stationId: string;
+    stationName: string;
+    slotNumber: number;
+    startTime: Date;
+    elapsedMinutes: number;
+    hourlyRate: number;
+    dailyCap: number;
+    depositAmount: number;
+    rewardThreshold: number;
+    campaignName: string;
+  };
   isOnline: boolean;
   isRefreshing: boolean;
-  lastRefresh: Date | null;
   onRefresh: () => void;
   onReturn: () => void;
   onSupport: () => void;
@@ -412,13 +371,13 @@ function ActiveSessionView({
             <p className="text-sm">
               {isQualified ? (
                 <span className="text-emerald-700 font-medium">
-                  Congratulations! You&apos;ve qualified for a €10 merch voucher. Return your power bank to claim it.
+                  Congratulations! You&apos;ve qualified for a {formatCurrency(10)} merch voucher. Return your power bank to claim it.
                 </span>
               ) : (
                 <>
                   <span className="font-medium text-primary">Keep going!</span>{' '}
                   <span className="text-muted-foreground">
-                    Rent for {session.rewardThreshold - session.elapsedMinutes} more minutes to earn your €10 voucher.
+                    Rent for {session.rewardThreshold - session.elapsedMinutes} more minutes to earn your {formatCurrency(10)} voucher.
                   </span>
                 </>
               )}
@@ -469,26 +428,24 @@ function ActiveSessionView({
             <span className="text-muted-foreground">Started</span>
             <span className="text-foreground">{formatTime(session.startTime)}</span>
           </div>
-          {lastRefresh && (
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-muted-foreground">Last sync</span>
-              <div className="flex items-center gap-2">
-                <span className="text-foreground">{formatTime(lastRefresh)}</span>
-                <button 
-                  onClick={onRefresh}
-                  disabled={isRefreshing}
-                  className="text-primary hover:text-primary/80"
-                  aria-label="Refresh status"
-                >
-                  {isRefreshing ? (
-                    <Spinner className="w-4 h-4" />
-                  ) : (
-                    <RefreshIcon size={14} className="animate-none" />
-                  )}
-                </button>
-              </div>
+          <div className="flex items-center justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Status</span>
+            <div className="flex items-center gap-2">
+              <span className="text-foreground">Live</span>
+              <button 
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="text-primary hover:text-primary/80"
+                aria-label="Refresh status"
+              >
+                {isRefreshing ? (
+                  <Spinner className="w-4 h-4" />
+                ) : (
+                  <RefreshIcon size={14} className="animate-none" />
+                )}
+              </button>
             </div>
-          )}
+          </div>
         </motion.div>
 
         {/* Actions */}
@@ -503,7 +460,7 @@ function ActiveSessionView({
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
             <MapPinIcon size={18} />
-            Find Return Station
+            Return Power Bank
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Return to any {session.campaignName} station to end your rental
@@ -526,7 +483,10 @@ function ReturningView({
   session,
   progress,
 }: {
-  session: ActiveSession;
+  session: {
+    sessionCode: string;
+    elapsedMinutes: number;
+  };
   progress: number;
 }) {
   return (
@@ -583,146 +543,106 @@ function ReturningView({
 // Completed View
 function CompletedView({
   session,
+  qualifiedForReward,
   onViewRewards,
   onStartNew,
 }: {
-  session: ActiveSession;
+  session: {
+    sessionCode: string;
+    elapsedMinutes: number;
+    hourlyRate: number;
+    dailyCap: number;
+    depositAmount: number;
+  };
+  qualifiedForReward: boolean;
   onViewRewards: () => void;
   onStartNew: () => void;
 }) {
-  const currentCharge = calculateCharge(session.elapsedMinutes, session.hourlyRate, session.dailyCap);
-  const refundAmount = Math.max(0, session.depositAmount - currentCharge);
-  const isQualified = session.elapsedMinutes >= session.rewardThreshold;
+  const finalCharge = calculateCharge(session.elapsedMinutes, session.hourlyRate, session.dailyCap);
+  const refundAmount = Math.max(0, session.depositAmount - finalCharge);
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
       <MobileHeader />
       
       <main className="flex-1 px-5 py-6 space-y-6">
-        {/* Event Badge */}
-        <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {session.campaignName}
-            </span>
-          </div>
-        </div>
-
-        {/* Success Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <h1 className="text-3xl font-bold text-foreground">Return Complete</h1>
-        </motion.div>
-
-        {/* Success Icon */}
+        {/* Success Animation */}
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
           className="flex justify-center"
         >
-          <div className="w-24 h-24 bg-primary rounded-3xl flex items-center justify-center">
-            <CheckCircleIcon size={48} className="text-primary-foreground" />
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
+            <CheckCircleIcon size={40} className="text-emerald-600" />
           </div>
         </motion.div>
 
-        <p className="text-center text-muted-foreground">
-          Successfully returned to <span className="font-semibold text-foreground">{session.stationName}</span>.
-        </p>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground">Return Complete!</h1>
+          <p className="mt-1 text-muted-foreground">
+            Thank you for using PowerDon. Your rental has been successfully completed.
+          </p>
+        </div>
 
         {/* Summary Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card rounded-2xl border border-border p-5 space-y-4"
-        >
+        <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total Duration</p>
-              <p className="text-2xl font-bold text-foreground">{formatDuration(session.elapsedMinutes)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Amount Paid</p>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(currentCharge)}</p>
-            </div>
+            <span className="text-muted-foreground">Total Duration</span>
+            <span className="font-semibold text-foreground">{formatDuration(session.elapsedMinutes)}</span>
           </div>
-
-          <div className="bg-emerald-50 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <WalletIcon size={18} className="text-emerald-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-emerald-800">{formatCurrency(refundAmount)} Refunded</p>
-                <p className="text-sm text-emerald-700">
-                  Sent to your payment method. Your security deposit has been released.
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Rental Fee</span>
+            <span className="font-semibold text-foreground">{formatCurrency(finalCharge)}</span>
           </div>
-
-          <div className="space-y-2 text-sm">
+          <div className="border-t border-border pt-4">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Payment Method</span>
-              <span className="font-medium text-foreground">Apple Pay</span>
+              <span className="font-medium text-foreground">Deposit Refund</span>
+              <span className="font-bold text-emerald-600 text-lg">{formatCurrency(refundAmount)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Transaction ID</span>
-              <span className="font-mono text-foreground">{session.sessionCode}</span>
-            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Refund will be processed within 1-5 business days
+            </p>
           </div>
+        </div>
 
-          <div className="flex items-center justify-center gap-2 pt-2 border-t border-border">
-            <ShieldCheckIcon size={14} className="text-primary" />
-            <span className="text-xs font-medium text-primary uppercase tracking-wide">PowerDon Secured</span>
-          </div>
-        </motion.div>
-
-        {/* Reward Notice */}
-        {isQualified && (
+        {/* Reward Card */}
+        {qualifiedForReward && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-primary text-primary-foreground rounded-2xl p-4"
+            transition={{ delay: 0.2 }}
+            className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-5 text-primary-foreground"
           >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-primary-foreground/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <GiftIcon size={18} />
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
+                <GiftIcon size={24} />
               </div>
               <div>
-                <p className="font-semibold">Reward Earned!</p>
-                <p className="text-sm text-primary-foreground/80">
-                  You qualified for a €10 merch voucher. Check your rewards to claim it.
-                </p>
+                <p className="text-xs text-primary-foreground/80 uppercase tracking-wide">Reward Unlocked</p>
+                <p className="font-bold text-lg">{formatCurrency(10)} Merch Voucher</p>
               </div>
             </div>
+            <p className="text-sm text-primary-foreground/80">
+              You&apos;ve earned a voucher for renting 60+ minutes. Check your rewards to claim it!
+            </p>
           </motion.div>
         )}
 
         {/* Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-3 pt-4"
-        >
-          {isQualified ? (
+        <div className="space-y-3 pt-4">
+          {qualifiedForReward ? (
             <Button 
               onClick={onViewRewards}
               className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
             >
               <GiftIcon size={18} />
-              View Reward
+              View My Reward
             </Button>
           ) : (
             <Button 
@@ -734,15 +654,16 @@ function CompletedView({
             </Button>
           )}
           
-          <button className="flex items-center justify-center gap-2 w-full text-muted-foreground hover:text-foreground py-2">
-            <span className="text-sm">Report an Issue</span>
-          </button>
-        </motion.div>
-
-        {/* Session ID Footer */}
-        <p className="text-center text-xs text-muted-foreground font-mono">
-          SESSION #{session.sessionCode}
-        </p>
+          {qualifiedForReward && (
+            <Button
+              variant="outline"
+              onClick={onStartNew}
+              className="w-full h-14 text-base font-semibold rounded-2xl"
+            >
+              Start Another Rental
+            </Button>
+          )}
+        </div>
       </main>
     </motion.div>
   );
@@ -777,9 +698,9 @@ function ErrorView({
         </motion.div>
 
         <div className="text-center max-w-sm mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Unable to Load Status</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Something Went Wrong</h1>
           <p className="text-muted-foreground">
-            {error || 'Something went wrong while loading your session status. Please try again.'}
+            {error || 'We encountered an error processing your request. Please try again.'}
           </p>
         </div>
 
@@ -788,7 +709,6 @@ function ErrorView({
             onClick={onRetry}
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
-            <RefreshIcon size={18} className="animate-none" />
             Try Again
           </Button>
           <Button
@@ -796,7 +716,6 @@ function ErrorView({
             onClick={onSupport}
             className="w-full h-14 text-base font-semibold rounded-2xl"
           >
-            <HeadphonesIcon size={18} />
             Contact Support
           </Button>
         </div>

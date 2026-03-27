@@ -6,12 +6,14 @@ import { RentPage } from '@/components/pages/rent-page';
 import { StatusPage } from '@/components/pages/status-page';
 import { RewardsPage } from '@/components/pages/rewards-page';
 import { SupportPage } from '@/components/pages/support-page';
+import { AppStateProvider, useAppState } from '@/lib/app-state';
 
 type NavTab = 'rent' | 'status' | 'rewards' | 'support';
 
-export function AppShell() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<NavTab>('rent');
   const [isOnline, setIsOnline] = useState(true);
+  const { activeSession, rewards } = useAppState();
 
   // Network status detection
   useEffect(() => {
@@ -33,6 +35,10 @@ export function AppShell() {
     setActiveTab(tab);
   }, []);
 
+  // Badge counts
+  const hasActiveSession = !!activeSession;
+  const pendingRewardsCount = rewards.filter(r => r.status === 'issued').length;
+
   // Render the active page
   const renderPage = () => {
     switch (activeTab) {
@@ -53,7 +59,7 @@ export function AppShell() {
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
       {/* Offline Banner */}
       {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-amber-950 text-center py-2 text-sm font-medium">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-amber-950 text-center py-2 text-sm font-medium max-w-md mx-auto">
           You are offline. Some features may not work.
         </div>
       )}
@@ -64,7 +70,20 @@ export function AppShell() {
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      <BottomNav 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange}
+        showStatusBadge={hasActiveSession}
+        rewardsBadgeCount={pendingRewardsCount}
+      />
     </div>
+  );
+}
+
+export function AppShell() {
+  return (
+    <AppStateProvider>
+      <AppContent />
+    </AppStateProvider>
   );
 }
