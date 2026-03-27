@@ -267,14 +267,14 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           <div className="w-full max-w-sm space-y-3 mt-8">
             <Button 
               onClick={handleErrorAction}
-              className="w-full h-12 text-[15px] font-medium rounded-lg"
+              className="w-full h-12 text-sm font-medium"
             >
               {config.action}
             </Button>
             <Button
               variant="outline"
               onClick={() => onNavigate('support')}
-              className="w-full h-12 text-[15px] font-medium rounded-lg"
+              className="w-full h-12 text-sm font-medium"
             >
               Contact Support
             </Button>
@@ -402,14 +402,14 @@ function ActiveWarningStep({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onViewRental}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             View Active Rental
           </Button>
           <Button
             variant="outline"
             onClick={onContinueAnyway}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             Continue Browsing
           </Button>
@@ -550,7 +550,7 @@ function LandingStep({
         <div className="sticky bottom-20 p-5 pb-8 bg-gradient-to-t from-background via-background to-transparent">
           <Button 
             onClick={onStart}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             Start rental
             <ArrowRightIcon size={18} />
@@ -701,7 +701,7 @@ function InfoStep({
         <div className="pt-4">
           <Button 
             onClick={onSubmit}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             Continue to Payment
             <ArrowRightIcon size={18} />
@@ -823,7 +823,7 @@ function PaymentStep({
           <Button 
             onClick={onSubmit}
             disabled={isProcessing}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             {isProcessing ? (
               <>
@@ -988,7 +988,7 @@ function SuccessStep({
         <div className="w-full max-w-sm">
           <Button 
             onClick={onContinue}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             View Rental Status
             <ArrowRightIcon size={18} />
@@ -1091,7 +1091,7 @@ function ErrorStep({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onAction}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <RefreshIcon size={18} />
             {config.action}
@@ -1099,7 +1099,7 @@ function ErrorStep({
           <Button
             variant="outline"
             onClick={onSupport}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             Contact Support
           </Button>

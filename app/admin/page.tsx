@@ -125,89 +125,59 @@ export default function AdminOverviewPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page Header */}
-      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+          <h1 className="text-lg font-medium text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Monitor your rental operations in real-time
+            Monitor rental operations
           </p>
         </div>
-        <div className="flex items-center gap-3 mt-3 md:mt-0">
-          <Badge variant="outline" className="gap-1.5 text-[11px] font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            All Systems Operational
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            Updated just now
-          </span>
-        </div>
+        <p className="text-xs text-muted-foreground mt-2 md:mt-0">
+          Updated just now
+        </p>
       </div>
 
       {/* Alerts Banner */}
       {dashboardStats && dashboardStats.stationsOnline < dashboardStats.stationsTotal && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
-                <Radio size={18} className="text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-medium text-amber-800">Station Offline Alert</p>
-                <p className="text-sm text-amber-700 mt-0.5">
-                  {dashboardStats.stationsTotal - dashboardStats.stationsOnline} station(s) currently offline. 
-                  Check the Stations page for details.
-                </p>
-              </div>
-              <a href="/admin/stations" className="text-sm font-medium text-amber-700 hover:text-amber-800 flex-shrink-0">
-                View Stations
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-between py-3 px-4 bg-muted rounded-md">
+          <div className="flex items-center gap-3">
+            <Radio size={16} className="text-muted-foreground" />
+            <p className="text-sm text-foreground">
+              {dashboardStats.stationsTotal - dashboardStats.stationsOnline} station(s) offline
+            </p>
+          </div>
+          <a href="/admin/stations" className="text-sm text-muted-foreground hover:text-foreground">
+            View
+          </a>
+        </div>
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
         {stats.map((stat) => (
-          <Card key={stat.name}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">{stat.name}</p>
-                  <p className="text-xl font-semibold text-foreground tabular-nums">{stat.value}</p>
-                  <div className={`flex items-center gap-1 text-[11px] font-medium ${
-                    stat.changeType === 'positive' ? 'text-emerald-600' : 'text-red-500'
-                  }`}>
-                    {stat.changeType === 'positive' ? (
-                      <ArrowUpRight size={12} />
-                    ) : (
-                      <ArrowDownRight size={12} />
-                    )}
-                    {stat.change} vs last week
-                  </div>
-                </div>
-                <div className="p-2 bg-muted rounded-md">
-                  <stat.icon size={16} className="text-muted-foreground" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div key={stat.name} className="space-y-1">
+            <p className="text-xs text-muted-foreground">{stat.name}</p>
+            <p className="text-2xl font-medium text-foreground tabular-nums">{stat.value}</p>
+            <p className={`text-xs ${
+              stat.changeType === 'positive' ? 'text-muted-foreground' : 'text-muted-foreground'
+            }`}>
+              {stat.change} vs last week
+            </p>
+          </div>
         ))}
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Revenue Chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Revenue Overview</CardTitle>
-              <Badge variant="secondary" className="text-xs">This Week</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <div>
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="text-sm font-medium text-foreground">Revenue</h2>
+            <span className="text-xs text-muted-foreground">This week</span>
+          </div>
+          <div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueData}>
@@ -249,18 +219,16 @@ export default function AdminOverviewPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Funnel Chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Conversion Funnel</CardTitle>
-              <Badge variant="secondary" className="text-xs">All Time</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <div>
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="text-sm font-medium text-foreground">Conversion Funnel</h2>
+            <span className="text-xs text-muted-foreground">All time</span>
+          </div>
+          <div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartFunnelData} layout="vertical">
@@ -298,23 +266,21 @@ export default function AdminOverviewPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         {/* Recent Sessions */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Recent Sessions</CardTitle>
-              <a href="/admin/sessions" className="text-sm text-primary hover:underline">
-                View all
-              </a>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
+        <div className="lg:col-span-2">
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
+            <a href="/admin/sessions" className="text-xs text-muted-foreground hover:text-foreground">
+              View all
+            </a>
+          </div>
+          <div>
             {sessionsLoading ? (
               <div className="flex items-center justify-center h-32">
                 <Spinner />
@@ -322,52 +288,50 @@ export default function AdminOverviewPage() {
             ) : (
               <>
                 {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-border">
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <tr>
+                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                           Session
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                           User
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                           Station
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                           Status
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="pb-3 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                           Amount
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
+                    <tbody>
                       {recentSessions.map((session) => (
-                        <tr key={session.id} className="hover:bg-muted/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="font-medium text-foreground font-mono text-sm">
-                                {session.sessionCode}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatTime(new Date(session.startTime))}
-                              </p>
-                            </div>
+                        <tr key={session.id} className="border-t border-border/50">
+                          <td className="py-3">
+                            <p className="text-sm text-foreground font-mono">
+                              {session.sessionCode}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {formatTime(new Date(session.startTime))}
+                            </p>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="py-3">
                             <p className="text-sm text-foreground">{session.userName || 'Anonymous'}</p>
-                            <p className="text-xs text-muted-foreground">{session.userEmail}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{session.userEmail}</p>
                           </td>
-                          <td className="px-6 py-4 text-sm text-foreground">
+                          <td className="py-3 text-sm text-foreground">
                             {session.stationName}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="py-3">
                             <StatusBadge status={session.status} size="sm" />
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <p className="font-medium text-foreground">
+                          <td className="py-3 text-right">
+                            <p className="text-sm text-foreground tabular-nums">
                               €{session.amountCharged.toFixed(2)}
                             </p>
                           </td>
@@ -378,42 +342,36 @@ export default function AdminOverviewPage() {
                 </div>
 
                 {/* Mobile Cards */}
-                <div className="md:hidden divide-y divide-border">
+                <div className="md:hidden space-y-4">
                   {recentSessions.map((session) => (
-                    <div key={session.id} className="p-4 space-y-3">
+                    <div key={session.id} className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm font-medium text-foreground">
+                        <span className="font-mono text-sm text-foreground">
                           {session.sessionCode}
                         </span>
                         <StatusBadge status={session.status} size="sm" />
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">{session.userName || session.userEmail}</span>
-                        <span className="font-medium text-foreground">€{session.amountCharged.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{session.stationName}</span>
-                        <span>{formatTime(new Date(session.startTime))}</span>
+                        <span className="text-foreground tabular-nums">€{session.amountCharged.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Station Health */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Station Health</CardTitle>
-              <a href="/admin/stations" className="text-sm text-primary hover:underline">
-                View all
-              </a>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div>
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="text-sm font-medium text-foreground">Station Health</h2>
+            <a href="/admin/stations" className="text-xs text-muted-foreground hover:text-foreground">
+              View all
+            </a>
+          </div>
+          <div className="space-y-3">
             {stationsLoading ? (
               <div className="flex items-center justify-center h-32">
                 <Spinner />
@@ -422,71 +380,41 @@ export default function AdminOverviewPage() {
               stationHealth.map((station) => (
                 <div
                   key={station.id}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                  className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
                 >
-                  <div className="space-y-1">
-                    <p className="font-medium text-sm text-foreground">{station.name}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{station.availableSlots}/{station.totalSlots} slots</span>
-                      <span>•</span>
-                      <span>{station.batteryLevel}% battery</span>
-                    </div>
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-foreground">{station.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {station.availableSlots}/{station.totalSlots} slots
+                    </p>
                   </div>
                   <StatusBadge status={station.status} size="sm" />
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Quick Stats Row */}
       {dashboardStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-50 rounded-lg">
-                <TrendingUp size={18} className="text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Conversion Rate</p>
-                <p className="text-lg font-bold text-foreground">{dashboardStats.conversionRate}%</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Clock size={18} className="text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Avg Duration</p>
-                <p className="text-lg font-bold text-foreground">{dashboardStats.averageSessionDuration}m</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-50 rounded-lg">
-                <Euro size={18} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Deposits Held</p>
-                <p className="text-lg font-bold text-foreground">€{dashboardStats.totalDepositsHeld}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Gift size={18} className="text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Rewards Redeemed</p>
-                <p className="text-lg font-bold text-foreground">{dashboardStats.totalRewardsRedeemed}</p>
-              </div>
-            </div>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-6 border-t border-border">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Conversion Rate</p>
+            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.conversionRate}%</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Avg Duration</p>
+            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.averageSessionDuration}m</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Deposits Held</p>
+            <p className="text-xl font-medium text-foreground tabular-nums">€{dashboardStats.totalDepositsHeld}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Rewards Redeemed</p>
+            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.totalRewardsRedeemed}</p>
+          </div>
         </div>
       )}
 

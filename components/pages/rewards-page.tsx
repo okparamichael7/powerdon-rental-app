@@ -199,7 +199,7 @@ function NoRewardsView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onStartRental}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <PowerDonLogo size={18} />
             Start Rental
@@ -208,7 +208,7 @@ function NoRewardsView({
             variant="outline"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             {isRefreshing ? (
               <>
@@ -353,7 +353,7 @@ function InProgressView({
         <div className="pt-4">
           <Button 
             onClick={onViewStatus}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             {isQualified ? 'Return Power Bank' : 'View Active Rental'}
           </Button>
@@ -609,7 +609,7 @@ function IssuedDetailView({
           <Button 
             onClick={() => onRedeem(reward.id)}
             disabled={isRedeeming}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             {isRedeeming ? (
               <>
@@ -700,7 +700,7 @@ function RedeemedDetailView({
 
         <Button 
           onClick={onStartRental}
-          className="w-full h-12 text-[15px] font-medium rounded-lg"
+          className="w-full h-12 text-sm font-medium"
         >
           <PowerDonLogo size={18} />
           Start New Rental

@@ -52,30 +52,27 @@ export default function AdminLayout({
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-60 bg-background border-r border-border transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-56 bg-background transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-14 px-4 border-b border-border">
+          <div className="flex items-center justify-between h-14 px-5">
             <Link href="/admin" className="flex items-center gap-2">
-              <PowerDonLogo size={24} className="text-primary" />
-              <span className="font-semibold text-foreground">POWERDON</span>
-              <span className="text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded">
-                Admin
-              </span>
+              <PowerDonLogo size={20} className="text-foreground" />
+              <span className="font-medium text-foreground text-sm">POWERDON</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-1.5 rounded-md hover:bg-muted"
+              className="lg:hidden p-1.5 rounded-full hover:bg-muted"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
             {navigation.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/admin' && pathname.startsWith(item.href));
@@ -84,13 +81,13 @@ export default function AdminLayout({
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
+                    'flex items-center gap-3 px-3 py-2 rounded-md text-[13px] transition-colors',
                     isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      ? 'bg-foreground text-background font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <item.icon size={16} />
+                  <item.icon size={16} strokeWidth={isActive ? 2 : 1.5} />
                   {item.name}
                 </Link>
               );
@@ -98,8 +95,8 @@ export default function AdminLayout({
           </nav>
 
           {/* Campaign Selector */}
-          <div className="p-3 border-t border-border">
-            <button className="w-full flex items-center justify-between p-2.5 bg-muted/50 border border-border rounded-md hover:bg-muted transition-colors">
+          <div className="px-3 py-3">
+            <button className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted transition-colors">
               <div className="text-left">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Campaign</p>
                 <p className="font-medium text-foreground text-[13px]">Sundance 2024</p>
@@ -109,12 +106,12 @@ export default function AdminLayout({
           </div>
 
           {/* Settings */}
-          <div className="px-3 pb-3 border-t border-border pt-3">
+          <div className="px-3 pb-4">
             <Link
               href="/admin/settings"
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex items-center gap-3 px-3 py-2 rounded-md text-[13px] text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Settings size={16} />
+              <Settings size={16} strokeWidth={1.5} />
               Settings
             </Link>
           </div>
@@ -122,51 +119,46 @@ export default function AdminLayout({
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-60">
+      <div className="lg:pl-56">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 bg-background border-b border-border lg:px-6">
+        <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-5 bg-background/95 backdrop-blur-sm lg:px-8">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-md hover:bg-muted"
+              className="lg:hidden p-1.5 rounded-full hover:bg-muted"
             >
               <Menu size={18} />
             </button>
             
             {/* Search */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 border border-border rounded-md w-56">
-              <Search size={14} className="text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search..."
-                className="bg-transparent text-[13px] outline-none flex-1 placeholder:text-muted-foreground"
-              />
-              <kbd className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            <div className="hidden md:flex items-center gap-2 text-muted-foreground">
+              <Search size={14} />
+              <span className="text-[13px]">Search</span>
+              <kbd className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-2">
                 ⌘K
               </kbd>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* Notifications */}
-            <button className="relative p-2 rounded-md hover:bg-muted transition-colors">
+            <button className="relative p-2 rounded-full hover:bg-muted transition-colors">
               <Bell size={16} className="text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full" />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-foreground rounded-full" />
             </button>
 
             {/* User menu */}
-            <Button variant="ghost" size="sm" className="gap-2">
-              <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center">
-                <span className="text-xs font-medium text-foreground">JD</span>
+            <Button variant="ghost" size="sm" className="gap-2 px-2">
+              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                <span className="text-[11px] font-medium text-foreground">JD</span>
               </div>
-              <span className="hidden md:block text-[13px] font-medium">John Doe</span>
-              <ChevronDownIcon size={12} className="text-muted-foreground" />
+              <span className="hidden md:block text-[13px]">John Doe</span>
             </Button>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-5 lg:p-8">{children}</main>
       </div>
     </div>
   );

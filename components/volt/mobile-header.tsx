@@ -25,46 +25,44 @@ export function MobileHeader({
   className,
 }: MobileHeaderProps) {
   return (
-    <header className={cn('flex items-center justify-between px-5 py-4 border-b border-border bg-background', className)}>
+    <header className={cn('flex items-center justify-between px-5 h-14 bg-background', className)}>
       <div className="flex items-center gap-3">
         {showBack ? (
           <button
             onClick={onBack}
-            className="flex items-center justify-center w-9 h-9 -ml-1.5 rounded-md hover:bg-muted transition-colors"
+            className="flex items-center justify-center w-8 h-8 -ml-2 rounded-full hover:bg-muted/60 transition-colors"
             aria-label="Go back"
           >
             <ArrowLeftIcon size={18} className="text-foreground" />
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <PowerDonLogo size={22} className="text-primary" />
-            <span className="font-semibold text-foreground tracking-tight text-[15px]">POWERDON</span>
+            <PowerDonLogo size={20} className="text-foreground" />
+            <span className="font-medium text-foreground tracking-tight text-sm">POWERDON</span>
           </div>
         )}
         {title && (
           <div className="flex flex-col">
-            <span className="font-medium text-foreground text-[15px]">{title}</span>
+            <span className="font-medium text-foreground text-sm">{title}</span>
             {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
           </div>
         )}
       </div>
       
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {subtitle && !title && (
-          <div className="text-right">
-            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{subtitle}</p>
-          </div>
+          <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{subtitle}</p>
         )}
         {showSecure && (
-          <div className="flex items-center gap-1 text-primary">
-            <ShieldCheckIcon size={13} />
-            <span className="text-[11px] font-medium uppercase tracking-wide">Secure</span>
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <ShieldCheckIcon size={12} />
+            <span className="text-[10px] font-medium uppercase tracking-wide">Secure</span>
           </div>
         )}
         {showHelp && (
           <button
             onClick={onHelp}
-            className="flex items-center justify-center w-9 h-9 rounded-md hover:bg-muted transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-muted/60 transition-colors"
             aria-label="Help"
           >
             <HelpCircleIcon size={18} className="text-muted-foreground" />

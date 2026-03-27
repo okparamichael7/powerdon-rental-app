@@ -30,12 +30,12 @@ export function BottomNav({
   return (
     <nav 
       className={cn(
-        'fixed bottom-0 left-0 right-0 bg-background border-t border-border z-40',
+        'fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm z-40',
         className
       )}
       aria-label="Main navigation"
     >
-      <div className="flex items-center justify-around h-14 max-w-md mx-auto safe-area-pb">
+      <div className="flex items-center justify-around h-16 max-w-md mx-auto safe-area-pb">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -48,20 +48,20 @@ export function BottomNav({
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                'relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
+                'focus:outline-none',
+                isActive ? 'text-foreground' : 'text-muted-foreground'
               )}
               aria-label={tab.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
             >
               <div className="relative">
-                <Icon size={20} />
+                <Icon size={22} strokeWidth={isActive ? 2 : 1.5} />
                 {showBadge && (
                   <span 
                     className={cn(
-                      'absolute -top-0.5 -right-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-semibold',
-                      badgeCount > 0 ? 'min-w-[14px] h-3.5 px-0.5' : 'w-2 h-2'
+                      'absolute -top-0.5 -right-1 flex items-center justify-center rounded-full bg-foreground text-background text-[9px] font-medium',
+                      badgeCount > 0 ? 'min-w-[14px] h-3.5 px-0.5' : 'w-1.5 h-1.5'
                     )}
                     aria-label={
                       tab.id === 'status' 
@@ -73,10 +73,7 @@ export function BottomNav({
                   </span>
                 )}
               </div>
-              <span className={cn(
-                "text-[11px]",
-                isActive ? "font-medium" : "font-normal"
-              )}>{tab.label}</span>
+              <span className="text-[10px] font-medium">{tab.label}</span>
             </button>
           );
         })}

@@ -200,7 +200,7 @@ function NoSessionView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onStartRental}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <PowerDonLogo size={18} />
             Start New Rental
@@ -209,7 +209,7 @@ function NoSessionView({
             variant="outline"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             {isRefreshing ? (
               <>
@@ -550,7 +550,7 @@ function ActiveSessionView({
         >
           <Button 
             onClick={onReturn}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <MapPinIcon size={18} />
             Return Power Bank
@@ -776,7 +776,7 @@ function CompletedView({
           {qualifiedForReward ? (
             <Button 
               onClick={onViewRewards}
-              className="w-full h-12 text-[15px] font-medium rounded-lg"
+              className="w-full h-12 text-sm font-medium"
             >
               <GiftIcon size={18} />
               View My Reward
@@ -784,7 +784,7 @@ function CompletedView({
           ) : (
             <Button 
               onClick={onStartNew}
-              className="w-full h-12 text-[15px] font-medium rounded-lg"
+              className="w-full h-12 text-sm font-medium"
             >
               <PowerDonLogo size={18} />
               Start New Rental
@@ -795,7 +795,7 @@ function CompletedView({
             <Button
               variant="outline"
               onClick={onStartNew}
-              className="w-full h-12 text-[15px] font-medium rounded-lg"
+              className="w-full h-12 text-sm font-medium"
             >
               Start Another Rental
             </Button>
@@ -876,7 +876,7 @@ function ErrorView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onRetry}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <RefreshIcon size={18} />
             Try Again
@@ -884,7 +884,7 @@ function ErrorView({
           <Button
             variant="outline"
             onClick={onSupport}
-            className="w-full h-12 text-[15px] font-medium rounded-lg"
+            className="w-full h-12 text-sm font-medium"
           >
             <HeadphonesIcon size={18} />
             Contact Support
