@@ -141,3 +141,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Safe area utilities for mobile devices */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}

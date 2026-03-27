@@ -1,6 +1,6 @@
 'use client';
 
-import { PowerDonLogo, ArrowLeftIcon, HelpCircleIcon } from './icons';
+import { PowerDonLogo, ArrowLeftIcon, HelpCircleIcon, ShieldCheckIcon } from './icons';
 import { cn } from '@/lib/utils';
 
 interface MobileHeaderProps {
@@ -10,6 +10,7 @@ interface MobileHeaderProps {
   onBack?: () => void;
   showHelp?: boolean;
   onHelp?: () => void;
+  showSecure?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export function MobileHeader({
   onBack,
   showHelp = true,
   onHelp,
+  showSecure = false,
   className,
 }: MobileHeaderProps) {
   return (
@@ -51,6 +53,12 @@ export function MobileHeader({
         {subtitle && !title && (
           <div className="text-right mr-2">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{subtitle}</p>
+          </div>
+        )}
+        {showSecure && (
+          <div className="flex items-center gap-1 text-primary">
+            <ShieldCheckIcon size={14} />
+            <span className="text-xs font-medium uppercase tracking-wide">Secure</span>
           </div>
         )}
         {showHelp && (
