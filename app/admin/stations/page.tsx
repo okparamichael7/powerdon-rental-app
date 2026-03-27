@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Sheet,
   SheetContent,
@@ -20,28 +21,44 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Search, Plus, MapPin, Battery, Wifi, WifiOff, Zap, Clock, AlertTriangle } from "lucide-react"
-import { mockStations, mockSessions } from "@/lib/mock-data"
-import type { Station } from "@/lib/types"
+import { useStations, useSessions } from "@/hooks/use-services"
+import type { Station, RentalSession } from "@/lib/types"
+import { formatDateTime } from "@/lib/utils"
 
 export default function StationsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedStation, setSelectedStation] = useState<Station | null>(null)
   
-  const filteredStations = mockStations.filter((station) => {
-    const matchesSearch = 
-      station.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      station.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      station.location.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || station.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const { data: stations, loading, fetchStations } = useStations()
+  const { data: allSessions, fetchSessions } = useSessions()
+
+  // Fetch stations on mount with filters
+  useEffect(() => {
+    const filters: Parameters<typeof fetchStations>[0] = {}
+    if (searchQuery) filters.search = searchQuery
+    if (statusFilter !== "all") filters.status = [statusFilter as Station["status"]]
+    fetchStations(filters)
+  }, [searchQuery, statusFilter, fetchStations])
+
+  // Fetch sessions for selected station
+  useEffect(() => {
+    if (selectedStation) {
+      fetchSessions({ stationId: selectedStation.id, limit: 5 })
+    }
+  }, [selectedStation?.id, fetchSessions])
+
+  const filteredStations = stations || []
+  const stationSessions = selectedStation 
+    ? (allSessions?.filter(s => s.stationId === selectedStation.id).slice(0, 5) || [])
+    : []
 
   const getStatusColor = (status: Station["status"]) => {
     switch (status) {
       case "online": return "bg-green-500"
       case "offline": return "bg-gray-400"
       case "maintenance": return "bg-amber-500"
+      case "low-battery": return "bg-red-500"
       default: return "bg-gray-400"
     }
   }
@@ -51,20 +68,17 @@ export default function StationsPage() {
       case "online": return <Badge variant="secondary" className="bg-green-100 text-green-700">Online</Badge>
       case "offline": return <Badge variant="secondary" className="bg-gray-100 text-gray-600">Offline</Badge>
       case "maintenance": return <Badge variant="secondary" className="bg-amber-100 text-amber-700">Maintenance</Badge>
+      case "low-battery": return <Badge variant="secondary" className="bg-red-100 text-red-700">Low Battery</Badge>
       default: return null
     }
   }
 
-  const stationSessions = selectedStation 
-    ? mockSessions.filter(s => s.stationId === selectedStation.id).slice(0, 5)
-    : []
-
   const stats = {
-    online: mockStations.filter(s => s.status === "online").length,
-    offline: mockStations.filter(s => s.status === "offline").length,
-    maintenance: mockStations.filter(s => s.status === "maintenance").length,
-    totalSlots: mockStations.reduce((sum, s) => sum + s.totalSlots, 0),
-    availableSlots: mockStations.reduce((sum, s) => sum + s.availableSlots, 0),
+    online: filteredStations.filter(s => s.status === "online").length,
+    offline: filteredStations.filter(s => s.status === "offline").length,
+    maintenance: filteredStations.filter(s => s.status === "maintenance").length,
+    totalSlots: filteredStations.reduce((sum, s) => sum + s.totalSlots, 0),
+    availableSlots: filteredStations.reduce((sum, s) => sum + s.availableSlots, 0),
   }
 
   return (
@@ -162,62 +176,68 @@ export default function StationsPage() {
       </div>
 
       {/* Stations Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredStations.map((station, index) => (
-          <motion.div
-            key={station.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <Card 
-              className="cursor-pointer transition-all hover:shadow-md hover:border-primary/20"
-              onClick={() => setSelectedStation(station)}
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Spinner size="lg" />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredStations.map((station, index) => (
+            <motion.div
+              key={station.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`h-2 w-2 rounded-full ${getStatusColor(station.status)}`} />
-                    <span className="font-medium text-foreground">{station.name}</span>
-                  </div>
-                  {getStatusBadge(station.status)}
-                </div>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5" />
-                    <span className="truncate">{station.location}</span>
+              <Card 
+                className="cursor-pointer transition-all hover:shadow-md hover:border-primary/20"
+                onClick={() => setSelectedStation(station)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${getStatusColor(station.status)}`} />
+                      <span className="font-medium text-foreground">{station.name}</span>
+                    </div>
+                    {getStatusBadge(station.status)}
                   </div>
                   
-                  <div className="flex items-center justify-between">
+                  <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Battery className="h-3.5 w-3.5" />
-                      <span>{station.availableSlots}/{station.totalSlots} available</span>
+                      <MapPin className="h-3.5 w-3.5" />
+                      <span className="truncate">{station.location}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Battery className="h-3.5 w-3.5" />
+                        <span>{station.availableSlots}/{station.totalSlots} available</span>
+                      </div>
+                    </div>
+                    
+                    {/* Slot visualization */}
+                    <div className="flex gap-1 mt-2">
+                      {Array.from({ length: station.totalSlots }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`h-1.5 flex-1 rounded-full ${
+                            i < station.availableSlots ? "bg-primary" : "bg-gray-200"
+                          }`}
+                        />
+                      ))}
                     </div>
                   </div>
-                  
-                  {/* Slot visualization */}
-                  <div className="flex gap-1 mt-2">
-                    {Array.from({ length: station.totalSlots }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-1.5 flex-1 rounded-full ${
-                          i < station.availableSlots ? "bg-primary" : "bg-gray-200"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
 
-                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-                  <span>ID: {station.id}</span>
-                  <span>Last ping: {station.lastPing}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                  <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                    <span>ID: {station.id}</span>
+                    <span>Battery: {station.batteryLevel}%</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Station Detail Sheet */}
       <Sheet open={!!selectedStation} onOpenChange={() => setSelectedStation(null)}>
@@ -305,9 +325,9 @@ export default function StationsPage() {
                             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {session.duration}
+                                {session.durationMinutes ? `${session.durationMinutes}m` : 'Active'}
                               </span>
-                              <span>{session.startTime}</span>
+                              <span>{formatDateTime(new Date(session.startTime))}</span>
                             </div>
                           </CardContent>
                         </Card>

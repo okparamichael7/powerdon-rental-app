@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/volt/status-badge';
+import { Spinner } from '@/components/ui/spinner';
 import { 
   Sheet, 
   SheetContent, 
@@ -13,8 +14,10 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { mockSessions, mockTimelineEvents } from '@/lib/mock-data';
-import type { RentalSession } from '@/lib/types';
+import { useSessions } from '@/hooks/use-services';
+import { rentalService } from '@/lib/services';
+import { isSuccessResponse } from '@/lib/api/client';
+import type { RentalSession, TimelineEvent } from '@/lib/types';
 import { formatDateTime, formatTime } from '@/lib/utils';
 import { 
   Search, 
@@ -46,15 +49,45 @@ export default function SessionsPage() {
   const [selectedSession, setSelectedSession] = useState<RentalSession | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
 
-  const filteredSessions = mockSessions.filter((session) => {
-    const matchesSearch = 
-      session.sessionCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      session.userEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (session.userName?.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || session.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const { data: sessions, loading, fetchSessions, refetch } = useSessions();
+
+  // Fetch sessions with filters
+  useEffect(() => {
+    const filters: Parameters<typeof fetchSessions>[0] = {};
+    
+    if (searchQuery) {
+      filters.search = searchQuery;
+    }
+    
+    if (statusFilter !== 'all') {
+      filters.status = [statusFilter as RentalSession['status']];
+    }
+
+    fetchSessions(filters);
+  }, [searchQuery, statusFilter, fetchSessions]);
+
+  // Load timeline when session is selected
+  useEffect(() => {
+    async function loadTimeline() {
+      if (!selectedSession) return;
+      
+      setTimelineLoading(true);
+      try {
+        const response = await rentalService.getSessionTimeline(selectedSession.id);
+        if (isSuccessResponse(response)) {
+          setTimelineEvents(response.data);
+        }
+      } finally {
+        setTimelineLoading(false);
+      }
+    }
+    loadTimeline();
+  }, [selectedSession?.id]);
+
+  const filteredSessions = sessions || [];
 
   return (
     <div className="space-y-6">
@@ -71,7 +104,7 @@ export default function SessionsPage() {
             <Download size={16} className="mr-2" />
             Export
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw size={16} className="mr-2" />
             Refresh
           </Button>
@@ -128,126 +161,134 @@ export default function SessionsPage() {
       {/* Sessions Table */}
       <Card>
         <CardContent className="p-0">
-          {/* Desktop Table */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Session
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Station
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Duration
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Payment
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Reward
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Spinner size="lg" />
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Session
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Station
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Duration
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Payment
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Reward
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredSessions.map((session) => (
+                      <tr
+                        key={session.id}
+                        className="hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => setSelectedSession(session)}
+                      >
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-foreground font-mono text-sm">
+                              {session.sessionCode}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(new Date(session.startTime))}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="text-sm text-foreground">{session.userName || 'Anonymous'}</p>
+                            <p className="text-xs text-muted-foreground">{session.userEmail}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="text-sm text-foreground">{session.stationName}</p>
+                            <p className="text-xs text-muted-foreground">Slot {session.slotNumber}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-foreground">
+                            {session.durationMinutes
+                              ? `${Math.floor(session.durationMinutes / 60)}h ${session.durationMinutes % 60}m`
+                              : 'In progress'}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={session.status} size="sm" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={session.paymentStatus} size="sm" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={session.rewardStatus} size="sm" />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <p className="font-semibold text-foreground">
+                            €{session.amountCharged.toFixed(2)}
+                          </p>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="lg:hidden divide-y divide-border">
                 {filteredSessions.map((session) => (
-                  <tr
+                  <div
                     key={session.id}
-                    className="hover:bg-muted/50 cursor-pointer transition-colors"
+                    className="p-4 space-y-3 cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={() => setSelectedSession(session)}
                   >
-                    <td className="px-6 py-4">
+                    <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-foreground font-mono text-sm">
+                        <p className="font-mono text-sm font-semibold text-foreground">
                           {session.sessionCode}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDateTime(new Date(session.startTime))}
                         </p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm text-foreground">{session.userName || 'Anonymous'}</p>
-                        <p className="text-xs text-muted-foreground">{session.userEmail}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm text-foreground">{session.stationName}</p>
-                        <p className="text-xs text-muted-foreground">Slot {session.slotNumber}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {session.durationMinutes
-                          ? `${Math.floor(session.durationMinutes / 60)}h ${session.durationMinutes % 60}m`
-                          : 'In progress'}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
                       <StatusBadge status={session.status} size="sm" />
-                    </td>
-                    <td className="px-6 py-4">
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm text-foreground">{session.userName || session.userEmail}</p>
+                        <p className="text-xs text-muted-foreground">{session.stationName}</p>
+                      </div>
+                      <p className="text-lg font-bold text-foreground">€{session.amountCharged.toFixed(2)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <StatusBadge status={session.paymentStatus} size="sm" />
-                    </td>
-                    <td className="px-6 py-4">
                       <StatusBadge status={session.rewardStatus} size="sm" />
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <p className="font-semibold text-foreground">
-                        €{session.amountCharged.toFixed(2)}
-                      </p>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Cards */}
-          <div className="lg:hidden divide-y divide-border">
-            {filteredSessions.map((session) => (
-              <div
-                key={session.id}
-                className="p-4 space-y-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={() => setSelectedSession(session)}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-mono text-sm font-semibold text-foreground">
-                      {session.sessionCode}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDateTime(new Date(session.startTime))}
-                    </p>
-                  </div>
-                  <StatusBadge status={session.status} size="sm" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm text-foreground">{session.userName || session.userEmail}</p>
-                    <p className="text-xs text-muted-foreground">{session.stationName}</p>
-                  </div>
-                  <p className="text-lg font-bold text-foreground">€{session.amountCharged.toFixed(2)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={session.paymentStatus} size="sm" />
-                  <StatusBadge status={session.rewardStatus} size="sm" />
-                </div>
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -374,29 +415,35 @@ export default function SessionsPage() {
                     <CardTitle className="text-sm font-medium">Session Timeline</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {mockTimelineEvents.map((event, index) => {
-                        const Icon = timelineIconMap[event.type] || CheckCircle;
-                        return (
-                          <div key={event.id} className="flex gap-3">
-                            <div className="relative">
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                                <Icon size={14} className="text-muted-foreground" />
+                    {timelineLoading ? (
+                      <div className="flex items-center justify-center h-32">
+                        <Spinner />
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {timelineEvents.map((event, index) => {
+                          const Icon = timelineIconMap[event.type] || CheckCircle;
+                          return (
+                            <div key={event.id} className="flex gap-3">
+                              <div className="relative">
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                                  <Icon size={14} className="text-muted-foreground" />
+                                </div>
+                                {index < timelineEvents.length - 1 && (
+                                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-6 bg-border" />
+                                )}
                               </div>
-                              {index < mockTimelineEvents.length - 1 && (
-                                <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-6 bg-border" />
-                              )}
+                              <div className="flex-1 pb-4">
+                                <p className="text-sm font-medium text-foreground">{event.description}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatTime(new Date(event.timestamp))}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex-1 pb-4">
-                              <p className="text-sm font-medium text-foreground">{event.description}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatTime(new Date(event.timestamp))}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 

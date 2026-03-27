@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Select,
   SelectContent,
@@ -29,41 +30,51 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Search, Users, Mail, Download, UserCheck, UserX, Clock, Zap, MapPin, Calendar } from "lucide-react"
-import { mockLeads, mockSessions } from "@/lib/mock-data"
-import type { Lead } from "@/lib/types"
+import { useUsers, useSessions } from "@/hooks/use-services"
+import { formatDateTime } from "@/lib/utils"
+import type { User, RentalSession } from "@/lib/types"
 
 export default function LeadsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [consentFilter, setConsentFilter] = useState<string>("all")
   const [selectedLeads, setSelectedLeads] = useState<string[]>([])
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [selectedLead, setSelectedLead] = useState<User | null>(null)
 
-  const filteredLeads = mockLeads.filter((lead) => {
-    const matchesSearch = 
-      lead.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lead.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    const matchesConsent = 
-      consentFilter === "all" || 
-      (consentFilter === "marketing" && lead.marketingConsent) ||
-      (consentFilter === "no-marketing" && !lead.marketingConsent)
-    return matchesSearch && matchesConsent
-  })
+  const { data: users, loading: usersLoading, fetchUsers } = useUsers()
+  const { data: allSessions, fetchSessions } = useSessions()
+
+  // Fetch users on mount with filters
+  useEffect(() => {
+    const filters: Parameters<typeof fetchUsers>[0] = {}
+    if (searchQuery) filters.search = searchQuery
+    if (consentFilter === "marketing") filters.marketingConsent = true
+    if (consentFilter === "no-marketing") filters.marketingConsent = false
+    fetchUsers(filters)
+  }, [searchQuery, consentFilter, fetchUsers])
+
+  // Fetch sessions for selected lead
+  useEffect(() => {
+    if (selectedLead) {
+      fetchSessions({ search: selectedLead.email })
+    }
+  }, [selectedLead?.id, fetchSessions])
+
+  const filteredLeads = users || []
+  const leadSessions = selectedLead 
+    ? (allSessions?.filter(s => s.userEmail === selectedLead.email) || [])
+    : []
 
   const stats = {
-    total: mockLeads.length,
-    withMarketing: mockLeads.filter(l => l.marketingConsent).length,
-    thisWeek: mockLeads.filter(l => {
+    total: filteredLeads.length,
+    withMarketing: filteredLeads.filter(l => l.marketingConsent).length,
+    thisWeek: filteredLeads.filter(l => {
       const date = new Date(l.createdAt)
       const weekAgo = new Date()
       weekAgo.setDate(weekAgo.getDate() - 7)
       return date > weekAgo
     }).length,
-    activeRenters: mockLeads.filter(l => l.totalRentals > 1).length,
+    activeRenters: filteredLeads.filter(l => l.totalRentals > 1).length,
   }
-
-  const leadSessions = selectedLead 
-    ? mockSessions.filter(s => s.userEmail === selectedLead.email)
-    : []
 
   const toggleSelectLead = (id: string) => {
     setSelectedLeads(prev => 
@@ -182,112 +193,120 @@ export default function LeadsPage() {
         </Select>
       </div>
 
-      {/* Desktop Table */}
-      <Card className="hidden lg:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[50px]">
-                <Checkbox 
-                  checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                />
-              </TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Rentals</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Marketing</TableHead>
-              <TableHead>Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredLeads.map((lead) => (
-              <TableRow 
-                key={lead.id} 
-                className="cursor-pointer"
-                onClick={() => setSelectedLead(lead)}
-              >
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Checkbox 
-                    checked={selectedLeads.includes(lead.id)}
-                    onCheckedChange={() => toggleSelectLead(lead.id)}
-                  />
-                </TableCell>
-                <TableCell className="font-medium">{lead.email}</TableCell>
-                <TableCell className="text-muted-foreground">{lead.name || "—"}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{lead.totalRentals}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{lead.source}</TableCell>
-                <TableCell>
-                  {lead.marketingConsent ? (
-                    <UserCheck className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <UserX className="h-4 w-4 text-gray-400" />
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{lead.createdAt}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Mobile Cards */}
-      <div className="space-y-3 lg:hidden">
-        {filteredLeads.map((lead, index) => (
-          <motion.div
-            key={lead.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <Card 
-              className="cursor-pointer"
-              onClick={() => setSelectedLead(lead)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
+      {usersLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Spinner size="lg" />
+        </div>
+      ) : (
+        <>
+          {/* Desktop Table */}
+          <Card className="hidden lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
                     <Checkbox 
-                      checked={selectedLeads.includes(lead.id)}
-                      onCheckedChange={() => toggleSelectLead(lead.id)}
-                      onClick={(e) => e.stopPropagation()}
+                      checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
+                      onCheckedChange={toggleSelectAll}
                     />
-                    <div>
-                      <p className="font-medium text-foreground">{lead.email}</p>
-                      {lead.name && (
-                        <p className="text-sm text-muted-foreground">{lead.name}</p>
+                  </TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Rentals</TableHead>
+                  <TableHead>Total Spent</TableHead>
+                  <TableHead>Marketing</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLeads.map((lead) => (
+                  <TableRow 
+                    key={lead.id} 
+                    className="cursor-pointer"
+                    onClick={() => setSelectedLead(lead)}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox 
+                        checked={selectedLeads.includes(lead.id)}
+                        onCheckedChange={() => toggleSelectLead(lead.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{lead.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{lead.name || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{lead.totalRentals}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">€{lead.totalSpent.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {lead.marketingConsent ? (
+                        <UserCheck className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <UserX className="h-4 w-4 text-gray-400" />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatDateTime(new Date(lead.createdAt))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+
+          {/* Mobile Cards */}
+          <div className="space-y-3 lg:hidden">
+            {filteredLeads.map((lead, index) => (
+              <motion.div
+                key={lead.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card 
+                  className="cursor-pointer"
+                  onClick={() => setSelectedLead(lead)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Checkbox 
+                          checked={selectedLeads.includes(lead.id)}
+                          onCheckedChange={() => toggleSelectLead(lead.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">{lead.email}</p>
+                          {lead.name && (
+                            <p className="text-sm text-muted-foreground">{lead.name}</p>
+                          )}
+                        </div>
+                      </div>
+                      {lead.marketingConsent ? (
+                        <Badge variant="secondary" className="bg-green-100 text-green-700">Opted In</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-600">No Marketing</Badge>
                       )}
                     </div>
-                  </div>
-                  {lead.marketingConsent ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-700">Opted In</Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-600">No Marketing</Badge>
-                  )}
-                </div>
 
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Rentals</p>
-                    <p className="font-medium">{lead.totalRentals}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Source</p>
-                    <p className="font-medium">{lead.source}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Created</p>
-                    <p>{lead.createdAt}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Rentals</p>
+                        <p className="font-medium">{lead.totalRentals}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Spent</p>
+                        <p className="font-medium">€{lead.totalSpent.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Created</p>
+                        <p>{formatDateTime(new Date(lead.createdAt))}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Lead Detail Sheet */}
       <Sheet open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
@@ -313,12 +332,8 @@ export default function LeadsPage() {
                       <span>{selectedLead.email}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span>Source: {selectedLead.source}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>Joined: {selectedLead.createdAt}</span>
+                      <span>Joined: {formatDateTime(new Date(selectedLead.createdAt))}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -333,10 +348,8 @@ export default function LeadsPage() {
                   </Card>
                   <Card>
                     <CardContent className="p-4 text-center">
-                      <p className="text-2xl font-semibold text-foreground">
-                        {selectedLead.marketingConsent ? "Yes" : "No"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Marketing Consent</p>
+                      <p className="text-2xl font-semibold text-foreground">€{selectedLead.totalSpent.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Total Spent</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -381,9 +394,9 @@ export default function LeadsPage() {
                               </Badge>
                             </div>
                             <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span>{session.duration}</span>
-                              <span>{session.amountCharged}</span>
-                              <span>{session.startTime}</span>
+                              <span>{session.durationMinutes ? `${session.durationMinutes}m` : 'Active'}</span>
+                              <span>€{session.amountCharged.toFixed(2)}</span>
+                              <span>{formatDateTime(new Date(session.startTime))}</span>
                             </div>
                           </CardContent>
                         </Card>
@@ -408,7 +421,7 @@ export default function LeadsPage() {
         </SheetContent>
       </Sheet>
 
-      {filteredLeads.length === 0 && (
+      {filteredLeads.length === 0 && !usersLoading && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
