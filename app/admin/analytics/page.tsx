@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Select,
   SelectContent,
@@ -14,8 +16,6 @@ import {
   Area,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -26,57 +26,109 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
-import { Download, TrendingUp, Users, Clock, Zap, DollarSign, Gift, MapPin } from "lucide-react"
+import { Download, TrendingUp, Clock, Zap, Euro, Gift, RefreshCw, AlertCircle } from "lucide-react"
+import { formatNumber } from '@/lib/utils';
+import { analyticsService } from '@/lib/services';
+import { isSuccessResponse } from '@/lib/api/client';
+import type { 
+  RevenueAnalytics, 
+  SessionAnalytics, 
+  RewardAnalytics, 
+  FunnelAnalytics 
+} from '@/lib/api/types';
 
-const revenueData = [
-  { date: "Mon", revenue: 1240, rentals: 62 },
-  { date: "Tue", revenue: 1580, rentals: 79 },
-  { date: "Wed", revenue: 1890, rentals: 94 },
-  { date: "Thu", revenue: 2100, rentals: 105 },
-  { date: "Fri", revenue: 2850, rentals: 142 },
-  { date: "Sat", revenue: 3200, rentals: 160 },
-  { date: "Sun", revenue: 2900, rentals: 145 },
-]
-
-const hourlyUsage = [
-  { hour: "6am", rentals: 12 },
-  { hour: "8am", rentals: 45 },
-  { hour: "10am", rentals: 78 },
-  { hour: "12pm", rentals: 120 },
-  { hour: "2pm", rentals: 95 },
-  { hour: "4pm", rentals: 85 },
-  { hour: "6pm", rentals: 145 },
-  { hour: "8pm", rentals: 180 },
-  { hour: "10pm", rentals: 130 },
-  { hour: "12am", rentals: 45 },
-]
-
+// Duration distribution (static for now - could be computed from session analytics)
 const durationDistribution = [
   { name: "< 30 min", value: 15, color: "#e5e7eb" },
   { name: "30-60 min", value: 25, color: "#93c5fd" },
   { name: "1-2 hrs", value: 35, color: "#3b82f6" },
   { name: "2-4 hrs", value: 18, color: "#1d4ed8" },
   { name: "> 4 hrs", value: 7, color: "#1e3a8a" },
-]
-
-const stationPerformance = [
-  { name: "Main Stage", rentals: 245, revenue: 4900 },
-  { name: "Food Court", rentals: 189, revenue: 3780 },
-  { name: "VIP Entrance", rentals: 156, revenue: 3120 },
-  { name: "East Gate", rentals: 134, revenue: 2680 },
-  { name: "Merch Area", rentals: 98, revenue: 1960 },
-]
-
-const conversionFunnel = [
-  { stage: "QR Scans", value: 1500 },
-  { stage: "Info Submitted", value: 1200 },
-  { stage: "Payment Started", value: 950 },
-  { stage: "Rental Started", value: 890 },
-  { stage: "Completed", value: 820 },
-  { stage: "Reward Earned", value: 580 },
-]
+];
 
 export default function AnalyticsPage() {
+  const [timeRange, setTimeRange] = useState('7d');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Analytics data
+  const [revenueData, setRevenueData] = useState<RevenueAnalytics | null>(null);
+  const [sessionData, setSessionData] = useState<SessionAnalytics | null>(null);
+  const [rewardData, setRewardData] = useState<RewardAnalytics | null>(null);
+  const [funnelData, setFunnelData] = useState<FunnelAnalytics | null>(null);
+  const [hourlyData, setHourlyData] = useState<{ hour: string; count: number }[]>([]);
+
+  const fetchAnalytics = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const [revenueRes, sessionRes, rewardRes, funnelRes, hourlyRes] = await Promise.all([
+        analyticsService.getRevenueAnalytics(),
+        analyticsService.getSessionAnalytics(),
+        analyticsService.getRewardAnalytics(),
+        analyticsService.getFunnelAnalytics(),
+        analyticsService.getHourlyDistribution(),
+      ]);
+      
+      if (isSuccessResponse(revenueRes)) setRevenueData(revenueRes.data);
+      if (isSuccessResponse(sessionRes)) setSessionData(sessionRes.data);
+      if (isSuccessResponse(rewardRes)) setRewardData(rewardRes.data);
+      if (isSuccessResponse(funnelRes)) setFunnelData(funnelRes.data);
+      if (isSuccessResponse(hourlyRes)) setHourlyData(hourlyRes.data);
+    } catch (err) {
+      setError('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics, timeRange]);
+
+  // Loading state
+  if (loading && !revenueData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Spinner className="w-8 h-8 mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error && !revenueData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-6 h-6 text-destructive" />
+              </div>
+              <h3 className="font-semibold text-foreground mb-2">Failed to Load Analytics</h3>
+              <p className="text-sm text-muted-foreground mb-4">{error}</p>
+              <Button onClick={fetchAnalytics}>
+                <RefreshCw size={16} className="mr-2" />
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Format duration from minutes
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -86,7 +138,7 @@ export default function AnalyticsPage() {
           <p className="text-sm text-muted-foreground">Deep dive into platform performance</p>
         </div>
         <div className="flex gap-2">
-          <Select defaultValue="7d">
+          <Select value={timeRange} onValueChange={setTimeRange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Time range" />
             </SelectTrigger>
@@ -97,6 +149,10 @@ export default function AnalyticsPage() {
               <SelectItem value="90d">Last 90 days</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={fetchAnalytics} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Button variant="outline">
             <Download className="mr-2 h-4 w-4" />
             Export
@@ -109,13 +165,15 @@ export default function AnalyticsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <DollarSign className="h-5 w-5 text-muted-foreground" />
+              <Euro className="h-5 w-5 text-muted-foreground" />
               <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
                 +23%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">$15,760</p>
+            <p className="text-2xl font-semibold text-foreground">
+              {revenueData ? `€${formatNumber(revenueData.totalRevenue)}` : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Total Revenue</p>
           </CardContent>
         </Card>
@@ -128,7 +186,9 @@ export default function AnalyticsPage() {
                 +18%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">787</p>
+            <p className="text-2xl font-semibold text-foreground">
+              {sessionData ? formatNumber(sessionData.totalSessions) : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Total Rentals</p>
           </CardContent>
         </Card>
@@ -141,7 +201,9 @@ export default function AnalyticsPage() {
                 +5%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">1h 42m</p>
+            <p className="text-2xl font-semibold text-foreground">
+              {sessionData ? formatDuration(sessionData.averageDuration) : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Avg Duration</p>
           </CardContent>
         </Card>
@@ -154,7 +216,9 @@ export default function AnalyticsPage() {
                 +12%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">65%</p>
+            <p className="text-2xl font-semibold text-foreground">
+              {rewardData ? `${rewardData.redemptionRate.toFixed(0)}%` : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Reward Rate</p>
           </CardContent>
         </Card>
@@ -170,7 +234,7 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
+                <AreaChart data={revenueData?.revenueByPeriod || []}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -178,7 +242,7 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                  <XAxis dataKey="period" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                   <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                   <Tooltip 
                     contentStyle={{ 
@@ -186,6 +250,7 @@ export default function AnalyticsPage() {
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                     }}
+                    formatter={(value: number) => [`€${value}`, 'Revenue']}
                   />
                   <Area
                     type="monotone"
@@ -209,7 +274,7 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyUsage}>
+                <BarChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="hour" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                   <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
@@ -220,7 +285,7 @@ export default function AnalyticsPage() {
                       borderRadius: '8px',
                     }}
                   />
-                  <Bar dataKey="rentals" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Rentals" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -282,10 +347,10 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stationPerformance} layout="vertical">
+                <BarChart data={sessionData?.sessionsByStation || []} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis type="number" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis type="category" dataKey="name" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} width={100} />
+                  <YAxis type="category" dataKey="stationName" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} width={100} />
                   <Tooltip 
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--card))',
@@ -294,7 +359,7 @@ export default function AnalyticsPage() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="rentals" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Rentals" />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Rentals" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -303,59 +368,65 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Conversion Funnel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-medium">Conversion Funnel</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {conversionFunnel.map((stage, index) => {
-              const prevValue = index > 0 ? conversionFunnel[index - 1].value : stage.value
-              const conversionRate = index > 0 ? ((stage.value / prevValue) * 100).toFixed(1) : 100
-              const widthPercent = (stage.value / conversionFunnel[0].value) * 100
-              
-              return (
-                <div key={stage.stage} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{stage.stage}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium">{stage.value.toLocaleString()}</span>
-                      {index > 0 && (
-                        <span className="text-xs text-muted-foreground">({conversionRate}%)</span>
-                      )}
+      {funnelData && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-medium">Conversion Funnel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {funnelData.stages.map((stage, index) => {
+                const widthPercent = (stage.count / funnelData.stages[0].count) * 100;
+                
+                return (
+                  <div key={stage.stage} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{stage.stage}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium">{formatNumber(stage.count)}</span>
+                        {index > 0 && (
+                          <span className="text-xs text-muted-foreground">({stage.conversionRate.toFixed(1)}%)</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary rounded-full transition-all duration-500"
+                        style={{ width: `${widthPercent}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary rounded-full transition-all duration-500"
-                      style={{ width: `${widthPercent}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          
-          <div className="mt-6 pt-4 border-t grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-semibold text-foreground">80%</p>
-              <p className="text-xs text-muted-foreground">Scan → Info</p>
+                );
+              })}
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-semibold text-foreground">79%</p>
-              <p className="text-xs text-muted-foreground">Info → Payment</p>
+            
+            <div className="mt-6 pt-4 border-t grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-foreground">
+                  {funnelData.stages[1] ? ((funnelData.stages[1].count / funnelData.stages[0].count) * 100).toFixed(0) : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground">Scan -&gt; Info</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-foreground">
+                  {funnelData.stages[2] && funnelData.stages[1] ? ((funnelData.stages[2].count / funnelData.stages[1].count) * 100).toFixed(0) : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground">Info -&gt; Payment</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-foreground">
+                  {funnelData.stages[3] && funnelData.stages[2] ? ((funnelData.stages[3].count / funnelData.stages[2].count) * 100).toFixed(0) : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground">Payment -&gt; Rental</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-foreground">{funnelData.overallConversion.toFixed(0)}%</p>
+                <p className="text-xs text-muted-foreground">Overall Conversion</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-semibold text-foreground">94%</p>
-              <p className="text-xs text-muted-foreground">Payment → Rental</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-semibold text-foreground">65%</p>
-              <p className="text-xs text-muted-foreground">Completed → Reward</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
-  )
+  );
 }

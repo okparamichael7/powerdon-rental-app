@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatTime } from '@/lib/utils';
+import { formatTime, formatNumber } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/volt/status-badge';
 import { Spinner } from '@/components/ui/spinner';
@@ -85,7 +85,7 @@ export default function AdminOverviewPage() {
     },
     {
       name: 'Total Revenue',
-      value: `€${dashboardStats.totalRevenue.toLocaleString()}`,
+      value: `€${formatNumber(dashboardStats.totalRevenue)}`,
       change: '+8.2%',
       changeType: 'positive' as const,
       icon: Euro,

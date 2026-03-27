@@ -110,16 +110,4 @@ export interface TimelineEvent {
   metadata?: Record<string, string | number>;
 }
 
-// Public app flow state
-export interface RentalFlow {
-  step: 'landing' | 'info' | 'payment' | 'unlocking' | 'active' | 'returning' | 'complete' | 'reward' | 'error';
-  stationId: string;
-  stationName: string;
-  campaignId: string;
-  campaignName: string;
-  slotNumber?: number;
-  hourlyRate: number;
-  depositAmount: number;
-  rewardThreshold: number;
-  rewardDescription: string;
-}
+

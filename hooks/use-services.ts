@@ -401,6 +401,61 @@ export function useActiveCampaigns() {
   return { ...state, refetch: fetchActiveCampaigns };
 }
 
+export function useCreateCampaign() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createCampaign = useCallback(async (request: Parameters<typeof campaignService.createCampaign>[0]) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await campaignService.createCampaign(request);
+      if (isSuccessResponse(response)) {
+        return response.data;
+      } else {
+        setError(getErrorMessage(response));
+        return null;
+      }
+    } catch (err) {
+      setError('Failed to create campaign');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { createCampaign, loading, error };
+}
+
+export function useUpdateCampaign() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateCampaign = useCallback(async (
+    id: string, 
+    request: Parameters<typeof campaignService.updateCampaign>[1]
+  ) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await campaignService.updateCampaign(id, request);
+      if (isSuccessResponse(response)) {
+        return response.data;
+      } else {
+        setError(getErrorMessage(response));
+        return null;
+      }
+    } catch (err) {
+      setError('Failed to update campaign');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { updateCampaign, loading, error };
+}
+
 // ============================================================
 // SUPPORT HOOKS
 // ============================================================

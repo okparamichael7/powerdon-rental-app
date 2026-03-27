@@ -22,3 +22,14 @@ export function formatDate(date: Date): string {
 export function formatDateTime(date: Date): string {
   return `${formatDate(date)} ${formatTime(date)}`;
 }
+
+// Number formatting helper (using fixed locale to avoid hydration mismatches)
+export function formatNumber(num: number): string {
+  return num.toLocaleString('en-US');
+}
+
+// Currency formatting helper
+export function formatCurrency(amount: number, currency: string = 'EUR'): string {
+  const symbol = currency === 'EUR' ? '€' : '$';
+  return `${symbol}${formatNumber(amount)}`;
+}
