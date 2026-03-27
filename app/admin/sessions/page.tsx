@@ -94,7 +94,7 @@ export default function SessionsPage() {
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Sessions</h1>
+          <h1 className="text-xl font-semibold text-foreground">Sessions</h1>
           <p className="text-muted-foreground">
             Monitor and manage all rental sessions
           </p>

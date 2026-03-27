@@ -170,19 +170,19 @@ function NoRewardsView({
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-muted rounded-2xl flex items-center justify-center mb-6"
+          className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center mb-6"
         >
           <GiftIcon size={40} className="text-muted-foreground" />
         </motion.div>
 
         <div className="text-center max-w-sm mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2">No Rewards Yet</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">No Rewards Yet</h1>
           <p className="text-muted-foreground">
             Start renting a power bank to earn rewards! Rent for at least 60 minutes to qualify for exclusive perks.
           </p>
         </div>
 
-        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 w-full max-w-sm mb-8">
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 w-full max-w-sm mb-8">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
               <GiftIcon size={18} className="text-primary" />
@@ -199,7 +199,7 @@ function NoRewardsView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onStartRental}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <PowerDonLogo size={18} />
             Start Rental
@@ -208,7 +208,7 @@ function NoRewardsView({
             variant="outline"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             {isRefreshing ? (
               <>
@@ -263,7 +263,7 @@ function InProgressView({
               {isQualified ? 'Qualified!' : 'In Progress'}
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-xl font-semibold text-foreground">
             {isQualified ? 'You Did It!' : 'Almost There!'}
           </h1>
           <p className="mt-2 text-muted-foreground">
@@ -279,7 +279,7 @@ function InProgressView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-card rounded-2xl border border-border p-6 space-y-6"
+          className="bg-card rounded-lg border border-border p-6 space-y-6"
         >
           {/* Circular Progress Indicator */}
           <div className="flex justify-center">
@@ -335,7 +335,7 @@ function InProgressView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white"
+          className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg p-5 text-white"
         >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
@@ -353,7 +353,7 @@ function InProgressView({
         <div className="pt-4">
           <Button 
             onClick={onViewStatus}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             {isQualified ? 'Return Power Bank' : 'View Active Rental'}
           </Button>
@@ -393,7 +393,7 @@ function RewardsListView({
       <main className="flex-1 px-5 py-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Your Rewards</h1>
+            <h1 className="text-xl font-semibold text-foreground">Your Rewards</h1>
             <p className="text-muted-foreground text-sm">
               {issuedRewards.length} active, {redeemedRewards.length} redeemed
             </p>
@@ -420,7 +420,7 @@ function RewardsListView({
               <button
                 key={reward.id}
                 onClick={() => onSelectReward(reward)}
-                className="w-full bg-card rounded-2xl border border-border p-4 text-left hover:bg-muted transition-colors"
+                className="w-full bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -449,7 +449,7 @@ function RewardsListView({
               <button
                 key={reward.id}
                 onClick={() => onSelectReward(reward)}
-                className="w-full bg-card rounded-2xl border border-border p-4 text-left hover:bg-muted transition-colors opacity-70"
+                className="w-full bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors opacity-70"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
@@ -473,7 +473,7 @@ function RewardsListView({
             {expiredRewards.map(reward => (
               <div
                 key={reward.id}
-                className="w-full bg-muted rounded-2xl p-4 opacity-50"
+                className="w-full bg-muted rounded-lg p-4 opacity-50"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-muted-foreground/10 rounded-xl flex items-center justify-center">
@@ -557,7 +557,7 @@ function IssuedDetailView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card rounded-2xl border border-border overflow-hidden"
+          className="bg-card rounded-lg border border-border overflow-hidden"
         >
           {/* Voucher Header */}
           <div className="relative h-40 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center overflow-hidden">
@@ -609,7 +609,7 @@ function IssuedDetailView({
           <Button 
             onClick={() => onRedeem(reward.id)}
             disabled={isRedeeming}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             {isRedeeming ? (
               <>
@@ -663,13 +663,13 @@ function RedeemedDetailView({
         </motion.div>
 
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Reward Redeemed</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">Reward Redeemed</h1>
           <p className="text-muted-foreground">
             You successfully used this voucher at {reward.redemptionLocation}.
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
+        <div className="bg-card rounded-lg border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Value</span>
             <span className="font-semibold text-foreground">{formatCurrency(reward.value)}</span>
@@ -692,7 +692,7 @@ function RedeemedDetailView({
           )}
         </div>
 
-        <div className="bg-muted rounded-2xl p-4">
+        <div className="bg-muted rounded-lg p-4">
           <p className="text-sm text-muted-foreground text-center">
             Rent again for 60+ minutes to earn another reward!
           </p>
@@ -700,7 +700,7 @@ function RedeemedDetailView({
 
         <Button 
           onClick={onStartRental}
-          className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+          className="w-full h-12 text-[15px] font-medium rounded-lg"
         >
           <PowerDonLogo size={18} />
           Start New Rental

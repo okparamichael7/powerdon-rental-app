@@ -11,27 +11,27 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   // Session statuses
-  pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  completed: { label: 'Completed', className: 'bg-slate-50 text-slate-600 border-slate-200' },
-  expired: { label: 'Expired', className: 'bg-red-50 text-red-600 border-red-200' },
-  failed: { label: 'Failed', className: 'bg-red-50 text-red-600 border-red-200' },
+  pending: { label: 'Pending', className: 'bg-amber-50/80 text-amber-700 border-amber-200/60' },
+  active: { label: 'Active', className: 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60' },
+  completed: { label: 'Completed', className: 'bg-muted text-muted-foreground border-border' },
+  expired: { label: 'Expired', className: 'bg-red-50/80 text-red-600 border-red-200/60' },
+  failed: { label: 'Failed', className: 'bg-red-50/80 text-red-600 border-red-200/60' },
   
   // Station statuses
-  online: { label: 'Online', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  offline: { label: 'Offline', className: 'bg-slate-50 text-slate-600 border-slate-200' },
-  maintenance: { label: 'Maintenance', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  'low-battery': { label: 'Low Battery', className: 'bg-orange-50 text-orange-600 border-orange-200' },
+  online: { label: 'Online', className: 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60' },
+  offline: { label: 'Offline', className: 'bg-muted text-muted-foreground border-border' },
+  maintenance: { label: 'Maintenance', className: 'bg-amber-50/80 text-amber-700 border-amber-200/60' },
+  'low-battery': { label: 'Low Battery', className: 'bg-orange-50/80 text-orange-600 border-orange-200/60' },
   
   // Reward statuses
-  qualified: { label: 'Qualified', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-  issued: { label: 'Issued', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  redeemed: { label: 'Redeemed', className: 'bg-slate-50 text-slate-600 border-slate-200' },
+  qualified: { label: 'Qualified', className: 'bg-primary/10 text-primary border-primary/20' },
+  issued: { label: 'Issued', className: 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60' },
+  redeemed: { label: 'Redeemed', className: 'bg-muted text-muted-foreground border-border' },
   
   // Payment statuses
-  authorized: { label: 'Authorized', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-  captured: { label: 'Captured', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  refunded: { label: 'Refunded', className: 'bg-slate-50 text-slate-600 border-slate-200' },
+  authorized: { label: 'Authorized', className: 'bg-primary/10 text-primary border-primary/20' },
+  captured: { label: 'Captured', className: 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60' },
+  refunded: { label: 'Refunded', className: 'bg-muted text-muted-foreground border-border' },
 };
 
 export function StatusBadge({ status, className, size = 'md' }: StatusBadgeProps) {

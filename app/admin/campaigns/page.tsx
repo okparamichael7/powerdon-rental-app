@@ -178,7 +178,7 @@ export default function CampaignsPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Campaigns</h1>
+            <h1 className="text-xl font-semibold text-foreground">Campaigns</h1>
             <p className="text-muted-foreground">
               Create and manage reward campaigns for your events
             </p>
@@ -224,7 +224,7 @@ export default function CampaignsPage() {
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Campaigns</h1>
+          <h1 className="text-xl font-semibold text-foreground">Campaigns</h1>
           <p className="text-muted-foreground">
             Create and manage reward campaigns for your events
           </p>
@@ -370,14 +370,14 @@ function CampaignCard({
               <Zap size={14} />
               <span className="text-xs">Sessions</span>
             </div>
-            <p className="text-2xl font-bold text-foreground">{formatNumber(campaign.totalSessions)}</p>
+            <p className="text-xl font-semibold text-foreground">{formatNumber(campaign.totalSessions)}</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
               <Gift size={14} />
               <span className="text-xs">Rewards Issued</span>
             </div>
-            <p className="text-2xl font-bold text-foreground">{formatNumber(campaign.totalRewardsIssued)}</p>
+            <p className="text-xl font-semibold text-foreground">{formatNumber(campaign.totalRewardsIssued)}</p>
           </div>
         </div>
 

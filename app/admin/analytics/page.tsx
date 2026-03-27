@@ -134,7 +134,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Analytics</h1>
+          <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
           <p className="text-sm text-muted-foreground">Deep dive into platform performance</p>
         </div>
         <div className="flex gap-2">
@@ -171,7 +171,7 @@ export default function AnalyticsPage() {
                 +23%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">
+            <p className="text-xl font-semibold text-foreground">
               {revenueData ? `€${formatNumber(revenueData.totalRevenue)}` : '-'}
             </p>
             <p className="text-xs text-muted-foreground">Total Revenue</p>
@@ -186,7 +186,7 @@ export default function AnalyticsPage() {
                 +18%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">
+            <p className="text-xl font-semibold text-foreground">
               {sessionData ? formatNumber(sessionData.totalSessions) : '-'}
             </p>
             <p className="text-xs text-muted-foreground">Total Rentals</p>
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
                 +5%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">
+            <p className="text-xl font-semibold text-foreground">
               {sessionData ? formatDuration(sessionData.averageDuration) : '-'}
             </p>
             <p className="text-xs text-muted-foreground">Avg Duration</p>
@@ -216,7 +216,7 @@ export default function AnalyticsPage() {
                 +12%
               </span>
             </div>
-            <p className="text-2xl font-semibold text-foreground">
+            <p className="text-xl font-semibold text-foreground">
               {rewardData ? `${rewardData.redemptionRate.toFixed(0)}%` : '-'}
             </p>
             <p className="text-xs text-muted-foreground">Reward Rate</p>
@@ -402,25 +402,25 @@ export default function AnalyticsPage() {
             
             <div className="mt-6 pt-4 border-t grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="text-center">
-                <p className="text-2xl font-semibold text-foreground">
+                <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[1] ? ((funnelData.stages[1].count / funnelData.stages[0].count) * 100).toFixed(0) : 0}%
                 </p>
                 <p className="text-xs text-muted-foreground">Scan -&gt; Info</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-semibold text-foreground">
+                <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[2] && funnelData.stages[1] ? ((funnelData.stages[2].count / funnelData.stages[1].count) * 100).toFixed(0) : 0}%
                 </p>
                 <p className="text-xs text-muted-foreground">Info -&gt; Payment</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-semibold text-foreground">
+                <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[3] && funnelData.stages[2] ? ((funnelData.stages[3].count / funnelData.stages[2].count) * 100).toFixed(0) : 0}%
                 </p>
                 <p className="text-xs text-muted-foreground">Payment -&gt; Rental</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-semibold text-foreground">{funnelData.overallConversion.toFixed(0)}%</p>
+                <p className="text-xl font-semibold text-foreground">{funnelData.overallConversion.toFixed(0)}%</p>
                 <p className="text-xs text-muted-foreground">Overall Conversion</p>
               </div>
             </div>

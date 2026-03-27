@@ -203,10 +203,10 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
-          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
             <HeadphonesIcon size={32} className="text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">How can we help?</h1>
+          <h1 className="text-xl font-semibold text-foreground">How can we help?</h1>
           <p className="mt-1 text-muted-foreground">
             Find answers or get in touch with our support team.
           </p>
@@ -218,7 +218,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4"
+            className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -249,7 +249,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-card rounded-2xl border border-border p-4 space-y-3"
+          className="bg-card rounded-lg border border-border p-4 space-y-3"
         >
           <h2 className="font-semibold text-foreground">Look up your session</h2>
           <p className="text-sm text-muted-foreground">
@@ -319,7 +319,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
         >
           <button
             onClick={() => onNavigate('status')}
-            className="flex-1 bg-card rounded-2xl border border-border p-4 text-left hover:bg-muted transition-colors"
+            className="flex-1 bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors"
           >
             <ClockIcon size={20} className="text-primary mb-2" />
             <p className="font-semibold text-foreground text-sm">Check Status</p>
@@ -327,7 +327,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           </button>
           <button
             onClick={() => setContactFormVisible(true)}
-            className="flex-1 bg-card rounded-2xl border border-border p-4 text-left hover:bg-muted transition-colors"
+            className="flex-1 bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors"
           >
             <HeadphonesIcon size={20} className="text-primary mb-2" />
             <p className="font-semibold text-foreground text-sm">Contact Us</p>
@@ -350,7 +350,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
                 <button
                   key={category.id}
                   onClick={() => setSelectedCategory(category.id)}
-                  className="bg-card rounded-2xl border border-border p-4 text-left hover:bg-muted transition-colors"
+                  className="bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors"
                 >
                   <Icon size={20} className="text-primary mb-2" />
                   <p className="font-semibold text-foreground text-sm">{category.label}</p>
@@ -412,7 +412,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-muted rounded-2xl p-5 text-center space-y-3"
+          className="bg-muted rounded-lg p-5 text-center space-y-3"
         >
           <p className="text-sm text-muted-foreground">
             Still need help? Our support team is available 24/7.
@@ -532,7 +532,7 @@ function IssueDetailView({
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-4"
         >
-          <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center">
+          <div className="w-14 h-14 bg-primary/10 rounded-lg flex items-center justify-center">
             <Icon size={28} className="text-primary" />
           </div>
           <div>
@@ -552,7 +552,7 @@ function IssueDetailView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-card rounded-2xl border border-border p-5 space-y-4"
+          className="bg-card rounded-lg border border-border p-5 space-y-4"
         >
           <h2 className="font-semibold text-foreground">Try these steps:</h2>
           <ol className="space-y-3">
@@ -593,7 +593,7 @@ function IssueDetailView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-muted rounded-2xl p-5 text-center space-y-3"
+          className="bg-muted rounded-lg p-5 text-center space-y-3"
         >
           <p className="text-sm text-muted-foreground">
             Issue not resolved? Contact our support team for personalized help.
@@ -644,13 +644,13 @@ function ContactFormView({
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            className="w-20 h-20 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6"
+            className="w-20 h-20 bg-emerald-100 rounded-lg flex items-center justify-center mb-6"
           >
             <CheckCircleIcon size={40} className="text-emerald-600" />
           </motion.div>
 
           <div className="text-center max-w-sm">
-            <h1 className="text-2xl font-bold text-foreground mb-2">Message Sent</h1>
+            <h1 className="text-xl font-semibold text-foreground mb-2">Message Sent</h1>
             <p className="text-muted-foreground">
               We&apos;ve received your message and will get back to you within 1 hour. Check your email for updates.
             </p>
@@ -760,7 +760,7 @@ function ContactFormView({
           <Button 
             onClick={onSubmit}
             disabled={isSubmitting}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-14 text-base font-semibold rounded-lg"
           >
             {isSubmitting ? (
               <>

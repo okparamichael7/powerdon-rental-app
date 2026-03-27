@@ -86,7 +86,7 @@ export default function StationsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Stations</h1>
+          <h1 className="text-xl font-semibold text-foreground">Stations</h1>
           <p className="text-sm text-muted-foreground">Monitor and manage power bank stations</p>
         </div>
         <Button className="bg-primary hover:bg-primary/90">
@@ -104,7 +104,7 @@ export default function StationsPage() {
                 <Wifi className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.online}</p>
+                <p className="text-xl font-semibold text-foreground">{stats.online}</p>
                 <p className="text-xs text-muted-foreground">Online</p>
               </div>
             </div>
@@ -117,7 +117,7 @@ export default function StationsPage() {
                 <WifiOff className="h-5 w-5 text-gray-500" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.offline}</p>
+                <p className="text-xl font-semibold text-foreground">{stats.offline}</p>
                 <p className="text-xs text-muted-foreground">Offline</p>
               </div>
             </div>
@@ -130,7 +130,7 @@ export default function StationsPage() {
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.maintenance}</p>
+                <p className="text-xl font-semibold text-foreground">{stats.maintenance}</p>
                 <p className="text-xs text-muted-foreground">Maintenance</p>
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function StationsPage() {
                 <Battery className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.availableSlots}/{stats.totalSlots}</p>
+                <p className="text-xl font-semibold text-foreground">{stats.availableSlots}/{stats.totalSlots}</p>
                 <p className="text-xs text-muted-foreground">Available Slots</p>
               </div>
             </div>

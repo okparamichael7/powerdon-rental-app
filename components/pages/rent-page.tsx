@@ -249,7 +249,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-20 h-20 bg-destructive/10 rounded-2xl flex items-center justify-center mb-6"
+            className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
           >
             <XCircleIcon size={40} className="text-destructive" />
           </motion.div>
@@ -260,21 +260,21 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             transition={{ delay: 0.1 }}
             className="text-center max-w-sm"
           >
-            <h1 className="text-2xl font-bold text-foreground mb-2">{config.title}</h1>
+            <h1 className="text-xl font-semibold text-foreground mb-2">{config.title}</h1>
             <p className="text-muted-foreground">{config.description}</p>
           </motion.div>
 
           <div className="w-full max-w-sm space-y-3 mt-8">
             <Button 
               onClick={handleErrorAction}
-              className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+              className="w-full h-12 text-[15px] font-medium rounded-lg"
             >
               {config.action}
             </Button>
             <Button
               variant="outline"
               onClick={() => onNavigate('support')}
-              className="w-full h-14 text-base font-semibold rounded-2xl"
+              className="w-full h-12 text-[15px] font-medium rounded-lg"
             >
               Contact Support
             </Button>
@@ -387,13 +387,13 @@ function ActiveWarningStep({
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mb-6"
+          className="w-20 h-20 bg-amber-50 rounded-lg flex items-center justify-center mb-6"
         >
           <PowerDonLogo size={40} className="text-amber-600" />
         </motion.div>
 
         <div className="text-center max-w-sm mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Active Rental Detected</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">Active Rental Detected</h1>
           <p className="text-muted-foreground">
             You already have an active power bank rental. Would you like to view its status or continue browsing?
           </p>
@@ -402,14 +402,14 @@ function ActiveWarningStep({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onViewRental}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             View Active Rental
           </Button>
           <Button
             variant="outline"
             onClick={onContinueAnyway}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             Continue Browsing
           </Button>
@@ -466,12 +466,12 @@ function LandingStep({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-card rounded-2xl border border-border p-5"
+            className="bg-card rounded-lg border border-border p-5"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Festival Rate</p>
-                <p className="text-2xl font-bold text-foreground">
+                <p className="text-xl font-semibold text-foreground">
                   {formatCurrency(station.hourlyRate)}
                   <span className="text-base font-normal text-muted-foreground">/hr</span>
                 </p>
@@ -479,7 +479,7 @@ function LandingStep({
               <div className="h-10 w-px bg-border" />
               <div className="text-right">
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Deposit</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(station.depositAmount)}</p>
+                <p className="text-xl font-semibold text-foreground">{formatCurrency(station.depositAmount)}</p>
                 <p className="text-xs font-medium text-primary uppercase">Refundable</p>
               </div>
             </div>
@@ -489,7 +489,7 @@ function LandingStep({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-primary text-primary-foreground rounded-2xl p-4"
+            className="bg-primary text-primary-foreground rounded-lg p-4"
           >
             <div className="flex items-start gap-3">
               <div className="flex items-center justify-center w-10 h-10 bg-primary-foreground/10 rounded-xl flex-shrink-0">
@@ -550,7 +550,7 @@ function LandingStep({
         <div className="sticky bottom-20 p-5 pb-8 bg-gradient-to-t from-background via-background to-transparent">
           <Button 
             onClick={onStart}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             Start rental
             <ArrowRightIcon size={18} />
@@ -606,13 +606,13 @@ function InfoStep({
       
       <main className="flex-1 px-5 py-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Complete your profile</h1>
+          <h1 className="text-xl font-semibold text-foreground">Complete your profile</h1>
           <p className="mt-1 text-muted-foreground">
             Enter your details to start your rental at {station.campaignName}.
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-4">
+        <div className="bg-card rounded-lg border border-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-xl">
               <PowerDonLogo size={24} className="text-primary" />
@@ -701,7 +701,7 @@ function InfoStep({
         <div className="pt-4">
           <Button 
             onClick={onSubmit}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             Continue to Payment
             <ArrowRightIcon size={18} />
@@ -739,13 +739,13 @@ function PaymentStep({
       
       <main className="flex-1 px-5 py-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Authorize payment</h1>
+          <h1 className="text-xl font-semibold text-foreground">Authorize payment</h1>
           <p className="mt-1 text-muted-foreground">
             A hold will be placed on your card. You&apos;ll only be charged for actual usage.
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
+        <div className="bg-card rounded-lg border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Security deposit</span>
             <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
@@ -823,7 +823,7 @@ function PaymentStep({
           <Button 
             onClick={onSubmit}
             disabled={isProcessing}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             {isProcessing ? (
               <>
@@ -877,7 +877,7 @@ function UnlockingStep({
 
         <div className="text-center mb-8">
           <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Unlocking Power Bank</p>
-          <h1 className="text-2xl font-bold text-foreground">Please wait...</h1>
+          <h1 className="text-xl font-semibold text-foreground">Please wait...</h1>
           <p className="mt-2 text-muted-foreground">
             The power bank at slot {assignedSlot} is being released.
           </p>
@@ -892,7 +892,7 @@ function UnlockingStep({
             />
           </div>
           
-          <div className="bg-card rounded-2xl border border-border p-4">
+          <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Station</span>
               <span className="font-mono text-foreground">{station.id}</span>
@@ -948,7 +948,7 @@ function SuccessStep({
         </div>
 
         {/* Slot Collection Card */}
-        <div className="bg-card rounded-2xl border border-border overflow-hidden w-full max-w-sm mb-4">
+        <div className="bg-card rounded-lg border border-border overflow-hidden w-full max-w-sm mb-4">
           <div className="px-4 py-3 bg-muted/50 border-b border-border">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Collect from</span>
@@ -976,7 +976,7 @@ function SuccessStep({
           </div>
         </div>
 
-        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 w-full max-w-sm mb-6">
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 w-full max-w-sm mb-6">
           <div className="flex items-start gap-3">
             <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
             <p className="text-sm text-foreground">
@@ -988,7 +988,7 @@ function SuccessStep({
         <div className="w-full max-w-sm">
           <Button 
             onClick={onContinue}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             View Rental Status
             <ArrowRightIcon size={18} />
@@ -1059,13 +1059,13 @@ function ErrorStep({
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="w-20 h-20 bg-destructive/10 rounded-2xl flex items-center justify-center mb-6"
+          className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
         >
           <XCircleIcon size={40} className="text-destructive" />
         </motion.div>
 
         <div className="text-center max-w-sm mb-4">
-          <h1 className="text-2xl font-bold text-foreground mb-2">{config.title}</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">{config.title}</h1>
           <p className="text-muted-foreground">{customMessage || config.description}</p>
         </div>
 
@@ -1091,7 +1091,7 @@ function ErrorStep({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onAction}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <RefreshIcon size={18} />
             {config.action}
@@ -1099,7 +1099,7 @@ function ErrorStep({
           <Button
             variant="outline"
             onClick={onSupport}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             Contact Support
           </Button>

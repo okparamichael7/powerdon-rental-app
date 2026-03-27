@@ -1,9 +1,13 @@
 import type { Station, Campaign, RentalSession, User, Reward, DashboardStats, TimelineEvent } from './types';
 
-// Helper to create dates relative to now
-const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000);
-const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-const daysFromNow = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+// Use a fixed reference date to avoid hydration mismatches between server/client
+// This represents a "snapshot" of the data at a specific point in time
+const REFERENCE_DATE = new Date('2024-01-27T14:00:00.000Z');
+
+// Helper to create dates relative to the fixed reference
+const hoursAgo = (hours: number) => new Date(REFERENCE_DATE.getTime() - hours * 60 * 60 * 1000);
+const daysAgo = (days: number) => new Date(REFERENCE_DATE.getTime() - days * 24 * 60 * 60 * 1000);
+const daysFromNow = (days: number) => new Date(REFERENCE_DATE.getTime() + days * 24 * 60 * 60 * 1000);
 
 export const mockStations: Station[] = [
   {

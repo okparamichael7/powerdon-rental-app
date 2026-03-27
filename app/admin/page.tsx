@@ -127,20 +127,20 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
             Monitor your rental operations in real-time
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="flex items-center gap-3 mt-3 md:mt-0">
+          <Badge variant="outline" className="gap-1.5 text-[11px] font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             All Systems Operational
           </Badge>
-          <span className="text-sm text-muted-foreground">
-            Last updated: Just now
+          <span className="text-xs text-muted-foreground">
+            Updated just now
           </span>
         </div>
       </div>
@@ -171,25 +171,25 @@ export default function AdminOverviewPage() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <Card key={stat.name} className="relative overflow-hidden">
-            <CardContent className="p-5">
+          <Card key={stat.name}>
+            <CardContent className="p-4">
               <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">{stat.name}</p>
-                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                  <div className={`flex items-center gap-1 text-xs font-medium ${
-                    stat.changeType === 'positive' ? 'text-emerald-600' : 'text-red-600'
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">{stat.name}</p>
+                  <p className="text-xl font-semibold text-foreground tabular-nums">{stat.value}</p>
+                  <div className={`flex items-center gap-1 text-[11px] font-medium ${
+                    stat.changeType === 'positive' ? 'text-emerald-600' : 'text-red-500'
                   }`}>
                     {stat.changeType === 'positive' ? (
-                      <ArrowUpRight size={14} />
+                      <ArrowUpRight size={12} />
                     ) : (
-                      <ArrowDownRight size={14} />
+                      <ArrowDownRight size={12} />
                     )}
                     {stat.change} vs last week
                   </div>
                 </div>
-                <div className="p-2.5 bg-primary/10 rounded-lg">
-                  <stat.icon size={20} className="text-primary" />
+                <div className="p-2 bg-muted rounded-md">
+                  <stat.icon size={16} className="text-muted-foreground" />
                 </div>
               </div>
             </CardContent>

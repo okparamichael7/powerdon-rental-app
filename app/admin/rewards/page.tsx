@@ -83,7 +83,7 @@ export default function RewardsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Rewards & Vouchers</h1>
+          <h1 className="text-xl font-semibold text-foreground">Rewards & Vouchers</h1>
           <p className="text-sm text-muted-foreground">Track issued vouchers and redemptions</p>
         </div>
         <Button variant="outline">
@@ -101,7 +101,7 @@ export default function RewardsPage() {
                 <Gift className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.total}</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.total}</p>
                 <p className="text-xs text-muted-foreground">Total Issued</p>
               </div>
             </div>
@@ -114,7 +114,7 @@ export default function RewardsPage() {
                 <CheckCircle className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.redeemed}</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.redeemed}</p>
                 <p className="text-xs text-muted-foreground">Redeemed</p>
               </div>
             </div>
@@ -127,7 +127,7 @@ export default function RewardsPage() {
                 <Clock className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">{stats.issued}</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.issued}</p>
                 <p className="text-xs text-muted-foreground">Pending</p>
               </div>
             </div>
@@ -140,7 +140,7 @@ export default function RewardsPage() {
                 <Ticket className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-foreground">€{stats.redeemedValue}</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">€{stats.redeemedValue}</p>
                 <p className="text-xs text-muted-foreground">Value Redeemed</p>
               </div>
             </div>

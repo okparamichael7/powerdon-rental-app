@@ -35,7 +35,7 @@ export function BottomNav({
       )}
       aria-label="Main navigation"
     >
-      <div className="flex items-center justify-around h-16 max-w-md mx-auto safe-area-pb">
+      <div className="flex items-center justify-around h-14 max-w-md mx-auto safe-area-pb">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -48,9 +48,9 @@ export function BottomNav({
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
+                'relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-label={tab.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
@@ -60,8 +60,8 @@ export function BottomNav({
                 {showBadge && (
                   <span 
                     className={cn(
-                      'absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold',
-                      badgeCount > 0 ? 'min-w-[16px] h-4 px-1' : 'w-2.5 h-2.5'
+                      'absolute -top-0.5 -right-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-semibold',
+                      badgeCount > 0 ? 'min-w-[14px] h-3.5 px-0.5' : 'w-2 h-2'
                     )}
                     aria-label={
                       tab.id === 'status' 
@@ -73,13 +73,10 @@ export function BottomNav({
                   </span>
                 )}
               </div>
-              <span className="text-xs font-medium">{tab.label}</span>
-              {isActive && (
-                <span 
-                  className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" 
-                  aria-hidden="true"
-                />
-              )}
+              <span className={cn(
+                "text-[11px]",
+                isActive ? "font-medium" : "font-normal"
+              )}>{tab.label}</span>
             </button>
           );
         })}

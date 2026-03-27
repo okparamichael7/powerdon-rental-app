@@ -185,13 +185,13 @@ function NoSessionView({
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-20 h-20 bg-muted rounded-2xl flex items-center justify-center mb-6"
+          className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center mb-6"
         >
           <PowerBankIcon size={40} className="text-muted-foreground" />
         </motion.div>
 
         <div className="text-center max-w-sm mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2">No Active Rental</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">No Active Rental</h1>
           <p className="text-muted-foreground">
             You don&apos;t have any active power bank rentals right now. Start a new rental to stay charged.
           </p>
@@ -200,7 +200,7 @@ function NoSessionView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onStartRental}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <PowerDonLogo size={18} />
             Start New Rental
@@ -209,7 +209,7 @@ function NoSessionView({
             variant="outline"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             {isRefreshing ? (
               <>
@@ -225,7 +225,7 @@ function NoSessionView({
           </Button>
         </div>
 
-        <div className="mt-8 p-4 bg-muted rounded-2xl w-full max-w-sm">
+        <div className="mt-8 p-4 bg-muted rounded-lg w-full max-w-sm">
           <p className="text-sm text-muted-foreground text-center">
             <span className="font-medium text-foreground">Looking for your rental?</span>
             <br />
@@ -320,7 +320,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white"
+          className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg p-5 text-white"
         >
           <div className="flex items-start justify-between">
             <div>
@@ -353,7 +353,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card rounded-2xl border border-border p-5 space-y-4"
+          className="bg-card rounded-lg border border-border p-5 space-y-4"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -402,7 +402,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-card rounded-2xl border border-border p-5"
+          className="bg-card rounded-lg border border-border p-5"
         >
           <h3 className="font-semibold text-foreground mb-3">Current Charges</h3>
           <div className="space-y-2">
@@ -430,7 +430,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="bg-card rounded-2xl border border-border overflow-hidden"
+          className="bg-card rounded-lg border border-border overflow-hidden"
         >
           <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Session Info</span>
@@ -476,7 +476,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-card rounded-2xl border border-border overflow-hidden"
+          className="bg-card rounded-lg border border-border overflow-hidden"
         >
           <div className="px-4 py-3 bg-muted/50 border-b border-border">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Activity Timeline</span>
@@ -550,7 +550,7 @@ function ActiveSessionView({
         >
           <Button 
             onClick={onReturn}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <MapPinIcon size={18} />
             Return Power Bank
@@ -565,7 +565,7 @@ function ActiveSessionView({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-muted/50 rounded-2xl p-4"
+          className="bg-muted/50 rounded-lg p-4"
         >
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-background rounded-xl flex items-center justify-center flex-shrink-0">
@@ -621,7 +621,7 @@ function ReturningView({
 
         <div className="text-center mb-8">
           <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Processing Return</p>
-          <h1 className="text-2xl font-bold text-foreground">Verifying Return...</h1>
+          <h1 className="text-xl font-semibold text-foreground">Verifying Return...</h1>
           <p className="mt-2 text-muted-foreground">
             Please wait while we verify your power bank has been returned to the station.
           </p>
@@ -636,7 +636,7 @@ function ReturningView({
             />
           </div>
           
-          <div className="bg-card rounded-2xl border border-border p-4">
+          <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Session</span>
               <span className="font-mono text-foreground">{session.sessionCode}</span>
@@ -699,14 +699,14 @@ function CompletedView({
         </motion.div>
 
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground">Return Complete!</h1>
+          <h1 className="text-xl font-semibold text-foreground">Return Complete!</h1>
           <p className="mt-1 text-muted-foreground">
             Thank you for using PowerDon. Your rental has been successfully completed.
           </p>
         </div>
 
         {/* Receipt Card */}
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</span>
             <span className="font-mono text-xs text-foreground">{session.sessionCode}</span>
@@ -754,7 +754,7 @@ function CompletedView({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-primary to-primary/80 rounded-2xl p-5 text-primary-foreground"
+            className="bg-gradient-to-br from-primary to-primary/80 rounded-lg p-5 text-primary-foreground"
           >
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
@@ -776,7 +776,7 @@ function CompletedView({
           {qualifiedForReward ? (
             <Button 
               onClick={onViewRewards}
-              className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+              className="w-full h-12 text-[15px] font-medium rounded-lg"
             >
               <GiftIcon size={18} />
               View My Reward
@@ -784,7 +784,7 @@ function CompletedView({
           ) : (
             <Button 
               onClick={onStartNew}
-              className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+              className="w-full h-12 text-[15px] font-medium rounded-lg"
             >
               <PowerDonLogo size={18} />
               Start New Rental
@@ -795,7 +795,7 @@ function CompletedView({
             <Button
               variant="outline"
               onClick={onStartNew}
-              className="w-full h-14 text-base font-semibold rounded-2xl"
+              className="w-full h-12 text-[15px] font-medium rounded-lg"
             >
               Start Another Rental
             </Button>
@@ -831,13 +831,13 @@ function ErrorView({
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="w-20 h-20 bg-destructive/10 rounded-2xl flex items-center justify-center mb-6"
+          className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
         >
           <XCircleIcon size={40} className="text-destructive" />
         </motion.div>
 
         <div className="text-center max-w-sm mb-6">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Something Went Wrong</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">Something Went Wrong</h1>
           <p className="text-muted-foreground">
             {error || 'We encountered an error processing your request. Please try again.'}
           </p>
@@ -876,7 +876,7 @@ function ErrorView({
         <div className="w-full max-w-sm space-y-3">
           <Button 
             onClick={onRetry}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <RefreshIcon size={18} />
             Try Again
@@ -884,7 +884,7 @@ function ErrorView({
           <Button
             variant="outline"
             onClick={onSupport}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-12 text-[15px] font-medium rounded-lg"
           >
             <HeadphonesIcon size={18} />
             Contact Support
