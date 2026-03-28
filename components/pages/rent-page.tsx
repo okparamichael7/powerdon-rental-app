@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { 
-  PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon, 
+import {
+  PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
   XCircleIcon, RefreshIcon, CheckCircleIcon, ChevronLeftIcon
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   const { activeSession, currentStation, user, startRental, setUser, setActiveSession } = useAppState();
-  
+
   const [step, setStep] = useState<RentStep>('landing');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ErrorType | null>(null);
@@ -96,10 +96,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   useEffect(() => {
     const initPage = async () => {
       setIsLoading(true);
-      
+
       // Simulate loading station data
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       if (!isOnline) {
         setError('network');
         setIsLoading(false);
@@ -172,16 +172,16 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
       // Proceed to unlocking
       setStep('unlocking');
       setAssignedSlot(Math.floor(Math.random() * 12) + 1);
-      
+
       // Simulate unlock process
       let progress = 0;
       const interval = setInterval(async () => {
         progress += 10;
         setUnlockProgress(progress);
-        
+
         if (progress >= 100) {
           clearInterval(interval);
-          
+
           // Start the actual rental
           const result = await startRental({
             email,
@@ -212,7 +212,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     if (!error) return;
 
     const config = errorConfigs[error];
-    
+
     if (error === 'duplicate_session') {
       onNavigate('status');
       return;
@@ -265,7 +265,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           </motion.div>
 
           <div className="w-full max-w-xs space-y-3 mt-10">
-            <Button 
+            <Button
               onClick={handleErrorAction}
               className="w-full h-12 text-sm font-medium"
             >
@@ -382,7 +382,7 @@ function ActiveWarningStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader />
-      
+
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
@@ -400,16 +400,16 @@ function ActiveWarningStep({
         </div>
 
         <div className="w-full max-w-sm space-y-3">
-          <Button 
+          <Button
             onClick={onViewRental}
-            className="w-full h-12 text-sm font-medium"
+            className="w-full h-12 text-sm font-medium rounded-none"
           >
             View Active Rental
           </Button>
           <Button
             variant="outline"
             onClick={onContinueAnyway}
-            className="w-full h-12 text-sm font-medium"
+            className="w-full h-12 text-sm font-medium rounded-none"
           >
             Continue Browsing
           </Button>
@@ -420,10 +420,10 @@ function ActiveWarningStep({
 }
 
 // Landing Step Component
-function LandingStep({ 
-  station, 
-  onStart 
-}: { 
+function LandingStep({
+  station,
+  onStart
+}: {
   station: { id: string; campaignName: string; hourlyRate: number; depositAmount: number; rewardDescription: string; availableSlots: number };
   onStart: () => void;
 }) {
@@ -435,14 +435,14 @@ function LandingStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader subtitle={`${station.campaignName.toUpperCase()} • STATION ${station.id}`} />
-      
+
       <main className="flex-1 flex flex-col">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="relative w-full aspect-[4/3] overflow-hidden"
         >
-          <img 
+          <img
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/powerbanks.png-n6OHfLGwW8PS0RkEAFHCgSp1h0fhk6.jpeg"
             alt="PowerDon power banks"
             className="w-full h-full object-cover"
@@ -526,7 +526,7 @@ function LandingStep({
         </div>
 
         <div className="sticky bottom-20 px-6 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-          <Button 
+          <Button
             onClick={onStart}
             className="w-full h-12 text-sm font-medium"
           >
@@ -578,7 +578,7 @@ function InfoStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader title="Your Info" showBack onBack={onBack} />
-      
+
       <main className="flex-1 px-6 py-8 space-y-8">
         <div>
           <h1 className="text-lg font-medium text-foreground">Your details</h1>
@@ -666,7 +666,7 @@ function InfoStep({
         </div>
 
         <div className="pt-6">
-          <Button 
+          <Button
             onClick={onSubmit}
             className="w-full h-12 text-sm font-medium"
           >
@@ -703,7 +703,7 @@ function PaymentStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader title="Payment" showBack onBack={onBack} />
-      
+
       <main className="flex-1 px-5 py-6 space-y-6">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Authorize payment</h1>
@@ -719,7 +719,7 @@ function PaymentStep({
           </div>
           <div className="border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              This amount will be held on your card and refunded when you return the power bank. 
+              This amount will be held on your card and refunded when you return the power bank.
               Actual charges will be calculated based on your rental duration.
             </p>
           </div>
@@ -727,12 +727,11 @@ function PaymentStep({
 
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-foreground uppercase tracking-wide">Payment Method</h2>
-          
+
           <button
             onClick={() => setPaymentMethod('apple_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
-              paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5' : 'border-border'
-            }`}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5' : 'border-border'
+              }`}
           >
             <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white text-sm font-semibold">
               Pay
@@ -748,9 +747,8 @@ function PaymentStep({
 
           <button
             onClick={() => setPaymentMethod('google_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
-              paymentMethod === 'google_pay' ? 'border-primary bg-primary/5' : 'border-border'
-            }`}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5' : 'border-border'
+              }`}
           >
             <div className="w-10 h-10 bg-white border border-border rounded-lg flex items-center justify-center text-sm font-semibold">
               G
@@ -766,14 +764,13 @@ function PaymentStep({
 
           <button
             onClick={() => setPaymentMethod('card')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${
-              paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border'
-            }`}
+            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border'
+              }`}
           >
             <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
               <svg width="20" height="16" viewBox="0 0 20 16" fill="none" className="text-muted-foreground">
-                <rect x="1" y="1" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2"/>
-                <path d="M1 5H19" stroke="currentColor" strokeWidth="2"/>
+                <rect x="1" y="1" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M1 5H19" stroke="currentColor" strokeWidth="2" />
               </svg>
             </div>
             <div className="text-left">
@@ -787,7 +784,7 @@ function PaymentStep({
         </div>
 
         <div className="pt-4">
-          <Button 
+          <Button
             onClick={onSubmit}
             disabled={isProcessing}
             className="w-full h-12 text-sm font-medium"
@@ -832,7 +829,7 @@ function UnlockingStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader subtitle="UNLOCKING" />
-      
+
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
           animate={{ rotate: 360 }}
@@ -858,7 +855,7 @@ function UnlockingStep({
               animate={{ width: `${progress}%` }}
             />
           </div>
-          
+
           <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Station</span>
@@ -887,7 +884,7 @@ function SuccessStep({
 }) {
   const sessionCode = `VR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   const startTime = new Date();
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -896,7 +893,7 @@ function SuccessStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader subtitle="CONFIRMED" />
-      
+
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
           initial={{ scale: 0 }}
@@ -953,7 +950,7 @@ function SuccessStep({
         </div>
 
         <div className="w-full max-w-sm">
-          <Button 
+          <Button
             onClick={onContinue}
             className="w-full h-12 text-sm font-medium"
           >
@@ -1021,7 +1018,7 @@ function ErrorStep({
       className="flex flex-col min-h-screen"
     >
       <MobileHeader subtitle="ERROR" />
-      
+
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
           initial={{ scale: 0 }}
@@ -1056,7 +1053,7 @@ function ErrorStep({
         </div>
 
         <div className="w-full max-w-sm space-y-3">
-          <Button 
+          <Button
             onClick={onAction}
             className="w-full h-12 text-sm font-medium"
           >
