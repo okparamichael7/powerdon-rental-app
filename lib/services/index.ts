@@ -8,3 +8,4 @@ export { campaignService, type ICampaignService } from './campaign-service';
 export { supportService, supportFaqs, type ISupportService } from './support-service';
 export { analyticsService, type IAnalyticsService } from './analytics-service';
 export { userService, type IUserService } from './user-service';
+export { hardwareService, type IHardwareService } from './hardware-service';

@@ -19,6 +19,7 @@ import {
   X,
   Bell,
   Search,
+  Cpu,
 } from 'lucide-react';
 
 const navigation = [
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'Sessions', href: '/admin/sessions', icon: Zap },
   { name: 'Campaigns', href: '/admin/campaigns', icon: Megaphone },
   { name: 'Stations', href: '/admin/stations', icon: Radio },
+  { name: 'Hardware', href: '/admin/hardware', icon: Cpu },
   { name: 'Rewards', href: '/admin/rewards', icon: Gift },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
