@@ -20,6 +20,7 @@ import {
   Bell,
   Search,
   Cpu,
+  Activity,
 } from 'lucide-react';
 
 const navigation = [
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Rewards', href: '/admin/rewards', icon: Gift },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { name: 'Operations', href: '/admin/ops', icon: Activity },
 ];
 
 export default function AdminLayout({
