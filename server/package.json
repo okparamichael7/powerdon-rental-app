@@ -1,0 +1,21 @@
+{
+  "name": "powerdon-tcp-proxy",
+  "version": "1.0.0",
+  "description": "TCP Proxy Server for WsCharge station connections",
+  "main": "dist/tcp-proxy.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/tcp-proxy.js",
+    "dev": "ts-node tcp-proxy.ts",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.6.3",
+    "ts-node": "^10.9.2"
+  }
+}
