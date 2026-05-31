@@ -217,6 +217,33 @@ class Logger {
   }
 
   /**
+   * Start a span for tracing (lightweight implementation)
+   * Returns an object with end() method for compatibility with tracing patterns
+   */
+  startSpan(name: string, context?: LogContext): { end: () => number; addAttribute: (key: string, value: unknown) => void } {
+    const start = performance.now();
+    const attributes: Record<string, unknown> = {};
+    
+    this.debug(`Span started: ${name}`, { ...context, spanName: name });
+    
+    return {
+      addAttribute: (key: string, value: unknown) => {
+        attributes[key] = value;
+      },
+      end: () => {
+        const duration = Math.round(performance.now() - start);
+        this.debug(`Span ended: ${name}`, { 
+          ...context, 
+          spanName: name, 
+          duration,
+          attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
+        });
+        return duration;
+      },
+    };
+  }
+
+  /**
    * Log an HTTP request
    */
   request(

@@ -3,7 +3,7 @@ import type Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { logger } from '@/lib/observability/logger'
 import { createClient } from '@/lib/supabase/server'
-import { sendAlert, AlertSeverity } from '@/lib/ops/alerting'
+import { alertManager, type AlertSeverity } from '@/lib/ops/alerting'
 
 // Webhook secret from environment
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -222,7 +222,7 @@ async function handlePaymentIntentFailed(
     }
 
     // Send alert for payment failure
-    await sendAlert({
+    await alertManager.send({
       severity: AlertSeverity.WARNING,
       title: 'Payment Failed',
       message: `Payment failed for session ${sessionId}`,
@@ -438,7 +438,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
 
 async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookResult> {
   // Critical alert for disputes
-  await sendAlert({
+  await alertManager.send({
     severity: AlertSeverity.CRITICAL,
     title: 'Stripe Dispute Created',
     message: `A dispute has been created for charge ${dispute.charge}`,
@@ -464,7 +464,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookRes
 async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<WebhookResult> {
   const won = dispute.status === 'won'
   
-  await sendAlert({
+  await alertManager.send({
     severity: won ? AlertSeverity.INFO : AlertSeverity.WARNING,
     title: `Stripe Dispute ${won ? 'Won' : 'Lost'}`,
     message: `Dispute ${dispute.id} has been ${dispute.status}`,

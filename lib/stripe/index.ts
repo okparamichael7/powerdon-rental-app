@@ -2,14 +2,32 @@ import 'server-only'
 
 import Stripe from 'stripe'
 
-// Initialize Stripe with API version and app info for better debugging
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil',
-  appInfo: {
-    name: 'PowerDon Rental Platform',
-    version: '1.0.0',
+// Lazy initialization to avoid build-time errors when env vars aren't available
+let _stripe: Stripe | null = null
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const apiKey = process.env.STRIPE_SECRET_KEY
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not set')
+    }
+    _stripe = new Stripe(apiKey, {
+      apiVersion: '2025-04-30.basil',
+      appInfo: {
+        name: 'PowerDon Rental Platform',
+        version: '1.0.0',
+      },
+      typescript: true,
+    })
+  }
+  return _stripe
+}
+
+// For backwards compatibility - getter that lazily initializes
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return (getStripe() as Record<string | symbol, unknown>)[prop]
   },
-  typescript: true,
 })
 
 // Re-export types for convenience

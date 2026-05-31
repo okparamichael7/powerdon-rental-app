@@ -7,6 +7,9 @@ import { BillingCharts } from './billing-charts'
 import { RecentTransactionsTable } from './recent-transactions-table'
 import { DisputesAlert } from './disputes-alert'
 
+// Force dynamic rendering - this page requires Stripe API calls
+export const dynamic = 'force-dynamic'
+
 // =============================================================================
 // BILLING DASHBOARD PAGE
 // =============================================================================
