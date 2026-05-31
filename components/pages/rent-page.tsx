@@ -477,7 +477,7 @@ function LandingStep({
                 <p className="text-[10px] text-muted-foreground mt-0.5">First 5 min free</p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Pre-auth</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Deposit</p>
                 <p className="text-xl font-medium text-foreground mt-1">{formatCurrency(station.depositAmount)}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">Refundable</p>
               </div>
@@ -598,7 +598,7 @@ function InfoStep({
             <p className="text-[10px] text-muted-foreground">First 5 min free</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">Pre-auth</p>
+            <p className="text-xs text-muted-foreground">Deposit</p>
             <p className="text-sm font-medium text-foreground">{formatCurrency(station.depositAmount)}</p>
           </div>
         </div>
@@ -719,7 +719,7 @@ function PaymentStep({
 
         <div className="bg-card rounded-lg border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Pre-authorization</span>
+            <span className="text-muted-foreground">Deposit</span>
             <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
           </div>
           <div className="space-y-2 text-xs text-muted-foreground border-t border-border pt-4">
