@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
     if (station.external_id) {
       try {
         // Create borrow command
-        const borrowCommand = protocol.createBorrowCommand(targetSlot, session.session_code);
+        const borrowCommand = protocol.buildBorrowCommand(targetSlot);
         
         // Send via station manager
         const sent = stationManager.sendCommand(station.external_id, borrowCommand);
