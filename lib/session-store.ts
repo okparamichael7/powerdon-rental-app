@@ -81,7 +81,8 @@ export interface UserInfo {
   marketingConsent: boolean;
 }
 
-// Mock station data
+// Mock station data - EUR Ladder Pricing
+// Pre-auth: €28, First 5 min free, €1/15min after, €27 daily cap
 export const mockStation: StationInfo = {
   id: 'A12',
   name: 'Main Stage Hub',
@@ -91,14 +92,15 @@ export const mockStation: StationInfo = {
   totalSlots: 12,
   campaignId: 'CMP-001',
   campaignName: 'Sundance Festival',
-  hourlyRate: 2.00,
-  dailyCap: 10.00,
-  depositAmount: 25.00,
+  hourlyRate: 4.00, // €1/15min = €4/hr equivalent (for display only)
+  dailyCap: 27.00,
+  depositAmount: 28.00,
   rewardThreshold: 60,
   rewardDescription: 'Rent for 60 mins and get a €10 voucher for Sundance merch.',
 };
 
 // Mock active session for demo purposes
+// EUR Ladder Pricing: Pre-auth €28, First 5 min free, €1/15min, €27 daily cap
 export const createMockActiveSession = (): ActiveSession => ({
   id: `SES-${Date.now()}`,
   sessionCode: 'VR-882194B',
@@ -107,10 +109,10 @@ export const createMockActiveSession = (): ActiveSession => ({
   slotNumber: 4,
   startTime: new Date(Date.now() - 45 * 60 * 1000), // Started 45 minutes ago
   elapsedMinutes: 45,
-  hourlyRate: 2.00,
-  dailyCap: 10.00,
-  depositAmount: 25.00,
-  currentCharge: 1.50,
+  hourlyRate: 4.00, // €1/15min = €4/hr equivalent
+  dailyCap: 27.00,
+  depositAmount: 28.00,
+  currentCharge: 3.00, // 45 min = 5 free + 40 chargeable = ceil(40/15) * €1 = 3 intervals = €3
   rewardThreshold: 60,
   rewardDescription: 'Rent for 60 mins and get a €10 voucher for Sundance merch.',
   campaignId: 'CMP-001',
@@ -151,9 +153,25 @@ export function formatCurrency(amount: number): string {
   return `€${amount.toFixed(2)}`;
 }
 
-// Calculate current charge based on elapsed time
-export function calculateCharge(elapsedMinutes: number, hourlyRate: number, dailyCap: number): number {
-  const charge = (elapsedMinutes / 60) * hourlyRate;
+// Calculate current charge based on elapsed time using ladder billing
+// First 5 min free, then €1 per 15 minutes, capped at daily max
+export function calculateCharge(elapsedMinutes: number, _hourlyRate: number, dailyCap: number): number {
+  const FREE_MINUTES = 5;
+  const RATE_PER_INTERVAL = 1.00; // €1
+  const INTERVAL_MINUTES = 15;
+  
+  // First 5 minutes are free
+  const chargeableMinutes = Math.max(0, elapsedMinutes - FREE_MINUTES);
+  
+  if (chargeableMinutes === 0) {
+    return 0;
+  }
+  
+  // Calculate intervals (round up)
+  const intervals = Math.ceil(chargeableMinutes / INTERVAL_MINUTES);
+  const charge = intervals * RATE_PER_INTERVAL;
+  
+  // Apply daily cap
   return Math.min(charge, dailyCap);
 }
 
