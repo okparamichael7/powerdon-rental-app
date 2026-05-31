@@ -7,44 +7,98 @@ import type { Stripe } from 'stripe'
 export const STRIPE_PRODUCTS = {
   RENTAL_DEPOSIT: {
     productId: 'prod_UcU1phsdl2ANSE',
-    priceId: 'price_1TdF3ODPW7Z1YWdIPWntTLoy',
+    priceId: 'price_1TdFOdDPW7Z1YWdIO8ieL7E0', // EUR price
     name: 'Power Bank Rental Deposit',
     description: 'Security deposit for power bank rental - refundable upon return',
-    amountCents: 2000, // $20.00
+    amountCents: 2800, // €28.00
   },
   RENTAL_FEE: {
     productId: 'prod_UcU1C0M83l5QO2',
-    priceId: 'price_1TdF3ODPW7Z1YWdIK5cItJaB',
+    priceId: 'price_1TdFOdDPW7Z1YWdI5DHDS8Nk', // EUR price
     name: 'Power Bank Rental Fee',
-    description: 'Hourly rental fee for power bank usage',
-    amountCents: 100, // $1.00 per hour
+    description: 'Per 15-minute rental fee for power bank usage',
+    amountCents: 100, // €1.00 per 15 minutes
   },
 } as const
 
 // =============================================================================
-// PRICING CONFIGURATION
+// PRICING CONFIGURATION - Ladder Billing Model
 // =============================================================================
 
+export type BillingModel = 'ladder' | 'linear' | 'flat'
+
+export interface PricingTier {
+  fromMinutes: number
+  toMinutes: number | null // null = unlimited
+  ratePerIntervalCents: number
+  intervalMinutes: number
+}
+
 export interface PricingConfig {
-  depositAmountCents: number
-  hourlyRateCents: number
-  minimumChargeCents: number
-  maximumChargeCents: number
+  // Pre-authorization
+  preAuthAmountCents: number
+  
+  // Billing model
+  billingModel: BillingModel
   currency: string
-  freeMinutes: number // Grace period before charging starts
+  taxIncluded: boolean
+  
+  // Time limits
+  freeMinutes: number
+  maxRentalMinutes: number
+  
+  // Caps
+  dailyCapAmountCents: number
   lostDeviceChargeCents: number
-  maxRentalHours: number
+  
+  // Ladder pricing tiers (used when billingModel = 'ladder')
+  tiers: PricingTier[]
 }
 
 export const DEFAULT_PRICING: PricingConfig = {
-  depositAmountCents: 2000, // $20.00 deposit
-  hourlyRateCents: 100, // $1.00/hour
-  minimumChargeCents: 0, // No minimum
-  maximumChargeCents: 2000, // Max $20.00 (deposit amount)
-  currency: 'usd',
-  freeMinutes: 5, // 5 minute grace period
-  lostDeviceChargeCents: 2000, // Full deposit for lost device
-  maxRentalHours: 72, // 3 days max rental
+  // Pre-auth: €28.00
+  preAuthAmountCents: 2800,
+  
+  // Billing configuration
+  billingModel: 'ladder',
+  currency: 'eur',
+  taxIncluded: true,
+  
+  // Time limits
+  freeMinutes: 5, // First 5 minutes free
+  maxRentalMinutes: 24 * 60, // 24 hours max
+  
+  // Caps
+  dailyCapAmountCents: 2700, // €27.00 daily cap
+  lostDeviceChargeCents: 2800, // Full pre-auth for lost device
+  
+  // Ladder pricing: €1.00 per 15 minutes after free period
+  tiers: [
+    {
+      fromMinutes: 0,
+      toMinutes: 5,
+      ratePerIntervalCents: 0, // Free
+      intervalMinutes: 5,
+    },
+    {
+      fromMinutes: 5,
+      toMinutes: null, // Unlimited
+      ratePerIntervalCents: 100, // €1.00
+      intervalMinutes: 15,
+    },
+  ],
+}
+
+// Legacy compatibility - maps to new structure
+export const LEGACY_PRICING = {
+  depositAmountCents: DEFAULT_PRICING.preAuthAmountCents,
+  hourlyRateCents: 400, // €4.00/hour equivalent (4 x €1.00/15min)
+  minimumChargeCents: 0,
+  maximumChargeCents: DEFAULT_PRICING.dailyCapAmountCents,
+  currency: DEFAULT_PRICING.currency,
+  freeMinutes: DEFAULT_PRICING.freeMinutes,
+  lostDeviceChargeCents: DEFAULT_PRICING.lostDeviceChargeCents,
+  maxRentalHours: DEFAULT_PRICING.maxRentalMinutes / 60,
 }
 
 // =============================================================================
@@ -255,40 +309,101 @@ export class StripeServiceError extends Error {
 // =============================================================================
 
 /**
- * Calculate rental charge based on duration
+ * Calculate rental charge using ladder billing model
+ * 
+ * Rules:
+ * - First 5 minutes free
+ * - €1.00 per 15 minutes after free period
+ * - Daily cap of €27.00
+ * - Tax included in all prices
  */
 export function calculateRentalCharge(
   durationMinutes: number,
   pricing: PricingConfig = DEFAULT_PRICING
-): number {
-  // Apply free minutes grace period
-  const chargeableMinutes = Math.max(0, durationMinutes - pricing.freeMinutes)
+): { 
+  totalCents: number
+  breakdown: Array<{ tier: string; minutes: number; charge: number }>
+  cappedAt?: number
+} {
+  const breakdown: Array<{ tier: string; minutes: number; charge: number }> = []
+  let totalCents = 0
+  let remainingMinutes = durationMinutes
   
-  if (chargeableMinutes === 0) {
-    return 0
+  // Process each tier in order
+  for (const tier of pricing.tiers) {
+    if (remainingMinutes <= 0) break
+    
+    // Calculate minutes in this tier
+    const tierStart = tier.fromMinutes
+    const tierEnd = tier.toMinutes ?? Infinity
+    const tierDuration = tierEnd - tierStart
+    
+    // Skip if we haven't reached this tier yet
+    if (durationMinutes <= tierStart) continue
+    
+    // Calculate how many minutes fall into this tier
+    const minutesInTier = Math.min(
+      remainingMinutes,
+      tierDuration,
+      Math.max(0, durationMinutes - tierStart)
+    )
+    
+    if (minutesInTier <= 0) continue
+    
+    // Calculate charge for this tier
+    if (tier.ratePerIntervalCents > 0) {
+      // Round up to the nearest interval
+      const intervals = Math.ceil(minutesInTier / tier.intervalMinutes)
+      const tierCharge = intervals * tier.ratePerIntervalCents
+      
+      totalCents += tierCharge
+      breakdown.push({
+        tier: tier.ratePerIntervalCents === 0 
+          ? 'Free period' 
+          : `€${(tier.ratePerIntervalCents / 100).toFixed(2)}/${tier.intervalMinutes}min`,
+        minutes: minutesInTier,
+        charge: tierCharge,
+      })
+    } else {
+      breakdown.push({
+        tier: 'Free period',
+        minutes: minutesInTier,
+        charge: 0,
+      })
+    }
+    
+    remainingMinutes -= minutesInTier
   }
   
-  // Calculate hours (round up)
-  const hours = Math.ceil(chargeableMinutes / 60)
+  // Apply daily cap
+  const cappedAt = totalCents > pricing.dailyCapAmountCents 
+    ? pricing.dailyCapAmountCents 
+    : undefined
   
-  // Calculate charge
-  let chargeCents = hours * pricing.hourlyRateCents
+  if (cappedAt !== undefined) {
+    totalCents = pricing.dailyCapAmountCents
+  }
   
-  // Apply minimum
-  chargeCents = Math.max(chargeCents, pricing.minimumChargeCents)
-  
-  // Apply maximum (cap at deposit amount)
-  chargeCents = Math.min(chargeCents, pricing.maximumChargeCents)
-  
-  return chargeCents
+  return { totalCents, breakdown, cappedAt }
+}
+
+/**
+ * Simple charge calculation (returns just the total)
+ */
+export function calculateSimpleCharge(
+  durationMinutes: number,
+  pricing: PricingConfig = DEFAULT_PRICING
+): number {
+  return calculateRentalCharge(durationMinutes, pricing).totalCents
 }
 
 /**
  * Format cents to display currency
  */
-export function formatCurrency(cents: number, currency: string = 'usd'): string {
+export function formatCurrency(cents: number, currency: string = 'eur'): string {
   const amount = cents / 100
-  return new Intl.NumberFormat('en-US', {
+  const locale = currency.toLowerCase() === 'eur' ? 'de-DE' : 'en-US'
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency.toUpperCase(),
   }).format(amount)

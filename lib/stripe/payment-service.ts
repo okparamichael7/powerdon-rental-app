@@ -17,6 +17,7 @@ import {
   STRIPE_PRODUCTS,
   mapPaymentIntentStatus,
   calculateRentalCharge,
+  calculateSimpleCharge,
   generateIdempotencyKey,
 } from './types'
 import { logger } from '@/lib/observability/logger'
@@ -155,7 +156,7 @@ export async function createPaymentIntentWithHold(
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount: params.amountCents,
-        currency: 'usd',
+        currency: DEFAULT_PRICING.currency, // EUR
         customer: params.customerId,
         capture_method: params.captureMethod || 'manual', // Manual = authorization only
         receipt_email: params.customerEmail,
@@ -385,7 +386,7 @@ export async function createCheckoutSession(
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: DEFAULT_PRICING.currency, // EUR
             product: STRIPE_PRODUCTS.RENTAL_DEPOSIT.productId,
             unit_amount: params.depositAmountCents,
           },
@@ -449,8 +450,15 @@ export async function getCheckoutSession(
 
 /**
  * Complete rental payment flow:
- * 1. Calculate actual charge based on duration
- * 2. Capture the appropriate amount (or refund difference)
+ * 1. Calculate actual charge based on duration using ladder billing
+ * 2. Capture the appropriate amount (partial capture releases the rest)
+ * 
+ * Pricing rules:
+ * - Pre-auth: €28.00
+ * - First 5 minutes: Free
+ * - After free period: €1.00 per 15 minutes
+ * - Daily cap: €27.00
+ * - Tax: Included
  */
 export async function completeRentalPayment(
   paymentIntentId: string,
@@ -460,6 +468,8 @@ export async function completeRentalPayment(
   paymentIntent: Stripe.PaymentIntent
   chargedAmountCents: number
   refundedAmountCents: number
+  breakdown: Array<{ tier: string; minutes: number; charge: number }>
+  wasCapped: boolean
 }> {
   const span = logger.startSpan('stripe.completeRentalPayment')
   
@@ -467,14 +477,17 @@ export async function completeRentalPayment(
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
     const authorizedAmount = paymentIntent.amount
     
-    // Calculate actual charge
-    const actualChargeCents = calculateRentalCharge(durationMinutes, pricing)
+    // Calculate actual charge using ladder billing
+    const { totalCents: actualChargeCents, breakdown, cappedAt } = calculateRentalCharge(durationMinutes, pricing)
+    const wasCapped = cappedAt !== undefined
     
     logger.info('Completing rental payment', {
       paymentIntentId,
       durationMinutes,
       authorizedAmount,
       actualChargeCents,
+      wasCapped,
+      breakdown,
     })
 
     // If no charge (within free period), cancel the authorization
@@ -484,6 +497,8 @@ export async function completeRentalPayment(
         paymentIntent: canceled,
         chargedAmountCents: 0,
         refundedAmountCents: 0,
+        breakdown,
+        wasCapped: false,
       }
     }
 
@@ -495,6 +510,8 @@ export async function completeRentalPayment(
         duration_minutes: String(durationMinutes),
         charged_amount: String(actualChargeCents),
         authorized_amount: String(authorizedAmount),
+        was_capped: String(wasCapped),
+        billing_model: 'ladder',
       },
     })
 
@@ -502,6 +519,8 @@ export async function completeRentalPayment(
       paymentIntent: captured,
       chargedAmountCents: actualChargeCents,
       refundedAmountCents: 0, // Partial capture automatically releases the rest
+      breakdown,
+      wasCapped,
     }
   } catch (error) {
     logger.error('Failed to complete rental payment', {
