@@ -45,7 +45,7 @@ import {
   MoreVertical,
   Cpu,
   Power,
-  LogOut,
+  Eject,
   RotateCcw,
   Terminal,
   Clock,
@@ -415,7 +415,7 @@ export default function HardwarePage() {
                           onClick={() => handleFullEject(station.stationId)}
                           className="text-orange-600"
                         >
-                          <LogOut className="mr-2 h-4 w-4" />
+                          <Eject className="mr-2 h-4 w-4" />
                           Eject All
                         </DropdownMenuItem>
                         <DropdownMenuItem 
@@ -593,7 +593,7 @@ export default function HardwarePage() {
                                 className="h-8 w-8"
                                 onClick={() => handleForceEject(selectedStation.stationId, slot.slotNumber)}
                               >
-                                <LogOut className="h-4 w-4" />
+                                <Eject className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -631,7 +631,7 @@ export default function HardwarePage() {
                       disabled={!selectedStation.isOnline}
                       className="text-orange-600 hover:text-orange-600"
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
+                      <Eject className="mr-2 h-4 w-4" />
                       Eject All
                     </Button>
                     <Button
