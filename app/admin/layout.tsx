@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { PowerDonLogo, ChevronDownIcon } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
 import {
   LayoutDashboard,
   Zap,
@@ -20,6 +22,7 @@ import {
   Bell,
   Search,
   Cpu,
+  LogOut,
 } from 'lucide-react';
 
 const navigation = [
@@ -39,7 +42,50 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Skip layout for login page
+  const isLoginPage = pathname === '/admin/login';
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    // Get initial user
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/admin/login');
+    router.refresh();
+  }
+
+  // For login page, render without the admin layout
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  // Get user initials
+  const userInitials = user?.email
+    ? user.email.substring(0, 2).toUpperCase()
+    : 'AD';
+  const userDisplayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Admin';
 
   return (
     <div className="min-h-screen bg-background">
@@ -107,8 +153,8 @@ export default function AdminLayout({
             </button>
           </div>
 
-          {/* Settings */}
-          <div className="px-3 pb-4">
+          {/* Settings and Logout */}
+          <div className="px-3 pb-4 space-y-0.5">
             <Link
               href="/admin/settings"
               className="flex items-center gap-3 px-3 py-2 rounded-md text-[13px] text-muted-foreground hover:text-foreground transition-colors"
@@ -116,6 +162,14 @@ export default function AdminLayout({
               <Settings size={16} strokeWidth={1.5} />
               Settings
             </Link>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-[13px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              <LogOut size={16} strokeWidth={1.5} />
+              {loggingOut ? 'Signing out...' : 'Sign out'}
+            </button>
           </div>
         </div>
       </aside>
@@ -152,9 +206,9 @@ export default function AdminLayout({
             {/* User menu */}
             <Button variant="ghost" size="sm" className="gap-2 px-2">
               <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-[11px] font-medium text-foreground">JD</span>
+                <span className="text-[11px] font-medium text-foreground">{userInitials}</span>
               </div>
-              <span className="hidden md:block text-[13px]">John Doe</span>
+              <span className="hidden md:block text-[13px]">{userDisplayName}</span>
             </Button>
           </div>
         </header>

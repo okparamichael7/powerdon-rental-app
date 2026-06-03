@@ -1,5 +1,5 @@
 // Campaign service - handles all campaign operations
-// Mock implementation with interface ready for real backend
+// Production implementation using Supabase
 
 import type { Campaign } from '@/lib/types';
 import type { 
@@ -9,13 +9,11 @@ import type {
   UpdateCampaignRequest,
 } from '@/lib/api/types';
 import { 
-  simulateNetworkDelay, 
   createSuccessResponse, 
   createErrorResponse,
   ErrorCodes,
-  generateId,
 } from '@/lib/api/client';
-import { mockCampaigns } from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
 
 // Campaign service interface
 export interface ICampaignService {
@@ -28,163 +26,314 @@ export interface ICampaignService {
   toggleCampaignActive(id: string, isActive: boolean): Promise<ApiResponse<Campaign>>;
 }
 
-// In-memory campaign store
-let campaigns: Campaign[] = [...mockCampaigns];
+// Transform database campaign to API campaign type
+function transformCampaign(dbCampaign: {
+  id: string;
+  name: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  hourly_rate: number;
+  deposit_amount: number;
+  reward_threshold_minutes: number;
+  reward_value: number | null;
+  reward_description: string | null;
+  is_active: boolean;
+  created_at: string;
+  _count?: { sessions: number; rewards: number };
+}): Campaign {
+  return {
+    id: dbCampaign.id,
+    name: dbCampaign.name,
+    eventName: dbCampaign.description || dbCampaign.name,
+    startDate: new Date(dbCampaign.start_date),
+    endDate: new Date(dbCampaign.end_date),
+    hourlyRate: Number(dbCampaign.hourly_rate) || 4.00,
+    dailyCap: 27.00, // EUR ladder pricing
+    depositAmount: Number(dbCampaign.deposit_amount) || 28.00,
+    rewardThresholdMinutes: dbCampaign.reward_threshold_minutes || 60,
+    rewardType: 'voucher',
+    rewardValue: Number(dbCampaign.reward_value) || 10.00,
+    rewardDescription: dbCampaign.reward_description || 'Reward for qualified rental',
+    isActive: dbCampaign.is_active,
+    totalSessions: dbCampaign._count?.sessions || 0,
+    totalRewardsIssued: dbCampaign._count?.rewards || 0,
+  };
+}
 
-// Mock implementation
-class MockCampaignService implements ICampaignService {
+// Production implementation using Supabase
+class SupabaseCampaignService implements ICampaignService {
   async getCampaigns(filters?: CampaignFilters): Promise<ApiResponse<Campaign[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('campaigns')
+        .select('*', { count: 'exact' })
+        .order('start_date', { ascending: false });
 
-    let result = [...campaigns];
-
-    // Apply filters
-    if (filters?.isActive !== undefined) {
-      result = result.filter(c => c.isActive === filters.isActive);
-    }
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      result = result.filter(c => 
-        c.name.toLowerCase().includes(search) || 
-        c.eventName.toLowerCase().includes(search)
-      );
-    }
-
-    if (filters?.dateRange) {
-      if (filters.dateRange.from) {
-        result = result.filter(c => c.startDate >= filters.dateRange!.from!);
+      // Apply filters
+      if (filters?.isActive !== undefined) {
+        query = query.eq('is_active', filters.isActive);
       }
-      if (filters.dateRange.to) {
-        result = result.filter(c => c.endDate <= filters.dateRange!.to!);
+
+      if (filters?.search) {
+        query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
+
+      if (filters?.dateRange?.from) {
+        query = query.gte('start_date', filters.dateRange.from.toISOString());
+      }
+
+      if (filters?.dateRange?.to) {
+        query = query.lte('end_date', filters.dateRange.to.toISOString());
+      }
+
+      // Apply pagination
+      const page = filters?.page || 1;
+      const limit = filters?.limit || 50;
+      const start = (page - 1) * limit;
+      query = query.range(start, start + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('[CampaignService] Error fetching campaigns:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch campaigns');
+      }
+
+      // Get session and reward counts for each campaign
+      const campaignIds = (data || []).map(c => c.id);
+      
+      const [sessionsResult, rewardsResult] = await Promise.all([
+        supabase
+          .from('rental_sessions')
+          .select('campaign_id')
+          .in('campaign_id', campaignIds),
+        supabase
+          .from('rewards')
+          .select('campaign_id')
+          .in('campaign_id', campaignIds),
+      ]);
+
+      const sessionCounts = new Map<string, number>();
+      const rewardCounts = new Map<string, number>();
+      
+      (sessionsResult.data || []).forEach(s => {
+        if (s.campaign_id) {
+          sessionCounts.set(s.campaign_id, (sessionCounts.get(s.campaign_id) || 0) + 1);
+        }
+      });
+      
+      (rewardsResult.data || []).forEach(r => {
+        if (r.campaign_id) {
+          rewardCounts.set(r.campaign_id, (rewardCounts.get(r.campaign_id) || 0) + 1);
+        }
+      });
+
+      const campaigns = (data || []).map(c => transformCampaign({
+        ...c,
+        _count: {
+          sessions: sessionCounts.get(c.id) || 0,
+          rewards: rewardCounts.get(c.id) || 0,
+        },
+      }));
+
+      return createSuccessResponse(campaigns, {
+        page,
+        limit,
+        total: count || campaigns.length,
+      });
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    // Sort by start date (newest first)
-    result.sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
-
-    // Apply pagination
-    const page = filters?.page || 1;
-    const limit = filters?.limit || 50;
-    const start = (page - 1) * limit;
-    const paginated = result.slice(start, start + limit);
-
-    return createSuccessResponse(paginated, {
-      page,
-      limit,
-      total: result.length,
-    });
   }
 
   async getCampaignById(id: string): Promise<ApiResponse<Campaign>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
 
-    const campaign = campaigns.find(c => c.id === id);
-    
-    if (!campaign) {
-      return createErrorResponse(
-        ErrorCodes.NOT_FOUND,
-        `Campaign ${id} not found`
-      );
+      if (error) {
+        console.error('[CampaignService] Error fetching campaign:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch campaign');
+      }
+
+      if (!data) {
+        return createErrorResponse(ErrorCodes.NOT_FOUND, `Campaign ${id} not found`);
+      }
+
+      // Get counts
+      const [sessionsResult, rewardsResult] = await Promise.all([
+        supabase
+          .from('rental_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('campaign_id', id),
+        supabase
+          .from('rewards')
+          .select('id', { count: 'exact', head: true })
+          .eq('campaign_id', id),
+      ]);
+
+      return createSuccessResponse(transformCampaign({
+        ...data,
+        _count: {
+          sessions: sessionsResult.count || 0,
+          rewards: rewardsResult.count || 0,
+        },
+      }));
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    return createSuccessResponse(campaign);
   }
 
   async getActiveCampaigns(): Promise<ApiResponse<Campaign[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      const now = new Date().toISOString();
+      
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('is_active', true)
+        .lte('start_date', now)
+        .gte('end_date', now)
+        .order('start_date', { ascending: false });
 
-    const now = new Date();
-    const activeCampaigns = campaigns.filter(c => 
-      c.isActive && c.startDate <= now && c.endDate >= now
-    );
+      if (error) {
+        console.error('[CampaignService] Error fetching active campaigns:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch active campaigns');
+      }
 
-    return createSuccessResponse(activeCampaigns);
+      const campaigns = (data || []).map(c => transformCampaign(c));
+
+      return createSuccessResponse(campaigns);
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async createCampaign(request: CreateCampaignRequest): Promise<ApiResponse<Campaign>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert({
+          name: request.name,
+          description: request.eventName,
+          start_date: request.startDate.toISOString(),
+          end_date: request.endDate.toISOString(),
+          hourly_rate: request.hourlyRate,
+          deposit_amount: request.depositAmount,
+          reward_threshold_minutes: request.rewardThresholdMinutes,
+          reward_value: request.rewardValue,
+          reward_description: request.rewardDescription,
+          is_active: true,
+        })
+        .select()
+        .single();
 
-    const newCampaign: Campaign = {
-      id: generateId('CMP'),
-      name: request.name,
-      eventName: request.eventName,
-      startDate: request.startDate,
-      endDate: request.endDate,
-      hourlyRate: request.hourlyRate,
-      dailyCap: request.dailyCap,
-      depositAmount: request.depositAmount,
-      rewardThresholdMinutes: request.rewardThresholdMinutes,
-      rewardType: request.rewardType,
-      rewardValue: request.rewardValue,
-      rewardDescription: request.rewardDescription,
-      isActive: true,
-      totalSessions: 0,
-      totalRewardsIssued: 0,
-    };
+      if (error) {
+        console.error('[CampaignService] Error creating campaign:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to create campaign');
+      }
 
-    campaigns.unshift(newCampaign);
-
-    return createSuccessResponse(newCampaign);
+      return createSuccessResponse(transformCampaign(data));
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async updateCampaign(id: string, request: UpdateCampaignRequest): Promise<ApiResponse<Campaign>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const updates: Record<string, unknown> = {};
+      if (request.name !== undefined) updates.name = request.name;
+      if (request.eventName !== undefined) updates.description = request.eventName;
+      if (request.startDate !== undefined) updates.start_date = request.startDate.toISOString();
+      if (request.endDate !== undefined) updates.end_date = request.endDate.toISOString();
+      if (request.hourlyRate !== undefined) updates.hourly_rate = request.hourlyRate;
+      if (request.depositAmount !== undefined) updates.deposit_amount = request.depositAmount;
+      if (request.rewardThresholdMinutes !== undefined) updates.reward_threshold_minutes = request.rewardThresholdMinutes;
+      if (request.rewardValue !== undefined) updates.reward_value = request.rewardValue;
+      if (request.rewardDescription !== undefined) updates.reward_description = request.rewardDescription;
+      if (request.isActive !== undefined) updates.is_active = request.isActive;
+      updates.updated_at = new Date().toISOString();
 
-    const campaignIndex = campaigns.findIndex(c => c.id === id);
-    
-    if (campaignIndex === -1) {
-      return createErrorResponse(
-        ErrorCodes.NOT_FOUND,
-        `Campaign ${id} not found`
-      );
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[CampaignService] Error updating campaign:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to update campaign');
+      }
+
+      return createSuccessResponse(transformCampaign(data));
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    campaigns[campaignIndex] = {
-      ...campaigns[campaignIndex],
-      ...request,
-    };
-
-    return createSuccessResponse(campaigns[campaignIndex]);
   }
 
   async deleteCampaign(id: string): Promise<ApiResponse<void>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', id);
 
-    const campaignIndex = campaigns.findIndex(c => c.id === id);
-    
-    if (campaignIndex === -1) {
-      return createErrorResponse(
-        ErrorCodes.NOT_FOUND,
-        `Campaign ${id} not found`
-      );
+      if (error) {
+        console.error('[CampaignService] Error deleting campaign:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to delete campaign');
+      }
+
+      return createSuccessResponse(undefined);
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    campaigns.splice(campaignIndex, 1);
-
-    return createSuccessResponse(undefined);
   }
 
   async toggleCampaignActive(id: string, isActive: boolean): Promise<ApiResponse<Campaign>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
 
-    const campaignIndex = campaigns.findIndex(c => c.id === id);
-    
-    if (campaignIndex === -1) {
-      return createErrorResponse(
-        ErrorCodes.NOT_FOUND,
-        `Campaign ${id} not found`
-      );
+      if (error) {
+        console.error('[CampaignService] Error toggling campaign:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to toggle campaign');
+      }
+
+      return createSuccessResponse(transformCampaign(data));
+    } catch (err) {
+      console.error('[CampaignService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    campaigns[campaignIndex] = {
-      ...campaigns[campaignIndex],
-      isActive,
-    };
-
-    return createSuccessResponse(campaigns[campaignIndex]);
   }
 }
 
-// Export singleton instance
-export const campaignService: ICampaignService = new MockCampaignService();
+// Export singleton instance - now using real Supabase implementation
+export const campaignService: ICampaignService = new SupabaseCampaignService();

@@ -1,5 +1,5 @@
 // Analytics service - handles all analytics and reporting operations
-// Mock implementation with interface ready for real backend
+// Production implementation using Supabase
 
 import type { DashboardStats } from '@/lib/types';
 import type { 
@@ -11,15 +11,11 @@ import type {
   FunnelAnalytics,
 } from '@/lib/api/types';
 import { 
-  simulateNetworkDelay, 
   createSuccessResponse,
+  createErrorResponse,
+  ErrorCodes,
 } from '@/lib/api/client';
-import { 
-  mockDashboardStats, 
-  mockFunnelData, 
-  mockRevenueByDay, 
-  mockSessionsByHour 
-} from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
 
 // Analytics service interface
 export interface IAnalyticsService {
@@ -32,114 +28,377 @@ export interface IAnalyticsService {
   getDailyRevenue(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ date: string; revenue: number; sessions: number }[]>>;
 }
 
-// Mock implementation
-class MockAnalyticsService implements IAnalyticsService {
+// Production implementation using Supabase
+class SupabaseAnalyticsService implements IAnalyticsService {
   async getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
-    await simulateNetworkDelay();
-    return createSuccessResponse(mockDashboardStats);
+    try {
+      const supabase = createClient();
+      
+      // Get all stats in parallel
+      const [
+        sessionsResult,
+        activeSessionsResult,
+        stationsResult,
+        onlineStationsResult,
+        rewardsResult,
+        redeemedRewardsResult,
+        usersResult,
+      ] = await Promise.all([
+        supabase.from('rental_sessions').select('total_charge, duration_minutes', { count: 'exact' }),
+        supabase.from('rental_sessions').select('id', { count: 'exact', head: true }).in('status', ['pending', 'active']),
+        supabase.from('stations').select('id', { count: 'exact', head: true }),
+        supabase.from('stations').select('id', { count: 'exact', head: true }).eq('status', 'online'),
+        supabase.from('rewards').select('id', { count: 'exact', head: true }),
+        supabase.from('rewards').select('id', { count: 'exact', head: true }).eq('status', 'redeemed'),
+        supabase.from('users').select('id', { count: 'exact', head: true }),
+      ]);
+
+      const sessions = sessionsResult.data || [];
+      const totalRevenue = sessions.reduce((sum, s) => sum + Number(s.total_charge || 0), 0);
+      const totalDuration = sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+      const avgDuration = sessions.length > 0 ? Math.round(totalDuration / sessions.length) : 0;
+
+      const stats: DashboardStats = {
+        totalRevenue,
+        totalSessions: sessionsResult.count || 0,
+        activeSessions: activeSessionsResult.count || 0,
+        totalStations: stationsResult.count || 0,
+        onlineStations: onlineStationsResult.count || 0,
+        averageSessionDuration: avgDuration,
+        totalRewardsIssued: rewardsResult.count || 0,
+        totalRewardsRedeemed: redeemedRewardsResult.count || 0,
+        totalUsers: usersResult.count || 0,
+      };
+
+      return createSuccessResponse(stats);
+    } catch (err) {
+      console.error('[AnalyticsService] Error fetching dashboard stats:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch dashboard stats');
+    }
   }
 
   async getRevenueAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<RevenueAnalytics>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('rental_sessions')
+        .select('total_charge, refund_amount, created_at')
+        .eq('status', 'completed');
 
-    const analytics: RevenueAnalytics = {
-      totalRevenue: mockDashboardStats.totalRevenue,
-      revenueByPeriod: mockRevenueByDay.map(d => ({
-        period: d.date,
-        revenue: d.revenue,
-        sessions: d.sessions,
-      })),
-      averageTransactionValue: mockDashboardStats.totalRevenue / mockDashboardStats.totalSessions,
-      refundTotal: 4250.00,
-    };
+      if (dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        query = query.lte('created_at', dateRange.to.toISOString());
+      }
 
-    return createSuccessResponse(analytics);
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[AnalyticsService] Error fetching revenue analytics:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch revenue analytics');
+      }
+
+      const sessions = data || [];
+      const totalRevenue = sessions.reduce((sum, s) => sum + Number(s.total_charge || 0), 0);
+      const refundTotal = sessions.reduce((sum, s) => sum + Number(s.refund_amount || 0), 0);
+
+      // Group by date
+      const revenueByDate = new Map<string, { revenue: number; sessions: number }>();
+      sessions.forEach(s => {
+        const date = new Date(s.created_at).toISOString().split('T')[0];
+        const existing = revenueByDate.get(date) || { revenue: 0, sessions: 0 };
+        revenueByDate.set(date, {
+          revenue: existing.revenue + Number(s.total_charge || 0),
+          sessions: existing.sessions + 1,
+        });
+      });
+
+      const revenueByPeriod = Array.from(revenueByDate.entries())
+        .map(([period, data]) => ({ period, ...data }))
+        .sort((a, b) => a.period.localeCompare(b.period));
+
+      const analytics: RevenueAnalytics = {
+        totalRevenue,
+        revenueByPeriod,
+        averageTransactionValue: sessions.length > 0 ? totalRevenue / sessions.length : 0,
+        refundTotal,
+      };
+
+      return createSuccessResponse(analytics);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getSessionAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<SessionAnalytics>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('rental_sessions')
+        .select(`
+          id,
+          status,
+          duration_minutes,
+          created_at,
+          start_station_id,
+          stations:start_station_id(name)
+        `);
 
-    const analytics: SessionAnalytics = {
-      totalSessions: mockDashboardStats.totalSessions,
-      activeSessions: mockDashboardStats.activeSessions,
-      completedSessions: 1724,
-      expiredSessions: 100,
-      averageDuration: mockDashboardStats.averageSessionDuration,
-      sessionsByPeriod: mockRevenueByDay.map(d => ({
-        period: d.date,
-        count: d.sessions,
-      })),
-      sessionsByStation: [
-        { stationId: 'STN-A12', stationName: 'Main Stage Hub', count: 645 },
-        { stationId: 'STN-B07', stationName: 'Food Court Station', count: 512 },
-        { stationId: 'STN-C03', stationName: 'VIP Lounge', count: 234 },
-        { stationId: 'STN-D15', stationName: 'Park City Main Hub', count: 356 },
-      ],
-    };
+      if (dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        query = query.lte('created_at', dateRange.to.toISOString());
+      }
 
-    return createSuccessResponse(analytics);
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[AnalyticsService] Error fetching session analytics:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch session analytics');
+      }
+
+      const sessions = data || [];
+      const completedSessions = sessions.filter(s => s.status === 'completed');
+      const activeSessions = sessions.filter(s => s.status === 'active' || s.status === 'pending');
+      const expiredSessions = sessions.filter(s => s.status === 'expired' || s.status === 'cancelled');
+      
+      const totalDuration = completedSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+      const avgDuration = completedSessions.length > 0 ? Math.round(totalDuration / completedSessions.length) : 0;
+
+      // Group by date
+      const sessionsByDate = new Map<string, number>();
+      sessions.forEach(s => {
+        const date = new Date(s.created_at).toISOString().split('T')[0];
+        sessionsByDate.set(date, (sessionsByDate.get(date) || 0) + 1);
+      });
+
+      // Group by station
+      const sessionsByStationMap = new Map<string, { name: string; count: number }>();
+      sessions.forEach(s => {
+        const stationId = s.start_station_id;
+        const stationName = (s.stations as { name: string } | null)?.name || 'Unknown';
+        const existing = sessionsByStationMap.get(stationId) || { name: stationName, count: 0 };
+        sessionsByStationMap.set(stationId, { name: existing.name, count: existing.count + 1 });
+      });
+
+      const analytics: SessionAnalytics = {
+        totalSessions: sessions.length,
+        activeSessions: activeSessions.length,
+        completedSessions: completedSessions.length,
+        expiredSessions: expiredSessions.length,
+        averageDuration: avgDuration,
+        sessionsByPeriod: Array.from(sessionsByDate.entries())
+          .map(([period, count]) => ({ period, count }))
+          .sort((a, b) => a.period.localeCompare(b.period)),
+        sessionsByStation: Array.from(sessionsByStationMap.entries())
+          .map(([stationId, data]) => ({ stationId, stationName: data.name, count: data.count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10),
+      };
+
+      return createSuccessResponse(analytics);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getRewardAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<RewardAnalytics>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('rewards')
+        .select('id, status, created_at, claimed_at');
 
-    const analytics: RewardAnalytics = {
-      totalIssued: mockDashboardStats.totalRewardsIssued,
-      totalRedeemed: mockDashboardStats.totalRewardsRedeemed,
-      totalExpired: 158,
-      redemptionRate: (mockDashboardStats.totalRewardsRedeemed / mockDashboardStats.totalRewardsIssued) * 100,
-      rewardsByPeriod: [
-        { period: 'Mon', issued: 98, redeemed: 67 },
-        { period: 'Tue', issued: 124, redeemed: 89 },
-        { period: 'Wed', issued: 156, redeemed: 112 },
-        { period: 'Thu', issued: 198, redeemed: 145 },
-        { period: 'Fri', issued: 178, redeemed: 134 },
-        { period: 'Sat', issued: 89, redeemed: 56 },
-        { period: 'Sun', issued: 49, redeemed: 31 },
-      ],
-    };
+      if (dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        query = query.lte('created_at', dateRange.to.toISOString());
+      }
 
-    return createSuccessResponse(analytics);
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[AnalyticsService] Error fetching reward analytics:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch reward analytics');
+      }
+
+      const rewards = data || [];
+      const totalIssued = rewards.length;
+      const totalRedeemed = rewards.filter(r => r.status === 'redeemed').length;
+      const totalExpired = rewards.filter(r => r.status === 'expired').length;
+      const redemptionRate = totalIssued > 0 ? (totalRedeemed / totalIssued) * 100 : 0;
+
+      // Group by date
+      const rewardsByDate = new Map<string, { issued: number; redeemed: number }>();
+      rewards.forEach(r => {
+        const date = new Date(r.created_at).toISOString().split('T')[0];
+        const existing = rewardsByDate.get(date) || { issued: 0, redeemed: 0 };
+        rewardsByDate.set(date, {
+          issued: existing.issued + 1,
+          redeemed: existing.redeemed + (r.status === 'redeemed' ? 1 : 0),
+        });
+      });
+
+      const analytics: RewardAnalytics = {
+        totalIssued,
+        totalRedeemed,
+        totalExpired,
+        redemptionRate,
+        rewardsByPeriod: Array.from(rewardsByDate.entries())
+          .map(([period, data]) => ({ period, ...data }))
+          .sort((a, b) => a.period.localeCompare(b.period)),
+      };
+
+      return createSuccessResponse(analytics);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getFunnelAnalytics(campaignId?: string): Promise<ApiResponse<FunnelAnalytics>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      // Get counts for each stage
+      let sessionsQuery = supabase.from('rental_sessions').select('id, status', { count: 'exact' });
+      let rewardsQuery = supabase.from('rewards').select('id, status', { count: 'exact' });
 
-    const stages = mockFunnelData.map((stage, index) => ({
-      stage: stage.stage,
-      count: stage.count,
-      conversionRate: index === 0 ? 100 : (stage.count / mockFunnelData[index - 1].count) * 100,
-    }));
+      if (campaignId) {
+        sessionsQuery = sessionsQuery.eq('campaign_id', campaignId);
+        rewardsQuery = rewardsQuery.eq('campaign_id', campaignId);
+      }
 
-    const analytics: FunnelAnalytics = {
-      stages,
-      overallConversion: (mockFunnelData[mockFunnelData.length - 1].count / mockFunnelData[0].count) * 100,
-    };
+      const [sessionsResult, rewardsResult] = await Promise.all([sessionsQuery, rewardsQuery]);
 
-    return createSuccessResponse(analytics);
+      const sessions = sessionsResult.data || [];
+      const rewards = rewardsResult.data || [];
+
+      const totalScans = sessions.length; // All sessions started with a scan
+      const totalAuthenticated = sessions.length; // All sessions are authenticated
+      const totalPaid = sessions.filter(s => s.status !== 'pending').length;
+      const totalCompleted = sessions.filter(s => s.status === 'completed').length;
+      const totalRewardsQualified = rewards.filter(r => r.status !== 'pending').length;
+      const totalRewardsRedeemed = rewards.filter(r => r.status === 'redeemed').length;
+
+      const stages = [
+        { stage: 'QR Scanned', count: totalScans, conversionRate: 100 },
+        { stage: 'Authenticated', count: totalAuthenticated, conversionRate: totalScans > 0 ? (totalAuthenticated / totalScans) * 100 : 0 },
+        { stage: 'Payment Complete', count: totalPaid, conversionRate: totalAuthenticated > 0 ? (totalPaid / totalAuthenticated) * 100 : 0 },
+        { stage: 'Rental Complete', count: totalCompleted, conversionRate: totalPaid > 0 ? (totalCompleted / totalPaid) * 100 : 0 },
+        { stage: 'Reward Qualified', count: totalRewardsQualified, conversionRate: totalCompleted > 0 ? (totalRewardsQualified / totalCompleted) * 100 : 0 },
+        { stage: 'Reward Redeemed', count: totalRewardsRedeemed, conversionRate: totalRewardsQualified > 0 ? (totalRewardsRedeemed / totalRewardsQualified) * 100 : 0 },
+      ];
+
+      const analytics: FunnelAnalytics = {
+        stages,
+        overallConversion: totalScans > 0 ? (totalRewardsRedeemed / totalScans) * 100 : 0,
+      };
+
+      return createSuccessResponse(analytics);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getHourlyDistribution(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ hour: string; count: number }[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase.from('rental_sessions').select('created_at');
 
-    const distribution = mockSessionsByHour.map(h => ({
-      hour: h.hour,
-      count: h.sessions,
-    }));
+      if (dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        query = query.lte('created_at', dateRange.to.toISOString());
+      }
 
-    return createSuccessResponse(distribution);
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[AnalyticsService] Error fetching hourly distribution:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch hourly distribution');
+      }
+
+      // Initialize all hours
+      const hourCounts = new Map<string, number>();
+      for (let i = 0; i < 24; i++) {
+        const hour = i.toString().padStart(2, '0') + ':00';
+        hourCounts.set(hour, 0);
+      }
+
+      // Count sessions by hour
+      (data || []).forEach(s => {
+        const hour = new Date(s.created_at).getHours().toString().padStart(2, '0') + ':00';
+        hourCounts.set(hour, (hourCounts.get(hour) || 0) + 1);
+      });
+
+      const distribution = Array.from(hourCounts.entries())
+        .map(([hour, count]) => ({ hour, count }))
+        .sort((a, b) => a.hour.localeCompare(b.hour));
+
+      return createSuccessResponse(distribution);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getDailyRevenue(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ date: string; revenue: number; sessions: number }[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('rental_sessions')
+        .select('total_charge, created_at')
+        .eq('status', 'completed');
 
-    return createSuccessResponse(mockRevenueByDay.map(d => ({
-      date: d.date,
-      revenue: d.revenue,
-      sessions: d.sessions,
-    })));
+      if (dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        query = query.lte('created_at', dateRange.to.toISOString());
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[AnalyticsService] Error fetching daily revenue:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch daily revenue');
+      }
+
+      // Group by date
+      const dailyData = new Map<string, { revenue: number; sessions: number }>();
+      (data || []).forEach(s => {
+        const date = new Date(s.created_at).toISOString().split('T')[0];
+        const existing = dailyData.get(date) || { revenue: 0, sessions: 0 };
+        dailyData.set(date, {
+          revenue: existing.revenue + Number(s.total_charge || 0),
+          sessions: existing.sessions + 1,
+        });
+      });
+
+      const result = Array.from(dailyData.entries())
+        .map(([date, data]) => ({ date, ...data }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      return createSuccessResponse(result);
+    } catch (err) {
+      console.error('[AnalyticsService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 }
 
-// Export singleton instance
-export const analyticsService: IAnalyticsService = new MockAnalyticsService();
+// Export singleton instance - now using real Supabase implementation
+export const analyticsService: IAnalyticsService = new SupabaseAnalyticsService();

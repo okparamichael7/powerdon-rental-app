@@ -1,5 +1,5 @@
 // Reward service - handles all reward/voucher operations
-// Mock implementation with interface ready for real backend
+// Production implementation using Supabase
 
 import type { Reward } from '@/lib/types';
 import type { 
@@ -9,14 +9,12 @@ import type {
   RedeemRewardResponse,
 } from '@/lib/api/types';
 import { 
-  simulateNetworkDelay, 
   createSuccessResponse, 
   createErrorResponse,
   ErrorCodes,
-  generateId,
   generateRewardCode,
 } from '@/lib/api/client';
-import { mockRewards } from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
 
 // Reward service interface
 export interface IRewardService {
@@ -35,197 +33,378 @@ export interface IRewardService {
   }>>;
 }
 
-// In-memory reward store
-let rewards: Reward[] = [...mockRewards];
+// Transform database reward to API reward type
+function transformReward(dbReward: {
+  id: string;
+  reward_code: string;
+  session_id: string;
+  user_id: string;
+  campaign_id: string;
+  reward_type: string;
+  reward_value: number | null;
+  description: string | null;
+  status: string;
+  created_at: string;
+  qualified_at: string | null;
+  claimed_at: string | null;
+  expires_at: string | null;
+  actual_minutes: number | null;
+  required_minutes: number | null;
+  metadata: Record<string, unknown> | null;
+  users?: { email: string; name: string | null } | null;
+  campaigns?: { name: string } | null;
+}): Reward {
+  return {
+    id: dbReward.id,
+    code: dbReward.reward_code || generateRewardCode('POWERDON'),
+    sessionId: dbReward.session_id,
+    userId: dbReward.user_id,
+    userEmail: dbReward.users?.email || '',
+    campaignId: dbReward.campaign_id,
+    campaignName: dbReward.campaigns?.name || 'Campaign',
+    type: dbReward.reward_type as Reward['type'] || 'voucher',
+    value: Number(dbReward.reward_value) || 10.00,
+    description: dbReward.description || 'Reward for qualified rental',
+    status: dbReward.status as Reward['status'] || 'issued',
+    issuedAt: new Date(dbReward.created_at),
+    expiresAt: dbReward.expires_at ? new Date(dbReward.expires_at) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    redeemedAt: dbReward.claimed_at ? new Date(dbReward.claimed_at) : undefined,
+    redemptionLocation: dbReward.metadata?.redemption_location as string | undefined,
+    qualifyingMinutes: dbReward.actual_minutes || undefined,
+    thresholdMinutes: dbReward.required_minutes || 60,
+  };
+}
 
-// Mock implementation
-class MockRewardService implements IRewardService {
+// Production implementation using Supabase
+class SupabaseRewardService implements IRewardService {
   async getRewards(filters?: RewardFilters): Promise<ApiResponse<Reward[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false });
 
-    let result = [...rewards];
-
-    // Apply filters
-    if (filters?.status && filters.status.length > 0) {
-      result = result.filter(r => filters.status!.includes(r.status));
-    }
-
-    if (filters?.campaignId) {
-      result = result.filter(r => r.campaignId === filters.campaignId);
-    }
-
-    if (filters?.userId) {
-      result = result.filter(r => r.userId === filters.userId);
-    }
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      result = result.filter(r => 
-        r.code.toLowerCase().includes(search) || 
-        r.userEmail.toLowerCase().includes(search) ||
-        r.campaignName.toLowerCase().includes(search)
-      );
-    }
-
-    if (filters?.dateRange) {
-      if (filters.dateRange.from) {
-        result = result.filter(r => r.issuedAt >= filters.dateRange!.from!);
+      // Apply filters
+      if (filters?.status && filters.status.length > 0) {
+        query = query.in('status', filters.status);
       }
-      if (filters.dateRange.to) {
-        result = result.filter(r => r.issuedAt <= filters.dateRange!.to!);
+
+      if (filters?.campaignId) {
+        query = query.eq('campaign_id', filters.campaignId);
       }
+
+      if (filters?.userId) {
+        query = query.eq('user_id', filters.userId);
+      }
+
+      if (filters?.search) {
+        query = query.ilike('reward_code', `%${filters.search}%`);
+      }
+
+      if (filters?.dateRange?.from) {
+        query = query.gte('created_at', filters.dateRange.from.toISOString());
+      }
+
+      if (filters?.dateRange?.to) {
+        query = query.lte('created_at', filters.dateRange.to.toISOString());
+      }
+
+      // Apply pagination
+      const page = filters?.page || 1;
+      const limit = filters?.limit || 50;
+      const start = (page - 1) * limit;
+      query = query.range(start, start + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('[RewardService] Error fetching rewards:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch rewards');
+      }
+
+      const rewards = (data || []).map(transformReward);
+
+      return createSuccessResponse(rewards, {
+        page,
+        limit,
+        total: count || rewards.length,
+      });
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    // Sort by issued date (newest first)
-    result.sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime());
-
-    // Apply pagination
-    const page = filters?.page || 1;
-    const limit = filters?.limit || 50;
-    const start = (page - 1) * limit;
-    const paginated = result.slice(start, start + limit);
-
-    return createSuccessResponse(paginated, {
-      page,
-      limit,
-      total: result.length,
-    });
   }
 
   async getRewardById(id: string): Promise<ApiResponse<Reward>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .eq('id', id)
+        .maybeSingle();
 
-    const reward = rewards.find(r => r.id === id);
-    
-    if (!reward) {
-      return createErrorResponse(
-        ErrorCodes.REWARD_NOT_FOUND,
-        `Reward ${id} not found`
-      );
+      if (error) {
+        console.error('[RewardService] Error fetching reward:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch reward');
+      }
+
+      if (!data) {
+        return createErrorResponse(ErrorCodes.REWARD_NOT_FOUND, `Reward ${id} not found`);
+      }
+
+      return createSuccessResponse(transformReward(data));
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    return createSuccessResponse(reward);
   }
 
   async getRewardByCode(code: string): Promise<ApiResponse<Reward>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .eq('reward_code', code.toUpperCase())
+        .maybeSingle();
 
-    const reward = rewards.find(r => r.code === code);
-    
-    if (!reward) {
-      return createErrorResponse(
-        ErrorCodes.REWARD_NOT_FOUND,
-        `Reward with code ${code} not found`
-      );
+      if (error) {
+        console.error('[RewardService] Error fetching reward by code:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch reward');
+      }
+
+      if (!data) {
+        return createErrorResponse(ErrorCodes.REWARD_NOT_FOUND, `Reward with code ${code} not found`);
+      }
+
+      return createSuccessResponse(transformReward(data));
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    return createSuccessResponse(reward);
   }
 
   async getRewardsByUser(userEmail: string): Promise<ApiResponse<Reward[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      // First get user by email
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', userEmail.toLowerCase())
+        .maybeSingle();
 
-    const userRewards = rewards.filter(r => r.userEmail === userEmail);
-    
-    // Sort by issued date (newest first)
-    userRewards.sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime());
+      if (!user) {
+        return createSuccessResponse([]);
+      }
 
-    return createSuccessResponse(userRewards);
+      const { data, error } = await supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[RewardService] Error fetching user rewards:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch user rewards');
+      }
+
+      const rewards = (data || []).map(transformReward);
+
+      return createSuccessResponse(rewards);
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async getRewardsBySession(sessionId: string): Promise<ApiResponse<Reward[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .eq('session_id', sessionId);
 
-    const sessionRewards = rewards.filter(r => r.sessionId === sessionId);
-    
-    return createSuccessResponse(sessionRewards);
+      if (error) {
+        console.error('[RewardService] Error fetching session rewards:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch session rewards');
+      }
+
+      const rewards = (data || []).map(transformReward);
+
+      return createSuccessResponse(rewards);
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async issueReward(sessionId: string, campaignId: string): Promise<ApiResponse<Reward>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      // Check if reward already exists for this session
+      const { data: existingReward } = await supabase
+        .from('rewards')
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .eq('session_id', sessionId)
+        .maybeSingle();
 
-    // Check if reward already exists for this session
-    const existingReward = rewards.find(r => r.sessionId === sessionId);
-    if (existingReward) {
-      return createSuccessResponse(existingReward);
+      if (existingReward) {
+        return createSuccessResponse(transformReward(existingReward));
+      }
+
+      // Get session info
+      const { data: session } = await supabase
+        .from('rental_sessions')
+        .select('user_id, duration_minutes')
+        .eq('id', sessionId)
+        .single();
+
+      if (!session) {
+        return createErrorResponse(ErrorCodes.SESSION_NOT_FOUND, 'Session not found');
+      }
+
+      // Get campaign info for reward value
+      const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('reward_value, reward_description, reward_threshold_minutes')
+        .eq('id', campaignId)
+        .single();
+
+      const rewardCode = generateRewardCode('POWERDON');
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      const { data: newReward, error } = await supabase
+        .from('rewards')
+        .insert({
+          reward_code: rewardCode,
+          session_id: sessionId,
+          user_id: session.user_id,
+          campaign_id: campaignId,
+          reward_type: 'voucher',
+          reward_value: campaign?.reward_value || 10.00,
+          description: campaign?.reward_description || 'Reward for qualified rental',
+          status: 'issued',
+          actual_minutes: session.duration_minutes,
+          required_minutes: campaign?.reward_threshold_minutes || 60,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select(`
+          *,
+          users:user_id(email, name),
+          campaigns:campaign_id(name)
+        `)
+        .single();
+
+      if (error) {
+        console.error('[RewardService] Error issuing reward:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to issue reward');
+      }
+
+      return createSuccessResponse(transformReward(newReward));
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    const newReward: Reward = {
-      id: generateId('RWD'),
-      code: generateRewardCode('POWERDON'),
-      sessionId,
-      userId: generateId('USR'),
-      userEmail: 'user@example.com', // Would come from session
-      campaignId,
-      campaignName: 'Sundance Merch Reward',
-      type: 'voucher',
-      value: 10.00,
-      description: '€10 voucher for Sundance official merchandise',
-      status: 'issued',
-      issuedAt: new Date(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-    };
-
-    rewards.unshift(newReward);
-
-    return createSuccessResponse(newReward);
   }
 
   async redeemReward(request: RedeemRewardRequest): Promise<ApiResponse<RedeemRewardResponse>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      // Get reward
+      const { data: reward, error: getError } = await supabase
+        .from('rewards')
+        .select('*')
+        .eq('id', request.rewardId)
+        .single();
 
-    const rewardIndex = rewards.findIndex(r => r.id === request.rewardId);
-    
-    if (rewardIndex === -1) {
-      return createErrorResponse(
-        ErrorCodes.REWARD_NOT_FOUND,
-        'Reward not found'
-      );
+      if (getError || !reward) {
+        return createErrorResponse(ErrorCodes.REWARD_NOT_FOUND, 'Reward not found');
+      }
+
+      // Validate reward code
+      if (reward.reward_code !== request.rewardCode.toUpperCase()) {
+        return createErrorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid reward code');
+      }
+
+      // Check if already redeemed
+      if (reward.status === 'redeemed') {
+        return createErrorResponse(ErrorCodes.REWARD_ALREADY_REDEEMED, 'This reward has already been redeemed');
+      }
+
+      // Check if expired
+      if (reward.expires_at && new Date(reward.expires_at) < new Date()) {
+        await supabase
+          .from('rewards')
+          .update({ status: 'expired' })
+          .eq('id', request.rewardId);
+        return createErrorResponse(ErrorCodes.REWARD_EXPIRED, 'This reward has expired');
+      }
+
+      // Redeem the reward
+      const redeemedAt = new Date();
+      const { error: updateError } = await supabase
+        .from('rewards')
+        .update({
+          status: 'redeemed',
+          claimed_at: redeemedAt.toISOString(),
+          metadata: {
+            ...(reward.metadata || {}),
+            redemption_location: request.redemptionLocation,
+          },
+        })
+        .eq('id', request.rewardId);
+
+      if (updateError) {
+        console.error('[RewardService] Error redeeming reward:', updateError);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to redeem reward');
+      }
+
+      return createSuccessResponse({
+        success: true,
+        rewardId: reward.id,
+        value: Number(reward.reward_value),
+        type: reward.reward_type,
+        redeemedAt,
+      });
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    const reward = rewards[rewardIndex];
-
-    // Validate reward code
-    if (reward.code !== request.rewardCode) {
-      return createErrorResponse(
-        ErrorCodes.VALIDATION_ERROR,
-        'Invalid reward code'
-      );
-    }
-
-    // Check if already redeemed
-    if (reward.status === 'redeemed') {
-      return createErrorResponse(
-        ErrorCodes.REWARD_ALREADY_REDEEMED,
-        'This reward has already been redeemed'
-      );
-    }
-
-    // Check if expired
-    if (reward.expiresAt < new Date()) {
-      rewards[rewardIndex] = { ...reward, status: 'expired' };
-      return createErrorResponse(
-        ErrorCodes.REWARD_EXPIRED,
-        'This reward has expired'
-      );
-    }
-
-    // Redeem the reward
-    const redeemedAt = new Date();
-    rewards[rewardIndex] = {
-      ...reward,
-      status: 'redeemed',
-      redeemedAt,
-      redemptionLocation: request.redemptionLocation,
-    };
-
-    return createSuccessResponse({
-      success: true,
-      rewardId: reward.id,
-      value: reward.value,
-      type: reward.type,
-      redeemedAt,
-    });
   }
 
   async getRewardStats(): Promise<ApiResponse<{
@@ -234,18 +413,28 @@ class MockRewardService implements IRewardService {
     totalExpired: number;
     pendingRedemption: number;
   }>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const [issuedResult, redeemedResult, expiredResult, pendingResult] = await Promise.all([
+        supabase.from('rewards').select('id', { count: 'exact', head: true }),
+        supabase.from('rewards').select('id', { count: 'exact', head: true }).eq('status', 'redeemed'),
+        supabase.from('rewards').select('id', { count: 'exact', head: true }).eq('status', 'expired'),
+        supabase.from('rewards').select('id', { count: 'exact', head: true }).in('status', ['qualified', 'issued']),
+      ]);
 
-    const stats = {
-      totalIssued: rewards.length,
-      totalRedeemed: rewards.filter(r => r.status === 'redeemed').length,
-      totalExpired: rewards.filter(r => r.status === 'expired').length,
-      pendingRedemption: rewards.filter(r => r.status === 'issued').length,
-    };
-
-    return createSuccessResponse(stats);
+      return createSuccessResponse({
+        totalIssued: issuedResult.count || 0,
+        totalRedeemed: redeemedResult.count || 0,
+        totalExpired: expiredResult.count || 0,
+        pendingRedemption: pendingResult.count || 0,
+      });
+    } catch (err) {
+      console.error('[RewardService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 }
 
-// Export singleton instance
-export const rewardService: IRewardService = new MockRewardService();
+// Export singleton instance - now using real Supabase implementation
+export const rewardService: IRewardService = new SupabaseRewardService();

@@ -1,5 +1,5 @@
 // Support service - handles all support ticket operations
-// Mock implementation with interface ready for real backend
+// Production implementation using Supabase
 
 import type { 
   ApiResponse,
@@ -8,12 +8,11 @@ import type {
   CreateSupportTicketRequest,
 } from '@/lib/api/types';
 import { 
-  simulateNetworkDelay, 
   createSuccessResponse, 
   createErrorResponse,
   ErrorCodes,
-  generateId,
 } from '@/lib/api/client';
+import { createClient } from '@/lib/supabase/client';
 
 // Support service interface
 export interface ISupportService {
@@ -34,10 +33,7 @@ export interface FAQ {
   relatedActions?: { label: string; action: string }[];
 }
 
-// In-memory ticket store
-let tickets: SupportTicket[] = [];
-
-// Static FAQ data
+// Static FAQ data (these could be moved to database if needed)
 export const faqs: FAQ[] = [
   {
     id: 'faq-1',
@@ -122,115 +118,203 @@ export const faqs: FAQ[] = [
   },
 ];
 
-// Mock implementation
-class MockSupportService implements ISupportService {
+// Transform database ticket to API ticket type
+function transformTicket(dbTicket: {
+  id: string;
+  ticket_number: string;
+  category: string;
+  subject: string;
+  description: string;
+  session_id: string | null;
+  user_email: string;
+  user_name: string | null;
+  status: string;
+  priority: string;
+  resolution: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}): SupportTicket {
+  return {
+    id: dbTicket.id,
+    ticketNumber: dbTicket.ticket_number,
+    category: dbTicket.category as SupportTicket['category'],
+    subject: dbTicket.subject,
+    description: dbTicket.description,
+    sessionId: dbTicket.session_id || undefined,
+    userEmail: dbTicket.user_email,
+    userName: dbTicket.user_name || undefined,
+    status: dbTicket.status as SupportTicket['status'],
+    priority: dbTicket.priority as SupportTicket['priority'],
+    resolution: dbTicket.resolution || undefined,
+    createdAt: new Date(dbTicket.created_at),
+    updatedAt: new Date(dbTicket.updated_at),
+    resolvedAt: dbTicket.resolved_at ? new Date(dbTicket.resolved_at) : undefined,
+  };
+}
+
+// Production implementation using Supabase
+class SupabaseSupportService implements ISupportService {
   async getTickets(filters?: SupportTicketFilters): Promise<ApiResponse<SupportTicket[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      let query = supabase
+        .from('support_tickets')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
-    let result = [...tickets];
+      // Apply filters
+      if (filters?.status && filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
 
-    // Apply filters
-    if (filters?.status && filters.status.length > 0) {
-      result = result.filter(t => filters.status!.includes(t.status));
+      if (filters?.category && filters.category.length > 0) {
+        query = query.in('category', filters.category);
+      }
+
+      if (filters?.priority && filters.priority.length > 0) {
+        query = query.in('priority', filters.priority);
+      }
+
+      if (filters?.search) {
+        query = query.or(`ticket_number.ilike.%${filters.search}%,subject.ilike.%${filters.search}%,user_email.ilike.%${filters.search}%`);
+      }
+
+      // Apply pagination
+      const page = filters?.page || 1;
+      const limit = filters?.limit || 50;
+      const start = (page - 1) * limit;
+      query = query.range(start, start + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('[SupportService] Error fetching tickets:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch tickets');
+      }
+
+      const tickets = (data || []).map(transformTicket);
+
+      return createSuccessResponse(tickets, {
+        page,
+        limit,
+        total: count || tickets.length,
+      });
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    if (filters?.category && filters.category.length > 0) {
-      result = result.filter(t => filters.category!.includes(t.category));
-    }
-
-    if (filters?.priority && filters.priority.length > 0) {
-      result = result.filter(t => filters.priority!.includes(t.priority));
-    }
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      result = result.filter(t => 
-        t.ticketNumber.toLowerCase().includes(search) || 
-        t.subject.toLowerCase().includes(search) ||
-        t.userEmail.toLowerCase().includes(search)
-      );
-    }
-
-    // Sort by created date (newest first)
-    result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    // Apply pagination
-    const page = filters?.page || 1;
-    const limit = filters?.limit || 50;
-    const start = (page - 1) * limit;
-    const paginated = result.slice(start, start + limit);
-
-    return createSuccessResponse(paginated, {
-      page,
-      limit,
-      total: result.length,
-    });
   }
 
   async getTicketById(id: string): Promise<ApiResponse<SupportTicket>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
 
-    const ticket = tickets.find(t => t.id === id);
-    
-    if (!ticket) {
-      return createErrorResponse(
-        ErrorCodes.TICKET_NOT_FOUND,
-        `Ticket ${id} not found`
-      );
+      if (error) {
+        console.error('[SupportService] Error fetching ticket:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch ticket');
+      }
+
+      if (!data) {
+        return createErrorResponse(ErrorCodes.TICKET_NOT_FOUND, `Ticket ${id} not found`);
+      }
+
+      return createSuccessResponse(transformTicket(data));
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    return createSuccessResponse(ticket);
   }
 
   async getTicketByNumber(ticketNumber: string): Promise<ApiResponse<SupportTicket>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('ticket_number', ticketNumber.toUpperCase())
+        .maybeSingle();
 
-    const ticket = tickets.find(t => t.ticketNumber === ticketNumber);
-    
-    if (!ticket) {
-      return createErrorResponse(
-        ErrorCodes.TICKET_NOT_FOUND,
-        `Ticket ${ticketNumber} not found`
-      );
+      if (error) {
+        console.error('[SupportService] Error fetching ticket by number:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch ticket');
+      }
+
+      if (!data) {
+        return createErrorResponse(ErrorCodes.TICKET_NOT_FOUND, `Ticket ${ticketNumber} not found`);
+      }
+
+      return createSuccessResponse(transformTicket(data));
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    return createSuccessResponse(ticket);
   }
 
   async getTicketsByUser(userEmail: string): Promise<ApiResponse<SupportTicket[]>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('user_email', userEmail.toLowerCase())
+        .order('created_at', { ascending: false });
 
-    const userTickets = tickets.filter(t => t.userEmail === userEmail);
-    
-    // Sort by created date (newest first)
-    userTickets.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      if (error) {
+        console.error('[SupportService] Error fetching user tickets:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to fetch user tickets');
+      }
 
-    return createSuccessResponse(userTickets);
+      const tickets = (data || []).map(transformTicket);
+
+      return createSuccessResponse(tickets);
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async createTicket(request: CreateSupportTicketRequest): Promise<ApiResponse<SupportTicket>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      const ticketNumber = `TKT-${Date.now().toString(36).toUpperCase()}`;
+      
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .insert({
+          ticket_number: ticketNumber,
+          category: request.category,
+          subject: request.subject,
+          description: request.description,
+          session_id: request.sessionId,
+          user_email: request.userEmail.toLowerCase(),
+          user_name: request.userName,
+          status: 'open',
+          priority: request.priority || 'medium',
+        })
+        .select()
+        .single();
 
-    const ticketNumber = `TKT-${Date.now().toString(36).toUpperCase()}`;
-    
-    const newTicket: SupportTicket = {
-      id: generateId('TKT'),
-      ticketNumber,
-      category: request.category,
-      subject: request.subject,
-      description: request.description,
-      sessionId: request.sessionId,
-      userEmail: request.userEmail,
-      userName: request.userName,
-      status: 'open',
-      priority: request.priority || 'medium',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      if (error) {
+        console.error('[SupportService] Error creating ticket:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to create ticket');
+      }
 
-    tickets.unshift(newTicket);
-
-    return createSuccessResponse(newTicket);
+      return createSuccessResponse(transformTicket(data));
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
+    }
   }
 
   async updateTicketStatus(
@@ -238,38 +322,57 @@ class MockSupportService implements ISupportService {
     status: SupportTicket['status'], 
     resolution?: string
   ): Promise<ApiResponse<SupportTicket>> {
-    await simulateNetworkDelay();
+    try {
+      const supabase = createClient();
+      
+      // First check current status
+      const { data: existingTicket } = await supabase
+        .from('support_tickets')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
 
-    const ticketIndex = tickets.findIndex(t => t.id === id);
-    
-    if (ticketIndex === -1) {
-      return createErrorResponse(
-        ErrorCodes.TICKET_NOT_FOUND,
-        `Ticket ${id} not found`
-      );
+      if (!existingTicket) {
+        return createErrorResponse(ErrorCodes.TICKET_NOT_FOUND, `Ticket ${id} not found`);
+      }
+
+      if (existingTicket.status === 'closed') {
+        return createErrorResponse(ErrorCodes.TICKET_ALREADY_CLOSED, 'This ticket has already been closed');
+      }
+
+      const updates: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (resolution) {
+        updates.resolution = resolution;
+      }
+
+      if (status === 'resolved' || status === 'closed') {
+        updates.resolved_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[SupportService] Error updating ticket:', error);
+        return createErrorResponse(ErrorCodes.SERVER_ERROR, 'Failed to update ticket');
+      }
+
+      return createSuccessResponse(transformTicket(data));
+    } catch (err) {
+      console.error('[SupportService] Unexpected error:', err);
+      return createErrorResponse(ErrorCodes.SERVER_ERROR, 'An unexpected error occurred');
     }
-
-    const ticket = tickets[ticketIndex];
-
-    if (ticket.status === 'closed') {
-      return createErrorResponse(
-        ErrorCodes.TICKET_ALREADY_CLOSED,
-        'This ticket has already been closed'
-      );
-    }
-
-    tickets[ticketIndex] = {
-      ...ticket,
-      status,
-      resolution: resolution || ticket.resolution,
-      updatedAt: new Date(),
-      resolvedAt: status === 'resolved' || status === 'closed' ? new Date() : ticket.resolvedAt,
-    };
-
-    return createSuccessResponse(tickets[ticketIndex]);
   }
 }
 
-// Export singleton instance and FAQs
-export const supportService: ISupportService = new MockSupportService();
+// Export singleton instance and FAQs - now using real Supabase implementation
+export const supportService: ISupportService = new SupabaseSupportService();
 export { faqs as supportFaqs };
