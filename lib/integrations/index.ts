@@ -353,8 +353,76 @@ export const mockRewardProvider: IRewardProvider = {
 // EXPORTED INTEGRATION INSTANCES
 // ============================================================
 
-// In production, these would be replaced with real implementations
-export const paymentProvider = mockPaymentProvider;
-export const hardwareProvider = mockHardwareProvider;
-export const emailProvider = mockEmailProvider;
-export const rewardProvider = mockRewardProvider;
+// Import real Stripe payment service
+import * as stripePaymentService from '@/lib/stripe/payment-service';
+import { getStripe } from '@/lib/stripe';
+
+// Real Stripe payment provider implementation
+export const stripeProvider: IPaymentProvider = {
+  async createPaymentIntent(request) {
+    const result = await stripePaymentService.createPaymentIntent({
+      amountCents: request.amountCents,
+      customerId: request.customerId,
+      sessionId: request.metadata?.sessionId,
+      metadata: request.metadata,
+      captureMethod: 'manual', // Always use manual capture for rentals
+    });
+    return {
+      clientSecret: result.clientSecret,
+      paymentIntentId: result.id,
+      status: result.status,
+    };
+  },
+  
+  async authorizePayment(request) {
+    const result = await stripePaymentService.createPaymentIntent({
+      amountCents: request.amountCents,
+      customerId: request.customerId,
+      sessionId: request.sessionId,
+      metadata: { sessionId: request.sessionId },
+      captureMethod: 'manual',
+    });
+    return {
+      authorizationId: result.id,
+      status: 'authorized',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    };
+  },
+  
+  async capturePayment(request) {
+    const result = await stripePaymentService.capturePayment({
+      paymentIntentId: request.paymentIntentId,
+      amountToCaptureCents: request.amountCents,
+      metadata: request.metadata,
+    });
+    return { success: true, captureId: result.id };
+  },
+  
+  async releaseAuthorization(authorizationId) {
+    await stripePaymentService.cancelPaymentIntent(authorizationId, 'released');
+    return { success: true };
+  },
+  
+  async refundPayment(request) {
+    const result = await stripePaymentService.refundPayment({
+      paymentIntentId: request.paymentIntentId,
+      amountCents: request.amountCents,
+      reason: request.reason,
+    });
+    return { success: true, refundId: result.id };
+  },
+  
+  async getPaymentStatus(paymentId) {
+    const stripe = getStripe();
+    const intent = await stripe.paymentIntents.retrieve(paymentId);
+    return { status: intent.status, amount: intent.amount };
+  },
+};
+
+// Use real Stripe in production, mock for development when STRIPE_SECRET_KEY is not set
+const isStripeConfigured = typeof process !== 'undefined' && process.env?.STRIPE_SECRET_KEY;
+
+export const paymentProvider: IPaymentProvider = isStripeConfigured ? stripeProvider : mockPaymentProvider;
+export const hardwareProvider = mockHardwareProvider; // Hardware provider stays mock until TCP proxy is connected
+export const emailProvider = mockEmailProvider; // Email provider stays mock until SendGrid/Resend is configured
+export const rewardProvider = mockRewardProvider; // Reward provider is handled by Supabase directly
