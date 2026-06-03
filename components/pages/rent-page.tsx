@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import {
   PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
@@ -100,31 +99,26 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     const initPage = async () => {
       setIsLoading(true);
       
-      // If there's an active session, show warning
       if (activeSession) {
         setStep('active_warning');
         setIsLoading(false);
         return;
       }
 
-      // If there's already a station loaded in state, go to landing
       if (currentStation) {
         setStep('landing');
         setIsLoading(false);
         return;
       }
 
-      // Try to load station from URL parameter (e.g., ?station=A12)
       const stationId = searchParams.get('station');
       
       if (!stationId) {
-        // No station in URL - show "scan a QR code" message
         setStep('no_station');
         setIsLoading(false);
         return;
       }
 
-      // Load station from database
       try {
         const station = await loadStation(stationId);
         
@@ -149,7 +143,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           return;
         }
         
-        // Station is valid, go to landing
         setStep('landing');
       } catch (err) {
         console.error('Failed to load station:', err);
@@ -163,7 +156,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     initPage();
   }, [activeSession, currentStation, searchParams, loadStation]);
 
-  // Pre-fill form when user data is available
   useEffect(() => {
     if (user) {
       setEmail(user.email);
@@ -173,13 +165,11 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     }
   }, [user]);
 
-  // Validate email
   const validateEmail = (emailValue: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(emailValue);
   };
 
-  // Handle form submission
   const handleInfoSubmit = () => {
     const errors: Record<string, string> = {};
 
@@ -202,33 +192,28 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     setStep('payment');
   };
 
-  // Handle payment authorization
   const handlePayment = async () => {
     setIsProcessing(true);
     setError(null);
 
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       if (!isOnline) {
         throw new Error('network');
       }
 
-      // Proceed to unlocking
       setStep('unlocking');
       setAssignedSlot(Math.floor(Math.random() * 12) + 1);
 
-      // Simulate unlock process
       let progress = 0;
       const interval = setInterval(async () => {
-        progress += 10;
+        progress += 15;
         setUnlockProgress(progress);
 
         if (progress >= 100) {
           clearInterval(interval);
 
-          // Start the actual rental
           const result = await startRental({
             email,
             name: name || undefined,
@@ -244,7 +229,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             setStep('error');
           }
         }
-      }, 400);
+      }, 300);
     } catch (err) {
       setError('network');
       setStep('error');
@@ -253,7 +238,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     }
   };
 
-  // Handle error actions
   const handleErrorAction = () => {
     if (!error) return;
 
@@ -270,100 +254,27 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     }
   };
 
-  // Render loading state
-  if (isLoading) {
-    return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
-        <MobileHeader subtitle="Loading..." />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <Spinner className="w-8 h-8 mx-auto text-primary" />
-            <p className="text-muted-foreground">Finding your station...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render error state (initial errors)
-  if (error && step !== 'error') {
-    const config = errorConfigs[error];
-    return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
-        <MobileHeader />
-        <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
-          >
-            <XCircleIcon size={28} className="text-muted-foreground" />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-center max-w-xs"
-          >
-            <h1 className="text-lg font-medium text-foreground mb-2">{config.title}</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">{config.description}</p>
-          </motion.div>
-
-          <div className="w-full max-w-xs space-y-3 mt-10">
-            <Button
-              onClick={handleErrorAction}
-              className="w-full h-12 text-sm font-medium"
-            >
-              {config.action}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('support')}
-              className="w-full h-12 text-sm font-medium"
-            >
-              Contact Support
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Render step content
-  return (
-    <div className="flex flex-col min-h-screen bg-background pb-20">
-      <AnimatePresence mode="wait">
-        {step === 'loading' && (
-          <LoadingStep key="loading" />
-        )}
-
-        {step === 'no_station' && (
-          <NoStationStep
-            key="no_station"
-            error={stationError}
-          />
-        )}
-
-        {step === 'active_warning' && (
+  // Render current step
+  const renderStep = () => {
+    switch (step) {
+      case 'loading':
+        return <LoadingStep />;
+      case 'no_station':
+        return <NoStationStep error={stationError} />;
+      case 'active_warning':
+        return (
           <ActiveWarningStep
-            key="active_warning"
             onViewRental={() => onNavigate('status')}
             onContinueAnyway={() => setStep('landing')}
           />
-        )}
-
-        {step === 'landing' && currentStation && (
-          <LandingStep
-            key="landing"
-            station={currentStation}
-            onStart={() => setStep('info')}
-          />
-        )}
-
-        {step === 'info' && currentStation && (
+        );
+      case 'landing':
+        return currentStation ? (
+          <LandingStep station={currentStation} onStart={() => setStep('info')} />
+        ) : null;
+      case 'info':
+        return currentStation ? (
           <InfoStep
-            key="info"
             station={currentStation}
             email={email}
             setEmail={setEmail}
@@ -377,11 +288,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             onBack={() => setStep('landing')}
             onSubmit={handleInfoSubmit}
           />
-        )}
-
-        {step === 'payment' && currentStation && (
+        ) : null;
+      case 'payment':
+        return currentStation ? (
           <PaymentStep
-            key="payment"
             station={currentStation}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
@@ -389,141 +299,110 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             onBack={() => setStep('info')}
             onSubmit={handlePayment}
           />
-        )}
-
-        {step === 'unlocking' && currentStation && (
+        ) : null;
+      case 'unlocking':
+        return currentStation ? (
           <UnlockingStep
-            key="unlocking"
             station={currentStation}
             assignedSlot={assignedSlot || 4}
             progress={unlockProgress}
           />
-        )}
-
-        {step === 'success' && currentStation && (
+        ) : null;
+      case 'success':
+        return currentStation ? (
           <SuccessStep
-            key="success"
             station={currentStation}
             assignedSlot={assignedSlot || 4}
             onContinue={() => onNavigate('status')}
           />
-        )}
-
-        {step === 'error' && error && (
+        ) : null;
+      case 'error':
+        return error ? (
           <ErrorStep
-            key="error"
             error={error}
             customMessage={errorMessage}
             onAction={handleErrorAction}
             onSupport={() => onNavigate('support')}
           />
-        )}
-      </AnimatePresence>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-background pb-20">
+      {renderStep()}
     </div>
   );
 }
 
-// Loading Step Component
+// Loading Step
 function LoadingStep() {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
       <MobileHeader />
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <Spinner className="w-8 h-8 mb-4" />
         <p className="text-sm text-muted-foreground">Loading station...</p>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
-// No Station Step - Shown when no station ID in URL
+// No Station Step
 function NoStationStep({ error }: { error: string | null }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
       <MobileHeader />
-
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="relative w-32 h-32 mb-8"
-        >
+        <div className="relative w-24 h-24 mb-6">
           <div className="absolute inset-0 bg-muted rounded-2xl flex items-center justify-center">
-            <QRScanIcon size={48} className="text-foreground" />
+            <QRScanIcon size={40} className="text-foreground" />
           </div>
-          <motion.div
-            className="absolute inset-0 border-2 border-primary rounded-2xl"
-            animate={{ scale: [1, 1.05, 1], opacity: [1, 0.5, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-        </motion.div>
+        </div>
 
-        <div className="text-center max-w-xs mb-8">
-          <h1 className="text-2xl font-medium text-foreground mb-3">Scan to Rent</h1>
+        <div className="text-center max-w-xs mb-6">
+          <h1 className="text-xl font-medium text-foreground mb-2">Scan to Rent</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Use your phone&apos;s camera to scan the QR code on any PowerDon charging station.
+            Use your phone&apos;s camera to scan the QR code on any PowerDon station.
           </p>
         </div>
 
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-sm bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6"
-          >
+          <div className="w-full max-w-sm bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-6">
             <div className="flex items-start gap-3">
-              <XCircleIcon size={18} className="text-destructive flex-shrink-0 mt-0.5" />
+              <XCircleIcon size={16} className="text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-destructive font-medium">Station Error</p>
-                <p className="text-xs text-destructive/80 mt-1">{error}</p>
+                <p className="text-sm text-destructive font-medium">Error</p>
+                <p className="text-xs text-destructive/80 mt-0.5">{error}</p>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
 
-        <div className="w-full max-w-sm space-y-6">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <div className="flex-1 h-px bg-border" />
-            <span>How it works</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          <div className="space-y-3 text-sm">
+        <div className="w-full max-w-sm space-y-4">
+          <div className="space-y-2 text-sm">
             {[
-              { step: 1, title: 'Scan QR code', desc: 'On the charging station' },
-              { step: 2, title: 'Enter your details', desc: 'Email and payment' },
-              { step: 3, title: 'Grab & go', desc: 'Slot unlocks automatically' },
+              { step: 1, title: 'Scan QR code', desc: 'On the station' },
+              { step: 2, title: 'Enter details', desc: 'Email & payment' },
+              { step: 3, title: 'Grab & go', desc: 'Slot unlocks' },
             ].map((item) => (
-              <div key={item.step} className="flex items-center gap-4">
-                <span className="w-6 h-6 rounded-full bg-muted text-foreground text-xs font-medium flex items-center justify-center flex-shrink-0">
+              <div key={item.step} className="flex items-center gap-3">
+                <span className="w-5 h-5 rounded-full bg-muted text-foreground text-xs font-medium flex items-center justify-center flex-shrink-0">
                   {item.step}
                 </span>
-                <div className="flex items-baseline gap-2">
-                  <p className="font-medium text-foreground">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
+                <p className="text-foreground">{item.title}</p>
+                <p className="text-xs text-muted-foreground">{item.desc}</p>
               </div>
             ))}
           </div>
-
-          <div className="pt-4 text-center">
-            <p className="text-xs text-muted-foreground">
-              First 5 minutes free, then €1/15min • Max €27/day
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground text-center pt-2">
+            First 5 min free, then €1/15min
+          </p>
         </div>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
@@ -536,24 +415,14 @@ function ActiveWarningStep({
   onContinueAnyway: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
       <MobileHeader />
-
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
-        >
-          <PowerDonLogo size={28} className="text-foreground" />
-        </motion.div>
+        <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mb-6">
+          <PowerDonLogo size={24} className="text-foreground" />
+        </div>
 
-        <div className="text-center max-w-xs mb-10">
+        <div className="text-center max-w-xs mb-8">
           <h1 className="text-lg font-medium text-foreground mb-2">Active Rental</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             You have an active rental. View its status or continue browsing.
@@ -561,153 +430,87 @@ function ActiveWarningStep({
         </div>
 
         <div className="w-full max-w-sm space-y-3">
-          <Button
-            onClick={onViewRental}
-            className="w-full h-12 text-sm font-medium rounded-none"
-          >
+          <Button onClick={onViewRental} className="w-full h-12 text-sm font-medium">
             View Active Rental
           </Button>
-          <Button
-            variant="outline"
-            onClick={onContinueAnyway}
-            className="w-full h-12 text-sm font-medium rounded-none"
-          >
+          <Button variant="outline" onClick={onContinueAnyway} className="w-full h-12 text-sm font-medium">
             Continue Browsing
           </Button>
         </div>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
-// Landing Step Component
+// Landing Step
 function LandingStep({
   station,
   onStart
 }: {
-  station: { id: string; campaignName: string; hourlyRate: number; depositAmount: number; rewardDescription: string; availableSlots: number };
+  station: { id: string; campaignName: string; hourlyRate: number; depositAmount: number; dailyCap?: number; rewardDescription: string; availableSlots: number };
   onStart: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
       <MobileHeader subtitle={`${station.campaignName.toUpperCase()} • STATION ${station.id}`} />
 
       <main className="flex-1 flex flex-col">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="relative w-full aspect-[4/3] overflow-hidden"
-        >
+        <div className="relative w-full aspect-[4/3] overflow-hidden">
           <img
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/powerbanks.png-n6OHfLGwW8PS0RkEAFHCgSp1h0fhk6.jpeg"
             alt="PowerDon power banks"
             className="w-full h-full object-cover"
           />
-        </motion.div>
+        </div>
 
-        <div className="flex-1 px-6 py-8 space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-center"
-          >
+        <div className="flex-1 px-5 py-6 space-y-6">
+          <div className="text-center">
             <h1 className="text-2xl font-medium text-foreground">Stay charged.</h1>
-            <p className="mt-2 text-sm text-muted-foreground text-balance leading-relaxed">
-              Rent a power bank in seconds.
-            </p>
-          </motion.div>
+            <p className="mt-1 text-sm text-muted-foreground">Rent a power bank in seconds.</p>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <div className="flex items-center justify-between py-4">
+          <div className="bg-card rounded-lg border border-border p-4">
+            <div className="flex items-center justify-between py-3">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Rate</p>
-                <p className="text-xl font-medium text-foreground mt-1">
-                  €1.00
-                  <span className="text-sm font-normal text-muted-foreground">/15min</span>
+                <p className="text-lg font-medium text-foreground mt-0.5">
+                  €1.00<span className="text-sm font-normal text-muted-foreground">/15min</span>
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">First 5 min free</p>
+                <p className="text-[10px] text-muted-foreground">First 5 min free</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Deposit</p>
-                <p className="text-xl font-medium text-foreground mt-1">{formatCurrency(station.depositAmount)}</p>
+                <p className="text-lg font-medium text-foreground mt-0.5">{formatCurrency(station.depositAmount)}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">Refundable</p>
               </div>
             </div>
             <div className="text-xs text-muted-foreground border-t border-border/50 pt-3">
               Max €27.00/day • Tax included
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-muted rounded-md p-4"
-          >
+          <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-start gap-3">
-              <GiftIcon size={18} className="text-foreground mt-0.5 flex-shrink-0" />
+              <GiftIcon size={18} className="text-primary flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-foreground">Merch Reward</p>
+                <p className="text-sm font-medium text-foreground">Reward Available</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{station.rewardDescription}</p>
               </div>
             </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="space-y-4"
-          >
-            <div className="space-y-3">
-              {[
-                { step: 1, title: 'Scan', desc: 'Start your rental' },
-                { step: 2, title: 'Unlock', desc: 'Pick up your power bank' },
-                { step: 3, title: 'Return', desc: 'Drop at any station' },
-              ].map((item) => (
-                <div key={item.step} className="flex items-center gap-4">
-                  <span className="w-6 h-6 rounded-full bg-foreground text-background text-xs font-medium flex items-center justify-center flex-shrink-0">
-                    {item.step}
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
+          </div>
         </div>
 
-        <div className="sticky bottom-20 px-6 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-          <Button
-            onClick={onStart}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Start rental
-            <ArrowRightIcon size={16} />
+        <div className="sticky bottom-20 px-5 py-4 bg-background border-t border-border">
+          <Button onClick={onStart} className="w-full h-12 text-sm font-medium gap-2">
+            Start Rental <ArrowRightIcon size={16} />
           </Button>
-          <p className="text-center text-xs text-muted-foreground mt-3">
-            {station.availableSlots} slots available
-          </p>
         </div>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
-// Info Step Component
+// Info Step
 function InfoStep({
   station,
   email,
@@ -722,7 +525,7 @@ function InfoStep({
   onBack,
   onSubmit,
 }: {
-  station: { campaignName: string; hourlyRate: number; depositAmount: number };
+  station: { id: string; depositAmount: number };
   email: string;
   setEmail: (v: string) => void;
   name: string;
@@ -736,81 +539,58 @@ function InfoStep({
   onSubmit: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader title="Your Info" showBack onBack={onBack} />
+    <div className="flex flex-col min-h-screen animate-in slide-in-from-right-4 duration-200">
+      <MobileHeader subtitle={`STATION ${station.id}`} />
 
-      <main className="flex-1 px-6 py-8 space-y-8">
-        <div>
-          <h1 className="text-lg font-medium text-foreground">Your details</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter your email to continue.
-          </p>
-        </div>
+      <main className="flex-1 px-5 py-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-muted-foreground mb-4 active:opacity-70"
+        >
+          <ChevronLeftIcon size={16} />
+          Back
+        </button>
 
-        <div className="flex items-center justify-between py-4 border-b border-border/50">
+        <h1 className="text-xl font-medium text-foreground mb-1">Your Details</h1>
+        <p className="text-sm text-muted-foreground mb-6">We&apos;ll send your receipt here.</p>
+
+        <div className="space-y-4">
           <div>
-            <p className="text-xs text-muted-foreground">Rate</p>
-            <p className="text-sm font-medium text-foreground">€1.00/15min</p>
-            <p className="text-[10px] text-muted-foreground">First 5 min free</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Deposit</p>
-            <p className="text-sm font-medium text-foreground">{formatCurrency(station.depositAmount)}</p>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <div>
-            <label htmlFor="email" className="block text-xs text-muted-foreground mb-2">
-              Email
-            </label>
+            <label className="text-sm font-medium text-foreground">Email *</label>
             <Input
-              id="email"
               type="email"
-              placeholder="email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={formErrors.email ? 'border-destructive' : ''}
-              aria-invalid={!!formErrors.email}
-              aria-describedby={formErrors.email ? 'email-error' : undefined}
+              placeholder="you@example.com"
+              className={`mt-1.5 h-11 ${formErrors.email ? 'border-destructive' : ''}`}
             />
             {formErrors.email && (
-              <p id="email-error" className="mt-1.5 text-xs text-destructive">{formErrors.email}</p>
+              <p className="text-xs text-destructive mt-1">{formErrors.email}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="name" className="block text-xs text-muted-foreground mb-2">
-              Name <span className="text-muted-foreground/60">(optional)</span>
-            </label>
+            <label className="text-sm font-medium text-foreground">Name (optional)</label>
             <Input
-              id="name"
               type="text"
-              placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              className="mt-1.5 h-11"
             />
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="pt-2 space-y-3">
             <div className="flex items-start gap-3">
               <Checkbox
                 id="terms"
                 checked={termsAccepted}
-                onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                onCheckedChange={(v) => setTermsAccepted(v === true)}
                 className="mt-0.5"
-                aria-invalid={!!formErrors.terms}
               />
-              <label htmlFor="terms" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
-                I agree to the{' '}
-                <a href="#" className="text-foreground underline">Terms</a>
-                {' '}and{' '}
-                <a href="#" className="text-foreground underline">Privacy Policy</a>
+              <label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed">
+                I agree to the <a href="#" className="underline text-foreground">Terms of Service</a> and{' '}
+                <a href="#" className="underline text-foreground">Privacy Policy</a> *
               </label>
             </div>
             {formErrors.terms && (
@@ -821,31 +601,34 @@ function InfoStep({
               <Checkbox
                 id="marketing"
                 checked={marketingConsent}
-                onCheckedChange={(checked) => setMarketingConsent(checked === true)}
+                onCheckedChange={(v) => setMarketingConsent(v === true)}
                 className="mt-0.5"
               />
-              <label htmlFor="marketing" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
-                Send me updates about rewards
+              <label htmlFor="marketing" className="text-sm text-muted-foreground leading-relaxed">
+                Send me offers and updates
               </label>
             </div>
           </div>
         </div>
 
-        <div className="pt-6">
-          <Button
-            onClick={onSubmit}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Continue
-            <ArrowRightIcon size={16} />
-          </Button>
+        <div className="flex items-center gap-2 mt-6 p-3 bg-muted/50 rounded-lg">
+          <ShieldCheckIcon size={16} className="text-muted-foreground flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            Your data is encrypted and secure
+          </p>
         </div>
       </main>
-    </motion.div>
+
+      <div className="sticky bottom-20 px-5 py-4 bg-background border-t border-border">
+        <Button onClick={onSubmit} className="w-full h-12 text-sm font-medium gap-2">
+          Continue to Payment <ArrowRightIcon size={16} />
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// Payment Step Component
+// Payment Step
 function PaymentStep({
   station,
   paymentMethod,
@@ -854,7 +637,7 @@ function PaymentStep({
   onBack,
   onSubmit,
 }: {
-  station: { depositAmount: number };
+  station: { id: string; depositAmount: number };
   paymentMethod: 'card' | 'apple_pay' | 'google_pay';
   setPaymentMethod: (v: 'card' | 'apple_pay' | 'google_pay') => void;
   isProcessing: boolean;
@@ -862,28 +645,28 @@ function PaymentStep({
   onSubmit: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader title="Payment" showBack onBack={onBack} />
+    <div className="flex flex-col min-h-screen animate-in slide-in-from-right-4 duration-200">
+      <MobileHeader subtitle={`STATION ${station.id}`} />
 
-      <main className="flex-1 px-5 py-6 space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Authorize payment</h1>
-          <p className="mt-1 text-muted-foreground">
-            A hold will be placed on your card. You&apos;ll only be charged for actual usage.
-          </p>
-        </div>
+      <main className="flex-1 px-5 py-6">
+        <button
+          onClick={onBack}
+          disabled={isProcessing}
+          className="flex items-center gap-1 text-sm text-muted-foreground mb-4 active:opacity-70 disabled:opacity-50"
+        >
+          <ChevronLeftIcon size={16} />
+          Back
+        </button>
 
-        <div className="bg-card rounded-lg border border-border p-5 space-y-4">
+        <h1 className="text-xl font-medium text-foreground mb-1">Payment</h1>
+        <p className="text-sm text-muted-foreground mb-6">Authorize your deposit to continue.</p>
+
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Deposit</span>
             <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
           </div>
-          <div className="space-y-2 text-xs text-muted-foreground border-t border-border pt-4">
+          <div className="space-y-2 text-xs text-muted-foreground border-t border-border pt-3">
             <div className="flex justify-between">
               <span>Rate</span>
               <span>€1.00/15min (first 5 min free)</span>
@@ -892,103 +675,59 @@ function PaymentStep({
               <span>Daily cap</span>
               <span>€27.00</span>
             </div>
-            <div className="flex justify-between">
-              <span>Max rental</span>
-              <span>24 hours</span>
-            </div>
             <p className="pt-2">
-              This amount will be held and you&apos;ll only be charged for actual usage. Tax included.
+              This amount will be held and you&apos;ll only be charged for actual usage.
             </p>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-foreground uppercase tracking-wide">Payment Method</h2>
-
-          <button
-            onClick={() => setPaymentMethod('apple_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white text-sm font-semibold">
-              Pay
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Apple Pay</p>
-              <p className="text-sm text-muted-foreground">Fast and secure</p>
-            </div>
-            {paymentMethod === 'apple_pay' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setPaymentMethod('google_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-white border border-border rounded-lg flex items-center justify-center text-sm font-semibold">
-              G
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Google Pay</p>
-              <p className="text-sm text-muted-foreground">Fast checkout</p>
-            </div>
-            {paymentMethod === 'google_pay' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setPaymentMethod('card')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-              <svg width="20" height="16" viewBox="0 0 20 16" fill="none" className="text-muted-foreground">
-                <rect x="1" y="1" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
-                <path d="M1 5H19" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Credit or Debit Card</p>
-              <p className="text-sm text-muted-foreground">Visa, Mastercard, Amex</p>
-            </div>
-            {paymentMethod === 'card' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
-        </div>
-
-        <div className="pt-4">
-          <Button
-            onClick={onSubmit}
-            disabled={isProcessing}
-            className="w-full h-12 text-sm font-medium"
-          >
-            {isProcessing ? (
-              <>
-                <Spinner className="w-5 h-5" />
-                Authorizing...
-              </>
-            ) : (
-              <>
-                Authorize {formatCurrency(station.depositAmount)}
-                <ArrowRightIcon size={18} />
-              </>
-            )}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground mt-3">
-            <ShieldCheckIcon size={12} className="inline mr-1" />
-            Secure payment powered by Stripe
-          </p>
+        <div className="mt-6 space-y-3">
+          <p className="text-sm font-medium text-foreground">Payment Method</p>
+          {(['apple_pay', 'google_pay', 'card'] as const).map((method) => (
+            <button
+              key={method}
+              onClick={() => setPaymentMethod(method)}
+              disabled={isProcessing}
+              className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 transition-colors ${
+                paymentMethod === method
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-card'
+              } disabled:opacity-50`}
+            >
+              <div className="w-8 h-8 bg-muted rounded flex items-center justify-center text-xs font-medium">
+                {method === 'apple_pay' ? '' : method === 'google_pay' ? 'G' : '💳'}
+              </div>
+              <span className="text-sm font-medium text-foreground">
+                {method === 'apple_pay' ? 'Apple Pay' : method === 'google_pay' ? 'Google Pay' : 'Card'}
+              </span>
+            </button>
+          ))}
         </div>
       </main>
-    </motion.div>
+
+      <div className="sticky bottom-20 px-5 py-4 bg-background border-t border-border">
+        <Button
+          onClick={onSubmit}
+          disabled={isProcessing}
+          className="w-full h-12 text-sm font-medium gap-2"
+        >
+          {isProcessing ? (
+            <>
+              <Spinner className="w-4 h-4" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Authorize {formatCurrency(station.depositAmount)}
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// Unlocking Step Component
+// Unlocking Step
 function UnlockingStep({
   station,
   assignedSlot,
@@ -999,148 +738,75 @@ function UnlockingStep({
   progress: number;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader subtitle="UNLOCKING" />
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
+      <MobileHeader subtitle={`STATION ${station.id}`} />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 mb-6"
-        >
-          <RefreshIcon size={64} className="text-primary" />
-        </motion.div>
-
-        <div className="text-center mb-8">
-          <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Unlocking Power Bank</p>
-          <h1 className="text-xl font-semibold text-foreground">Please wait...</h1>
-          <p className="mt-2 text-muted-foreground">
-            The power bank at slot {assignedSlot} is being released.
-          </p>
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-16 h-16 mb-6">
+          <Spinner className="w-full h-full text-primary" />
         </div>
 
-        <div className="w-full max-w-sm">
-          <div className="bg-muted rounded-full h-3 overflow-hidden mb-4">
-            <motion.div
-              className="h-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
+        <h1 className="text-xl font-medium text-foreground mb-2">Unlocking Slot {assignedSlot}</h1>
+        <p className="text-sm text-muted-foreground mb-8">Please wait...</p>
+
+        <div className="w-full max-w-xs">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
             />
           </div>
-
-          <div className="bg-card rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Station</span>
-              <span className="font-mono text-foreground">{station.id}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-muted-foreground">Slot</span>
-              <span className="font-mono font-bold text-primary">{String(assignedSlot).padStart(2, '0')}</span>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground text-center mt-3">{progress}% complete</p>
         </div>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
-// Success Step Component
+// Success Step
 function SuccessStep({
   station,
   assignedSlot,
   onContinue,
 }: {
-  station: { id: string; campaignName: string };
+  station: { id: string };
   assignedSlot: number;
   onContinue: () => void;
 }) {
-  const sessionCode = `VR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-  const startTime = new Date();
-
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader subtitle="CONFIRMED" />
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
+      <MobileHeader subtitle={`STATION ${station.id}`} />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6"
-        >
-          <CheckCircleIcon size={48} className="text-emerald-600" />
-        </motion.div>
-
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2">You&apos;re all set!</h1>
-          <p className="text-muted-foreground">
-            Your power bank is ready. Pick it up from slot {assignedSlot} at station {station.id}.
-          </p>
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+          <CheckCircleIcon size={32} className="text-primary" />
         </div>
 
-        {/* Slot Collection Card */}
-        <div className="bg-card rounded-lg border border-border overflow-hidden w-full max-w-sm mb-4">
-          <div className="px-4 py-3 bg-muted/50 border-b border-border">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Collect from</span>
-              <div className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-xs text-emerald-600">Ready</span>
-              </div>
-            </div>
-          </div>
-          <div className="p-5 text-center">
-            <p className="text-5xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
-            <p className="text-sm text-muted-foreground mt-2">Station {station.id} • {station.campaignName}</p>
-          </div>
-        </div>
+        <h1 className="text-xl font-medium text-foreground mb-2">Slot {assignedSlot} is Open</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-xs mb-8">
+          Take your power bank now. Your rental timer starts when you remove it.
+        </p>
 
-        {/* Session Details */}
-        <div className="bg-muted/50 rounded-xl p-3 w-full max-w-sm mb-4">
+        <div className="w-full max-w-sm bg-card border border-border rounded-lg p-4 mb-8">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Session ID</span>
-            <span className="font-mono font-medium text-foreground">{sessionCode}</span>
+            <span className="text-muted-foreground">Station</span>
+            <span className="font-medium text-foreground">{station.id}</span>
           </div>
-          <div className="flex items-center justify-between text-sm mt-1">
-            <span className="text-muted-foreground">Started</span>
-            <span className="text-foreground">{formatTime(startTime)}</span>
-          </div>
-        </div>
-
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 w-full max-w-sm mb-6">
-          <div className="flex items-start gap-3">
-            <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">Remember:</span> Rent for at least 60 minutes to earn your free merch voucher!
-            </p>
+          <div className="flex items-center justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Slot</span>
+            <span className="font-medium text-foreground">{assignedSlot}</span>
           </div>
         </div>
 
-        <div className="w-full max-w-sm">
-          <Button
-            onClick={onContinue}
-            className="w-full h-12 text-sm font-medium"
-          >
-            View Rental Status
-            <ArrowRightIcon size={18} />
-          </Button>
-        </div>
+        <Button onClick={onContinue} className="w-full max-w-sm h-12 text-sm font-medium">
+          View Rental Status
+        </Button>
       </main>
-    </motion.div>
+    </div>
   );
 }
 
-// Error Step Component
+// Error Step
 function ErrorStep({
   error,
   customMessage,
@@ -1153,99 +819,30 @@ function ErrorStep({
   onSupport: () => void;
 }) {
   const config = errorConfigs[error];
-  const errorCode = `ERR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-
-  const troubleshootingTips: Record<ErrorType, string[]> = {
-    station_unavailable: [
-      'Check if the station LED is lit',
-      'Try scanning the QR code again',
-      'Look for another nearby station',
-    ],
-    duplicate_session: [
-      'Return your current power bank first',
-      'Check your active session in Status tab',
-    ],
-    payment_failed: [
-      'Verify your card details are correct',
-      'Ensure sufficient funds available',
-      'Try a different payment method',
-    ],
-    network: [
-      'Check your internet connection',
-      'Move closer to a WiFi access point',
-      'Wait a moment and try again',
-    ],
-    unlock_failed: [
-      'Ensure you are near the station',
-      'Try a different slot if available',
-      'Wait 10 seconds and try again',
-    ],
-    general: [
-      'Try refreshing the page',
-      'Check your internet connection',
-      'Contact support if issue persists',
-    ],
-  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader subtitle="ERROR" />
+    <div className="flex flex-col min-h-screen animate-in fade-in duration-150">
+      <MobileHeader />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
-        >
-          <XCircleIcon size={40} className="text-destructive" />
-        </motion.div>
-
-        <div className="text-center max-w-sm mb-4">
-          <h1 className="text-xl font-semibold text-foreground mb-2">{config.title}</h1>
-          <p className="text-muted-foreground">{customMessage || config.description}</p>
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center mb-6">
+          <XCircleIcon size={24} className="text-destructive" />
         </div>
 
-        {/* Error Reference */}
-        <div className="bg-muted/50 rounded-lg px-3 py-2 mb-4">
-          <span className="text-xs text-muted-foreground">Reference: </span>
-          <span className="font-mono text-xs text-foreground">{errorCode}</span>
-        </div>
-
-        {/* Troubleshooting Tips */}
-        <div className="bg-card rounded-xl border border-border p-4 w-full max-w-sm mb-6">
-          <p className="text-sm font-medium text-foreground mb-3">Quick troubleshooting:</p>
-          <ul className="space-y-2">
-            {troubleshootingTips[error].map((tip, index) => (
-              <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="text-primary font-medium">{index + 1}.</span>
-                <span>{tip}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <h1 className="text-lg font-medium text-foreground mb-2">{config.title}</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-xs mb-8">
+          {customMessage || config.description}
+        </p>
 
         <div className="w-full max-w-sm space-y-3">
-          <Button
-            onClick={onAction}
-            className="w-full h-12 text-sm font-medium"
-          >
-            <RefreshIcon size={18} />
+          <Button onClick={onAction} className="w-full h-12 text-sm font-medium">
             {config.action}
           </Button>
-          <Button
-            variant="outline"
-            onClick={onSupport}
-            className="w-full h-12 text-sm font-medium"
-          >
+          <Button variant="outline" onClick={onSupport} className="w-full h-12 text-sm font-medium">
             Contact Support
           </Button>
         </div>
       </main>
-    </motion.div>
+    </div>
   );
 }
