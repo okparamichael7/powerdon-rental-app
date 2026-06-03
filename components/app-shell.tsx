@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { BottomNav } from '@/components/volt/bottom-nav';
 import { RentPage } from '@/components/pages/rent-page';
 import { StatusPage } from '@/components/pages/status-page';
 import { RewardsPage } from '@/components/pages/rewards-page';
 import { SupportPage } from '@/components/pages/support-page';
 import { AppStateProvider, useAppState } from '@/lib/app-state';
+import { Spinner } from '@/components/ui/spinner';
 
 type NavTab = 'rent' | 'status' | 'rewards' | 'support';
 
@@ -43,7 +44,11 @@ function AppContent() {
   const renderPage = () => {
     switch (activeTab) {
       case 'rent':
-        return <RentPage isOnline={isOnline} onNavigate={handleTabChange} />;
+        return (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Spinner className="w-8 h-8" /></div>}>
+            <RentPage isOnline={isOnline} onNavigate={handleTabChange} />
+          </Suspense>
+        );
       case 'status':
         return <StatusPage isOnline={isOnline} onNavigate={handleTabChange} />;
       case 'rewards':
@@ -51,7 +56,11 @@ function AppContent() {
       case 'support':
         return <SupportPage isOnline={isOnline} onNavigate={handleTabChange} />;
       default:
-        return <RentPage isOnline={isOnline} onNavigate={handleTabChange} />;
+        return (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Spinner className="w-8 h-8" /></div>}>
+            <RentPage isOnline={isOnline} onNavigate={handleTabChange} />
+          </Suspense>
+        );
     }
   };
 

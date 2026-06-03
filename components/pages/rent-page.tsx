@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import {
@@ -11,12 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
-import { QRScanner } from '@/components/qr-scanner';
 import { useAppState } from '@/lib/app-state';
 import { formatCurrency } from '@/lib/session-store';
 import { formatTime } from '@/lib/utils';
 
-type RentStep = 'scan' | 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
+type RentStep = 'loading' | 'no_station' | 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
 
 interface RentPageProps {
@@ -71,12 +71,12 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 };
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
+  const searchParams = useSearchParams();
   const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation, setCurrentStation } = useAppState();
 
-  const [step, setStep] = useState<RentStep>('scan');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const [step, setStep] = useState<RentStep>('loading');
+  const [isLoading, setIsLoading] = useState(true);
+  const [stationError, setStationError] = useState<string | null>(null);
   const [error, setError] = useState<ErrorType | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -95,27 +95,73 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   const [unlockProgress, setUnlockProgress] = useState(0);
   const [assignedSlot, setAssignedSlot] = useState<number | null>(null);
 
-  // Initialize page based on state
+  // Initialize page - load station from URL parameter
   useEffect(() => {
     const initPage = async () => {
+      setIsLoading(true);
+      
       // If there's an active session, show warning
       if (activeSession) {
         setStep('active_warning');
+        setIsLoading(false);
         return;
       }
 
-      // If there's already a station selected, go to landing
+      // If there's already a station loaded in state, go to landing
       if (currentStation) {
         setStep('landing');
+        setIsLoading(false);
         return;
       }
 
-      // Otherwise, stay on scan step (default)
-      setStep('scan');
+      // Try to load station from URL parameter (e.g., ?station=A12)
+      const stationId = searchParams.get('station');
+      
+      if (!stationId) {
+        // No station in URL - show "scan a QR code" message
+        setStep('no_station');
+        setIsLoading(false);
+        return;
+      }
+
+      // Load station from database
+      try {
+        const station = await loadStation(stationId);
+        
+        if (!station) {
+          setStationError(`Station "${stationId}" not found.`);
+          setStep('no_station');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (station.status !== 'online') {
+          setStationError(`Station "${stationId}" is currently ${station.status}.`);
+          setStep('no_station');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (station.availableSlots === 0) {
+          setStationError(`Station "${stationId}" has no available power banks.`);
+          setStep('no_station');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Station is valid, go to landing
+        setStep('landing');
+      } catch (err) {
+        console.error('Failed to load station:', err);
+        setStationError('Failed to load station. Please check your connection.');
+        setStep('no_station');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     initPage();
-  }, [activeSession, currentStation]);
+  }, [activeSession, currentStation, searchParams, loadStation]);
 
   // Pre-fill form when user data is available
   useEffect(() => {
@@ -126,47 +172,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
       setMarketingConsent(user.marketingConsent);
     }
   }, [user]);
-
-  // Handle QR code scan
-  const handleQRScan = useCallback(async (stationId: string) => {
-    setIsLoading(true);
-    setScanError(null);
-    
-    try {
-      const station = await loadStation(stationId);
-      
-      if (!station) {
-        setScanError(`Station ${stationId} not found. Please try again.`);
-        setIsScannerOpen(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      if (station.status !== 'online') {
-        setScanError(`Station ${stationId} is currently ${station.status}. Please try a nearby station.`);
-        setIsScannerOpen(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      if (station.availableSlots === 0) {
-        setScanError(`Station ${stationId} has no available power banks. Please try a nearby station.`);
-        setIsScannerOpen(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      // Station is valid, close scanner and go to landing
-      setIsScannerOpen(false);
-      setStep('landing');
-    } catch (err) {
-      console.error('Failed to load station:', err);
-      setScanError('Failed to load station. Please check your connection and try again.');
-      setIsScannerOpen(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loadStation]);
 
   // Validate email
   const validateEmail = (emailValue: string): boolean => {
@@ -328,24 +333,15 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   // Render step content
   return (
     <div className="flex flex-col min-h-screen bg-background pb-20">
-      {/* QR Scanner Modal */}
-      <AnimatePresence>
-        {isScannerOpen && (
-          <QRScanner
-            onScan={handleQRScan}
-            onClose={() => setIsScannerOpen(false)}
-            isLoading={isLoading}
-          />
-        )}
-      </AnimatePresence>
-
       <AnimatePresence mode="wait">
-        {step === 'scan' && (
-          <ScanStep
-            key="scan"
-            onOpenScanner={() => setIsScannerOpen(true)}
-            scanError={scanError}
-            onClearError={() => setScanError(null)}
+        {step === 'loading' && (
+          <LoadingStep key="loading" />
+        )}
+
+        {step === 'no_station' && (
+          <NoStationStep
+            key="no_station"
+            error={stationError}
           />
         )}
 
@@ -427,16 +423,26 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   );
 }
 
-// Scan Step Component - Initial step to scan QR code
-function ScanStep({
-  onOpenScanner,
-  scanError,
-  onClearError,
-}: {
-  onOpenScanner: () => void;
-  scanError: string | null;
-  onClearError: () => void;
-}) {
+// Loading Step Component
+function LoadingStep() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex flex-col min-h-screen"
+    >
+      <MobileHeader />
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <Spinner className="w-8 h-8 mb-4" />
+        <p className="text-sm text-muted-foreground">Loading station...</p>
+      </main>
+    </motion.div>
+  );
+}
+
+// No Station Step - Shown when no station ID in URL
+function NoStationStep({ error }: { error: string | null }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -452,11 +458,9 @@ function ScanStep({
           animate={{ scale: 1, opacity: 1 }}
           className="relative w-32 h-32 mb-8"
         >
-          {/* Animated QR code icon */}
           <div className="absolute inset-0 bg-muted rounded-2xl flex items-center justify-center">
             <QRScanIcon size={48} className="text-foreground" />
           </div>
-          {/* Scanning animation */}
           <motion.div
             className="absolute inset-0 border-2 border-primary rounded-2xl"
             animate={{ scale: [1, 1.05, 1], opacity: [1, 0.5, 1] }}
@@ -467,11 +471,11 @@ function ScanStep({
         <div className="text-center max-w-xs mb-8">
           <h1 className="text-2xl font-medium text-foreground mb-3">Scan to Rent</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Point your camera at the QR code on any PowerDon charging station to get started.
+            Use your phone&apos;s camera to scan the QR code on any PowerDon charging station.
           </p>
         </div>
 
-        {scanError && (
+        {error && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -480,29 +484,14 @@ function ScanStep({
             <div className="flex items-start gap-3">
               <XCircleIcon size={18} className="text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-destructive font-medium">Scan Failed</p>
-                <p className="text-xs text-destructive/80 mt-1">{scanError}</p>
+                <p className="text-sm text-destructive font-medium">Station Error</p>
+                <p className="text-xs text-destructive/80 mt-1">{error}</p>
               </div>
-              <button
-                onClick={onClearError}
-                className="text-destructive/60 hover:text-destructive"
-                aria-label="Dismiss error"
-              >
-                <XCircleIcon size={16} />
-              </button>
             </div>
           </motion.div>
         )}
 
-        <div className="w-full max-w-sm space-y-4">
-          <Button
-            onClick={onOpenScanner}
-            className="w-full h-14 text-base font-medium gap-3"
-          >
-            <QRScanIcon size={20} />
-            Open Camera
-          </Button>
-
+        <div className="w-full max-w-sm space-y-6">
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex-1 h-px bg-border" />
             <span>How it works</span>
@@ -511,9 +500,9 @@ function ScanStep({
 
           <div className="space-y-3 text-sm">
             {[
-              { step: 1, title: 'Scan QR code', desc: 'Find a nearby station' },
-              { step: 2, title: 'Authorize deposit', desc: 'Refundable €28' },
-              { step: 3, title: 'Grab & go', desc: 'Your slot unlocks automatically' },
+              { step: 1, title: 'Scan QR code', desc: 'On the charging station' },
+              { step: 2, title: 'Enter your details', desc: 'Email and payment' },
+              { step: 3, title: 'Grab & go', desc: 'Slot unlocks automatically' },
             ].map((item) => (
               <div key={item.step} className="flex items-center gap-4">
                 <span className="w-6 h-6 rounded-full bg-muted text-foreground text-xs font-medium flex items-center justify-center flex-shrink-0">
@@ -526,12 +515,12 @@ function ScanStep({
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="mt-auto pt-8">
-          <p className="text-xs text-muted-foreground text-center">
-            First 5 minutes free, then €1/15min
-          </p>
+          <div className="pt-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              First 5 minutes free, then €1/15min • Max €27/day
+            </p>
+          </div>
         </div>
       </main>
     </motion.div>
