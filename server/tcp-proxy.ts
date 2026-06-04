@@ -1,317 +1,186 @@
-// TCP Proxy Server for WsCharge Station Connections
-// This runs as a separate Node.js process and bridges TCP connections to the HTTP API
+/**
+ * WsCharge v5.8P TCP bridge — forwards binary frames to Next.js /api/stations/message
+ * Run: npx tsx server/tcp-proxy.ts
+ */
 
-import * as net from 'net';
-import * as http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
-import { WsChargeProtocol, MessageType } from '../lib/wscharge/proxy-protocol';
+import * as net from 'net'
+import * as http from 'http'
+import { WebSocketServer, WebSocket } from 'ws'
+import { PROTOCOL_TOKEN } from '../lib/wscharge/protocol.js'
 
-// Configuration
 const config = {
-  // TCP server settings
   tcp: {
     port: parseInt(process.env.TCP_PORT || '8088', 10),
     host: process.env.TCP_HOST || '0.0.0.0',
-    keepAliveInitialDelay: 30000, // 30 seconds
-    timeout: 180000, // 3 minutes
+    keepAliveInitialDelay: 30_000,
+    timeout: 180_000,
   },
-  // HTTP API settings
   api: {
     baseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
-    authToken: process.env.API_AUTH_TOKEN || '',
+    authToken:
+      process.env.API_AUTH_TOKEN ||
+      process.env.STATION_PROXY_TOKEN ||
+      process.env.TCP_PROXY_API_KEY ||
+      '',
   },
-  // WebSocket server for real-time updates
   ws: {
     port: parseInt(process.env.WS_PORT || '8089', 10),
     path: '/ws',
   },
-  // Logging
+  reconnectBackoffMs: parseInt(process.env.TCP_PROXY_BACKOFF_MS || '1000', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
-};
+}
 
-// Logger
 const log = {
-  debug: (...args: unknown[]) => config.logLevel === 'debug' && console.log('[DEBUG]', new Date().toISOString(), ...args),
-  info: (...args: unknown[]) => ['debug', 'info'].includes(config.logLevel) && console.log('[INFO]', new Date().toISOString(), ...args),
-  warn: (...args: unknown[]) => ['debug', 'info', 'warn'].includes(config.logLevel) && console.warn('[WARN]', new Date().toISOString(), ...args),
+  debug: (...args: unknown[]) =>
+    config.logLevel === 'debug' && console.log('[DEBUG]', new Date().toISOString(), ...args),
+  info: (...args: unknown[]) =>
+    ['debug', 'info'].includes(config.logLevel) &&
+    console.log('[INFO]', new Date().toISOString(), ...args),
+  warn: (...args: unknown[]) => console.warn('[WARN]', new Date().toISOString(), ...args),
   error: (...args: unknown[]) => console.error('[ERROR]', new Date().toISOString(), ...args),
-};
+}
 
-// Connection tracking
 interface StationConnection {
-  socket: net.Socket;
-  stationId: string | null;
-  externalId: string | null;
-  connectedAt: Date;
-  lastActivity: Date;
-  remoteAddress: string;
-  bytesReceived: number;
-  bytesSent: number;
-  messagesReceived: number;
-  messagesSent: number;
-  buffer: Buffer;
+  socket: net.Socket
+  connectionId: string
+  stationId: string | null
+  externalId: string | null
+  connectedAt: Date
+  lastActivity: Date
+  remoteAddress: string
+  bytesReceived: number
+  bytesSent: number
+  messagesReceived: number
+  messagesSent: number
+  buffer: Buffer
 }
 
-const connections = new Map<string, StationConnection>();
-const stationIdToConnectionId = new Map<string, string>();
+const connections = new Map<string, StationConnection>()
+const externalIdToConnectionId = new Map<string, string>()
+const wsClients = new Set<WebSocket>()
 
-// WebSocket clients for real-time updates
-const wsClients = new Set<WebSocket>();
-
-// Broadcast to all WebSocket clients
 function broadcast(event: string, data: unknown) {
-  const message = JSON.stringify({ event, data, timestamp: new Date().toISOString() });
-  wsClients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  });
-}
-
-// Send message to HTTP API
-async function sendToApi(endpoint: string, data: unknown): Promise<unknown> {
-  const url = `${config.api.baseUrl}${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.api.authToken}`,
-        'X-Station-Proxy': 'true',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API error ${response.status}: ${errorText}`);
-    }
-
-    return response.json();
-  } catch (error) {
-    log.error('API request failed:', endpoint, error);
-    throw error;
+  const message = JSON.stringify({ event, data, timestamp: new Date().toISOString() })
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) client.send(message)
   }
 }
 
-// Process incoming message from station
-async function processMessage(conn: StationConnection, message: Buffer): Promise<Buffer | null> {
-  const startTime = Date.now();
-  
-  try {
-    const decoded = WsChargeProtocol.decode(message);
-    log.debug('Received message:', decoded.type, 'from', conn.externalId || 'unknown');
+async function apiPost(path: string, body: unknown): Promise<Record<string, unknown>> {
+  const url = `${config.api.baseUrl}${path}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Station-Proxy': 'true',
+  }
+  if (config.api.authToken) {
+    headers.Authorization = `Bearer ${config.api.authToken}`
+  }
 
-    // Log raw event
-    await sendToApi('/api/stations/message', {
-      direction: 'inbound',
-      stationExternalId: conn.externalId,
-      stationId: conn.stationId,
-      eventType: decoded.type,
-      rawData: message.toString('base64'),
-      parsedData: decoded,
-      remoteAddress: conn.remoteAddress,
-    }).catch(err => log.warn('Failed to log event:', err.message));
-
-    let response: Buffer | null = null;
-
-    switch (decoded.type) {
-      case 'login': {
-        // Station login - register the connection
-        conn.externalId = decoded.data.stationId;
-        
-        // Send to API to register/update station
-        const result = await sendToApi('/api/stations/message', {
-          type: 'login',
-          stationExternalId: decoded.data.stationId,
-          data: {
-            iccid: decoded.data.iccid,
-            firmwareVersion: decoded.data.firmwareVersion,
-            slots: decoded.data.slots,
-          },
-          remoteAddress: conn.remoteAddress,
-        }) as { stationId?: string };
-
-        if (result.stationId) {
-          conn.stationId = result.stationId;
-          stationIdToConnectionId.set(result.stationId, conn.socket.remoteAddress + ':' + conn.socket.remotePort);
+  let attempt = 0
+  while (attempt < 3) {
+    attempt++
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!response.ok) {
+        const text = await response.text()
+        if (response.status >= 500 && attempt < 3) {
+          await new Promise((r) =>
+            setTimeout(r, config.reconnectBackoffMs * 2 ** (attempt - 1) + Math.random() * 100)
+          )
+          continue
         }
-
-        // Send login response
-        response = WsChargeProtocol.encode({
-          type: 'login_response',
-          data: { success: true, timestamp: new Date() },
-        });
-
-        broadcast('station_connected', {
-          stationId: conn.stationId,
-          externalId: conn.externalId,
-          remoteAddress: conn.remoteAddress,
-        });
-
-        log.info('Station logged in:', conn.externalId, 'ID:', conn.stationId);
-        break;
+        throw new Error(`API ${response.status}: ${text}`)
       }
+      return (await response.json()) as Record<string, unknown>
+    } catch (err) {
+      if (attempt >= 3) throw err
+      await new Promise((r) =>
+        setTimeout(r, config.reconnectBackoffMs * 2 ** (attempt - 1) + Math.random() * 100)
+      )
+    }
+  }
+  throw new Error('API request failed after retries')
+}
 
-      case 'heartbeat': {
-        // Update heartbeat in API
-        if (conn.stationId) {
-          await sendToApi('/api/stations/message', {
-            type: 'heartbeat',
-            stationId: conn.stationId,
-            data: decoded.data,
-          }).catch(err => log.warn('Failed to update heartbeat:', err.message));
-        }
+async function processFrame(conn: StationConnection, frame: Buffer): Promise<void> {
+  const messageHex = frame.toString('hex')
+  const correlationId = `${conn.connectionId}-${Date.now()}`
 
-        // Send heartbeat response
-        response = WsChargeProtocol.encode({
-          type: 'heartbeat_response',
-          data: { timestamp: new Date() },
-        });
-        break;
+  const result = await apiPost('/api/stations/message', {
+    messageHex,
+    stationId: conn.externalId ?? undefined,
+    connectionId: conn.connectionId,
+    remoteAddress: conn.remoteAddress,
+    correlationId,
+  })
+
+  if (result.stationId && typeof result.stationId === 'string') {
+    conn.externalId = result.stationId
+    externalIdToConnectionId.set(result.stationId, conn.connectionId)
+    broadcast('station_connected', {
+      externalId: conn.externalId,
+      connectionId: conn.connectionId,
+    })
+  }
+
+  const responses = result.responses as Array<{ responseHex?: string }> | undefined
+  if (responses?.length) {
+    for (const item of responses) {
+      if (item.responseHex) {
+        const out = Buffer.from(item.responseHex, 'hex')
+        await new Promise<void>((resolve, reject) => {
+          conn.socket.write(out, (err) => (err ? reject(err) : resolve()))
+        })
+        conn.bytesSent += out.length
+        conn.messagesSent++
       }
+    }
+  }
+}
 
-      case 'inventory_report': {
-        // Station reporting its inventory
-        if (conn.stationId) {
-          await sendToApi('/api/stations/message', {
-            type: 'inventory_report',
-            stationId: conn.stationId,
-            data: decoded.data,
-          });
+async function handleIncomingData(conn: StationConnection, data: Buffer): Promise<void> {
+  conn.buffer = Buffer.concat([conn.buffer, data])
+  conn.bytesReceived += data.length
+  conn.lastActivity = new Date()
 
-          broadcast('inventory_updated', {
-            stationId: conn.stationId,
-            slots: decoded.data.slots,
-          });
-        }
+  let offset = 0
+  while (offset + 2 <= conn.buffer.length) {
+    const packetLength = conn.buffer.readUInt16BE(offset)
+    const totalLength = 2 + packetLength
+    if (offset + totalLength > conn.buffer.length) break
 
-        // Send acknowledgment
-        response = WsChargeProtocol.encode({
-          type: 'inventory_response',
-          data: { success: true },
-        });
-        break;
-      }
+    const frame = conn.buffer.subarray(offset, offset + totalLength)
+    offset += totalLength
 
-      case 'borrow_result': {
-        // Station reporting borrow (unlock) result
-        if (conn.stationId) {
-          const result = await sendToApi('/api/stations/message', {
-            type: 'borrow_result',
-            stationId: conn.stationId,
-            data: decoded.data,
-          }) as { success: boolean };
-
-          broadcast('unlock_result', {
-            stationId: conn.stationId,
-            slotNumber: decoded.data.slotNumber,
-            success: decoded.data.success,
-            powerBankId: decoded.data.powerBankId,
-          });
-        }
-        // No response needed for results
-        break;
-      }
-
-      case 'return_detected': {
-        // Station detected a power bank return
-        if (conn.stationId) {
-          const result = await sendToApi('/api/stations/message', {
-            type: 'return_detected',
-            stationId: conn.stationId,
-            data: decoded.data,
-          });
-
-          broadcast('return_detected', {
-            stationId: conn.stationId,
-            slotNumber: decoded.data.slotNumber,
-            powerBankId: decoded.data.powerBankId,
-            batteryLevel: decoded.data.batteryLevel,
-          });
-        }
-
-        // Send acknowledgment
-        response = WsChargeProtocol.encode({
-          type: 'return_response',
-          data: { success: true },
-        });
-        break;
-      }
-
-      case 'error': {
-        log.error('Station error:', conn.externalId, decoded.data);
-        
-        if (conn.stationId) {
-          await sendToApi('/api/stations/message', {
-            type: 'error',
-            stationId: conn.stationId,
-            data: decoded.data,
-          }).catch(err => log.warn('Failed to log error:', err.message));
-
-          broadcast('station_error', {
-            stationId: conn.stationId,
-            errorCode: decoded.data.code,
-            errorMessage: decoded.data.message,
-          });
-        }
-        break;
-      }
-
-      default:
-        log.warn('Unknown message type:', decoded.type);
+    if (frame.length >= 9 && frame.readUInt32BE(5) !== PROTOCOL_TOKEN) {
+      log.warn('Invalid protocol token from', conn.connectionId)
+      continue
     }
 
-    const processingTime = Date.now() - startTime;
-    log.debug('Message processed in', processingTime, 'ms');
+    conn.messagesReceived++
 
-    return response;
-  } catch (error) {
-    log.error('Error processing message:', error);
-    return null;
+    try {
+      await processFrame(conn, frame)
+    } catch (err) {
+      log.error('Frame processing failed:', err instanceof Error ? err.message : err)
+    }
   }
+  conn.buffer = conn.buffer.subarray(offset)
 }
 
-// Send command to station
-async function sendCommand(stationId: string, command: Buffer): Promise<boolean> {
-  const connectionId = stationIdToConnectionId.get(stationId);
-  if (!connectionId) {
-    log.warn('No connection found for station:', stationId);
-    return false;
-  }
-
-  const conn = connections.get(connectionId);
-  if (!conn || !conn.socket || conn.socket.destroyed) {
-    log.warn('Connection not available for station:', stationId);
-    stationIdToConnectionId.delete(stationId);
-    return false;
-  }
-
-  return new Promise((resolve) => {
-    conn.socket.write(command, (err) => {
-      if (err) {
-        log.error('Failed to send command:', err.message);
-        resolve(false);
-      } else {
-        conn.bytesSent += command.length;
-        conn.messagesSent++;
-        conn.lastActivity = new Date();
-        log.debug('Command sent to station:', stationId, command.length, 'bytes');
-        resolve(true);
-      }
-    });
-  });
-}
-
-// Handle new TCP connection
 function handleConnection(socket: net.Socket) {
-  const connectionId = `${socket.remoteAddress}:${socket.remotePort}`;
-  
-  log.info('New connection from:', connectionId);
+  const connectionId = `${socket.remoteAddress}:${socket.remotePort}`
+  log.info('New TCP connection:', connectionId)
 
   const conn: StationConnection = {
     socket,
+    connectionId,
     stationId: null,
     externalId: null,
     connectedAt: new Date(),
@@ -322,266 +191,132 @@ function handleConnection(socket: net.Socket) {
     messagesReceived: 0,
     messagesSent: 0,
     buffer: Buffer.alloc(0),
-  };
-
-  connections.set(connectionId, conn);
-
-  // Configure socket
-  socket.setKeepAlive(true, config.tcp.keepAliveInitialDelay);
-  socket.setTimeout(config.tcp.timeout);
-
-  // Handle incoming data
-  socket.on('data', async (data: Buffer) => {
-    conn.buffer = Buffer.concat([conn.buffer, data]);
-    conn.bytesReceived += data.length;
-    conn.lastActivity = new Date();
-
-    // Try to extract complete messages from buffer
-    while (conn.buffer.length > 0) {
-      // Check for start bytes (0x68 0x65)
-      const startIndex = conn.buffer.indexOf(Buffer.from([0x68, 0x65]));
-      if (startIndex === -1) {
-        // No valid message start found, clear buffer
-        conn.buffer = Buffer.alloc(0);
-        break;
-      }
-
-      // Remove any garbage before start bytes
-      if (startIndex > 0) {
-        conn.buffer = conn.buffer.slice(startIndex);
-      }
-
-      // Need at least 8 bytes for header + length
-      if (conn.buffer.length < 8) {
-        break;
-      }
-
-      // Read message length from header
-      const messageLength = conn.buffer.readUInt16BE(4) + 10; // +10 for header, checksum, and end bytes
-
-      // Check if we have the complete message
-      if (conn.buffer.length < messageLength) {
-        break;
-      }
-
-      // Extract complete message
-      const message = conn.buffer.slice(0, messageLength);
-      conn.buffer = conn.buffer.slice(messageLength);
-      conn.messagesReceived++;
-
-      // Process message
-      const response = await processMessage(conn, message);
-      
-      if (response) {
-        socket.write(response, (err) => {
-          if (err) {
-            log.error('Failed to send response:', err.message);
-          } else {
-            conn.bytesSent += response.length;
-            conn.messagesSent++;
-          }
-        });
-      }
-    }
-  });
-
-  // Handle socket timeout
-  socket.on('timeout', () => {
-    log.warn('Connection timeout:', connectionId, conn.externalId);
-    socket.end();
-  });
-
-  // Handle socket error
-  socket.on('error', (err: Error) => {
-    log.error('Socket error:', connectionId, err.message);
-  });
-
-  // Handle connection close
-  socket.on('close', () => {
-    log.info('Connection closed:', connectionId, conn.externalId);
-    
-    if (conn.stationId) {
-      stationIdToConnectionId.delete(conn.stationId);
-      
-      // Notify API that station disconnected
-      sendToApi('/api/stations/message', {
-        type: 'disconnect',
-        stationId: conn.stationId,
-      }).catch(err => log.warn('Failed to notify disconnect:', err.message));
-
-      broadcast('station_disconnected', {
-        stationId: conn.stationId,
-        externalId: conn.externalId,
-      });
-    }
-
-    connections.delete(connectionId);
-  });
-}
-
-// Create TCP server
-const tcpServer = net.createServer(handleConnection);
-
-tcpServer.on('error', (err: Error) => {
-  log.error('TCP server error:', err.message);
-});
-
-tcpServer.on('listening', () => {
-  const addr = tcpServer.address();
-  log.info('TCP server listening on:', addr);
-});
-
-// Create HTTP server for command API and health checks
-const httpServer = http.createServer((req, res) => {
-  // Health check
-  if (req.url === '/health' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'healthy',
-      connections: connections.size,
-      stations: stationIdToConnectionId.size,
-      uptime: process.uptime(),
-    }));
-    return;
   }
 
-  // Get connected stations
+  connections.set(connectionId, conn)
+  socket.setKeepAlive(true, config.tcp.keepAliveInitialDelay)
+  socket.setTimeout(config.tcp.timeout)
+
+  socket.on('data', (chunk) => {
+    void handleIncomingData(conn, chunk)
+  })
+
+  socket.on('timeout', () => {
+    log.warn('Socket timeout:', connectionId)
+    socket.end()
+  })
+
+  socket.on('error', (err) => log.error('Socket error:', connectionId, err.message))
+
+  socket.on('close', () => {
+    log.info('Connection closed:', connectionId, conn.externalId)
+    if (conn.externalId) {
+      externalIdToConnectionId.delete(conn.externalId)
+      void apiPost('/api/stations/disconnect', { externalId: conn.externalId }).catch((e) =>
+        log.warn('Disconnect notify failed:', e.message)
+      )
+      broadcast('station_disconnected', { externalId: conn.externalId })
+    }
+    connections.delete(connectionId)
+  })
+}
+
+const tcpServer = net.createServer(handleConnection)
+
+tcpServer.on('listening', () => log.info('WsCharge TCP proxy listening:', tcpServer.address()))
+
+const httpServer = http.createServer((req, res) => {
+  if (req.url === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        status: 'healthy',
+        protocol: 'WsCharge v5.8P',
+        connections: connections.size,
+        stations: externalIdToConnectionId.size,
+        uptime: process.uptime(),
+      })
+    )
+    return
+  }
+
+  if (req.url?.startsWith('/command/') && req.method === 'POST') {
+    const externalId = decodeURIComponent(req.url.split('/')[2] || '')
+    const connId = externalIdToConnectionId.get(externalId)
+    const conn = connId ? connections.get(connId) : undefined
+
+    let body = ''
+    req.on('data', (chunk) => { body += chunk })
+    req.on('end', () => {
+      try {
+        const { commandHex } = JSON.parse(body) as { commandHex?: string }
+        if (!commandHex || !conn?.socket || conn.socket.destroyed) {
+          res.writeHead(503, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, error: 'Station not connected' }))
+          return
+        }
+        const out = Buffer.from(commandHex, 'hex')
+        conn.socket.write(out, (err) => {
+          if (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+          conn.bytesSent += out.length
+          conn.messagesSent++
+          conn.lastActivity = new Date()
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true, bytes: out.length }))
+        })
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'Invalid JSON body' }))
+      }
+    })
+    return
+  }
+
   if (req.url === '/stations' && req.method === 'GET') {
-    const stations = Array.from(connections.values())
-      .filter(c => c.stationId)
-      .map(c => ({
-        stationId: c.stationId,
+    const list = [...connections.values()]
+      .filter((c) => c.externalId)
+      .map((c) => ({
         externalId: c.externalId,
+        connectionId: c.connectionId,
         remoteAddress: c.remoteAddress,
         connectedAt: c.connectedAt,
         lastActivity: c.lastActivity,
         bytesReceived: c.bytesReceived,
         bytesSent: c.bytesSent,
-        messagesReceived: c.messagesReceived,
-        messagesSent: c.messagesSent,
-      }));
-
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(stations));
-    return;
+      }))
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(list))
+    return
   }
 
-  // Send command to station
-  if (req.url?.startsWith('/command/') && req.method === 'POST') {
-    const stationId = req.url.split('/')[2];
-    
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { type, slotNumber, payload } = JSON.parse(body);
-        
-        // Encode command
-        const command = WsChargeProtocol.encode({
-          type,
-          data: { slotNumber, ...payload },
-        });
+  res.writeHead(404)
+  res.end('Not Found')
+})
 
-        const success = await sendCommand(stationId, command);
+const wss = new WebSocketServer({ server: httpServer, path: config.ws.path })
 
-        res.writeHead(success ? 200 : 503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success }));
-      } catch (error) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid request' }));
-      }
-    });
-    return;
-  }
+wss.on('connection', (ws) => {
+  wsClients.add(ws)
+  ws.on('close', () => wsClients.delete(ws))
+})
 
-  // 404 for other routes
-  res.writeHead(404);
-  res.end('Not Found');
-});
+tcpServer.listen(config.tcp.port, config.tcp.host)
+httpServer.listen(config.ws.port, () => log.info('HTTP/WS on port', config.ws.port))
 
-// Create WebSocket server for real-time updates
-const wss = new WebSocketServer({ server: httpServer, path: config.ws.path });
-
-wss.on('connection', (ws: WebSocket) => {
-  log.info('WebSocket client connected');
-  wsClients.add(ws);
-
-  // Send current state
-  ws.send(JSON.stringify({
-    event: 'connected',
-    data: {
-      stations: Array.from(connections.values())
-        .filter(c => c.stationId)
-        .map(c => ({
-          stationId: c.stationId,
-          externalId: c.externalId,
-          connectedAt: c.connectedAt,
-        })),
-    },
-    timestamp: new Date().toISOString(),
-  }));
-
-  ws.on('close', () => {
-    log.info('WebSocket client disconnected');
-    wsClients.delete(ws);
-  });
-
-  ws.on('error', (err) => {
-    log.error('WebSocket error:', err.message);
-    wsClients.delete(ws);
-  });
-});
-
-// Cleanup stale connections periodically
-setInterval(() => {
-  const now = Date.now();
-  const timeout = config.tcp.timeout;
-
-  connections.forEach((conn, id) => {
-    if (now - conn.lastActivity.getTime() > timeout) {
-      log.warn('Closing stale connection:', id, conn.externalId);
-      conn.socket.destroy();
-      connections.delete(id);
-      if (conn.stationId) {
-        stationIdToConnectionId.delete(conn.stationId);
-      }
-    }
-  });
-}, 60000); // Check every minute
-
-// Start servers
-tcpServer.listen(config.tcp.port, config.tcp.host);
-httpServer.listen(config.ws.port, () => {
-  log.info('HTTP/WebSocket server listening on port:', config.ws.port);
-});
-
-// Graceful shutdown
 process.on('SIGTERM', () => {
-  log.info('Received SIGTERM, shutting down...');
-  
-  tcpServer.close();
-  httpServer.close();
-  wss.close();
-  
-  connections.forEach((conn) => {
-    conn.socket.end();
-  });
+  tcpServer.close()
+  httpServer.close()
+  for (const c of connections.values()) c.socket.end()
+  setTimeout(() => process.exit(0), 3000)
+})
 
-  setTimeout(() => {
-    process.exit(0);
-  }, 5000);
-});
+log.info('WsCharge TCP proxy starting', {
+  tcp: config.tcp,
+  api: config.api.baseUrl,
+})
 
-process.on('SIGINT', () => {
-  log.info('Received SIGINT, shutting down...');
-  process.exit(0);
-});
-
-log.info('TCP Proxy Server starting...');
-log.info('Config:', {
-  tcp: { port: config.tcp.port, host: config.tcp.host },
-  api: { baseUrl: config.api.baseUrl },
-  ws: { port: config.ws.port },
-});
-
-export { sendCommand, connections, stationIdToConnectionId };
+export { connections, externalIdToConnectionId }

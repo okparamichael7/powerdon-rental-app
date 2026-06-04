@@ -2,6 +2,7 @@
 // Manages connected charging stations and their state
 
 import * as protocol from './protocol';
+import { dispatchCommandToTcpProxy } from './command-dispatch';
 
 // Station connection state
 export interface StationConnection {
@@ -52,9 +53,20 @@ export type ConnectionEventListener = (event: ConnectionEvent) => void;
 // Station connection manager
 class StationConnectionManager {
   private connections: Map<string, StationConnection> = new Map();
+  /** Maps database station UUID → cabinet product SN (WsCharge connection key). */
+  private dbIdToProductSn = new Map<string, string>();
   private eventListeners: ConnectionEventListener[] = [];
-  private commandTimeout = 30000; // 30 seconds
-  private heartbeatTimeout = 120000; // 2 minutes (4 missed heartbeats @ 30s)
+  private commandTimeout = parseInt(process.env.WSCHARGE_COMMAND_TIMEOUT_MS || '30000', 10);
+  private heartbeatTimeout = parseInt(process.env.WSCHARGE_HEARTBEAT_STALE_MS || '120000', 10);
+
+  /** Link DB UUID to live TCP session key (product SN). */
+  linkDbId(dbId: string, productSn: string): void {
+    this.dbIdToProductSn.set(dbId, productSn);
+  }
+
+  resolveConnectionKey(stationIdOrDbId: string): string {
+    return this.dbIdToProductSn.get(stationIdOrDbId) ?? stationIdOrDbId;
+  }
 
   // Register event listener
   addEventListener(listener: ConnectionEventListener): void {
@@ -239,8 +251,9 @@ class StationConnectionManager {
     stationId: string, 
     command: protocol.CommandCode, 
     payload?: Buffer
-  ): Promise<{ success: boolean; data?: T; error?: string; commandBuffer: Buffer }> {
-    const connection = this.connections.get(stationId);
+  ): Promise<{ success: boolean; data?: T; error?: string; commandBuffer: Buffer; dispatched?: boolean }> {
+    const connectionKey = this.resolveConnectionKey(stationId);
+    const connection = this.connections.get(connectionKey);
     
     if (!connection || !connection.isOnline) {
       return { 
@@ -291,10 +304,10 @@ class StationConnectionManager {
 
     // Create pending command with promise
     return new Promise((resolve) => {
-      const commandId = `${stationId}-${command}-${Date.now()}`;
+      const commandId = `${connectionKey}-${command}-${Date.now()}`;
       
       const timeoutId = setTimeout(() => {
-        this.handleCommandTimeout(stationId, commandId);
+        this.handleCommandTimeout(connectionKey, commandId);
         resolve({ success: false, error: 'Command timeout', commandBuffer });
       }, this.commandTimeout);
 
@@ -305,7 +318,7 @@ class StationConnectionManager {
         payload,
         resolve: (response) => {
           clearTimeout(timeoutId);
-          resolve({ success: true, data: response as T, commandBuffer });
+          resolve({ success: true, data: response as T, commandBuffer, dispatched: true });
         },
         reject: (error) => {
           clearTimeout(timeoutId);
@@ -315,6 +328,12 @@ class StationConnectionManager {
       };
 
       connection.pendingCommands.push(pendingCommand);
+
+      void dispatchCommandToTcpProxy(connectionKey, commandBuffer).then((dispatch) => {
+        if (!dispatch.dispatched) {
+          pendingCommand.reject(new Error(dispatch.error || 'Failed to send command to station'));
+        }
+      });
     });
   }
 
@@ -397,12 +416,12 @@ class StationConnectionManager {
 
   // Get station by ID
   getStation(stationId: string): StationConnection | undefined {
-    return this.connections.get(stationId);
+    return this.connections.get(this.resolveConnectionKey(stationId));
   }
 
   // Get station inventory
   getStationInventory(stationId: string): protocol.SlotInventory[] {
-    const connection = this.connections.get(stationId);
+    const connection = this.connections.get(this.resolveConnectionKey(stationId));
     return connection?.inventory || [];
   }
 
@@ -418,7 +437,7 @@ class StationConnectionManager {
 
   // Check if station has available power banks
   hasAvailablePowerBanks(stationId: string): boolean {
-    const connection = this.connections.get(stationId);
+    const connection = this.connections.get(this.resolveConnectionKey(stationId));
     return connection ? connection.inventory.length > 0 : false;
   }
 
@@ -429,7 +448,7 @@ class StationConnectionManager {
     isOnline: boolean;
     lastHeartbeat: Date | null;
   } | null {
-    const connection = this.connections.get(stationId);
+    const connection = this.connections.get(this.resolveConnectionKey(stationId));
     if (!connection) return null;
 
     return {

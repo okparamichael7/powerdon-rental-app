@@ -44,6 +44,8 @@ export const GET = withPublicApi(async (request: NextRequest) => {
       return {
         // Database fields
         id: dbStation.id,
+        stationId: dbStation.id,
+        productSn: dbStation.external_id,
         externalId: dbStation.external_id,
         name: dbStation.name,
         location: dbStation.location,
@@ -79,6 +81,18 @@ export const GET = withPublicApi(async (request: NextRequest) => {
             errorCode: slot.error_code,
           };
         }),
+        inventory: dbStation.slots
+          .filter((slot) => slot.status === 'occupied' && slot.power_bank_id)
+          .map((slot) => {
+            const memorySlot = memoryStation?.inventory.find(i => i.slotNumber === slot.slot_number);
+            return {
+              slotNumber: slot.slot_number,
+              terminalId: memorySlot?.terminalId ?? slot.power_bank_id ?? '',
+              batteryLevel: memorySlot
+                ? protocol.batteryLevelToPercent(memorySlot.batteryLevel)
+                : slot.battery_level ?? 0,
+            };
+          }),
         availableSlots: dbStation.available_slots,
         occupiedSlots: dbStation.occupied_slots,
         
@@ -98,6 +112,8 @@ export const GET = withPublicApi(async (request: NextRequest) => {
         if (!exists) {
           mergedStations.push({
             id: memStation.stationId,
+            stationId: memStation.stationId,
+            productSn: memStation.productSn,
             externalId: memStation.productSn,
             name: `Station ${memStation.productSn.slice(-6)}`,
             location: null,
@@ -123,6 +139,11 @@ export const GET = withPublicApi(async (request: NextRequest) => {
               batteryLevel: protocol.batteryLevelToPercent(slot.batteryLevel),
               isCharging: false,
               errorCode: null,
+            })),
+            inventory: memStation.inventory.map((slot) => ({
+              slotNumber: slot.slotNumber,
+              terminalId: slot.terminalId,
+              batteryLevel: protocol.batteryLevelToPercent(slot.batteryLevel),
             })),
             availableSlots: memStation.inventory.length,
             occupiedSlots: 0,

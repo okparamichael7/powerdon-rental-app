@@ -221,6 +221,8 @@ export interface DbHardwareEvent {
   response_code: number | null;
   processing_time_ms: number | null;
   error_message: string | null;
+  idempotency_key: string | null;
+  correlation_id: string | null;
   created_at: string;
 }
 

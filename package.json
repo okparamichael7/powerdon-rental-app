@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:wscharge": "npx tsx --test lib/wscharge/protocol.test.ts lib/wscharge/validation.test.ts",
+    "tcp-proxy": "npx tsx server/tcp-proxy.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -119,6 +119,21 @@ export default function HardwarePage() {
   )
 
   const stations: HardwareStation[] = stationsResponse?.success ? stationsResponse.data : []
+
+  const { data: eventsResponse } = useSWR(
+    selectedStation
+      ? `/api/admin/hardware/events?stationId=${encodeURIComponent(selectedStation.stationId)}&limit=30`
+      : null,
+    fetcher,
+    { refreshInterval: 10000 }
+  )
+  const hardwareEvents: {
+    id: string
+    event_type: string
+    direction: string
+    created_at: string
+    error_message?: string | null
+  }[] = eventsResponse?.success ? eventsResponse.data : []
   const filteredStations = stations.filter(s => 
     s.stationId.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.productSn.toLowerCase().includes(searchQuery.toLowerCase())
@@ -549,6 +564,32 @@ export default function HardwarePage() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Firmware</span>
                         <span>{selectedStation.firmwareVersion}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Recent protocol events */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Recent protocol events</CardTitle>
+                    <CardDescription>Last 30 inbound/outbound hardware events</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {hardwareEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No events recorded yet</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {hardwareEvents.map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="flex items-center justify-between text-xs p-2 rounded bg-muted/50"
+                          >
+                            <span className="font-mono">{ev.event_type}</span>
+                            <span className="text-muted-foreground">{ev.direction}</span>
+                            <span className="text-muted-foreground">{formatTime(ev.created_at)}</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </CardContent>

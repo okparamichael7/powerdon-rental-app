@@ -105,7 +105,7 @@ export interface ReturnMessage {
 }
 
 export interface ForceEjectResponse {
-  command: CommandCode.FORCE_EJECT;
+  command: CommandCode.FORCE_EJECT | CommandCode.STACKED_FULL_EJECT;
   slotNumber: number;
   result: BorrowResult;
   terminalId: string;
@@ -393,6 +393,79 @@ export function batteryLevelToPercent(level: BatteryLevel): number {
 // Helper to convert hex string to readable format
 export function formatTerminalId(terminalId: string): string {
   return terminalId.match(/.{2}/g)?.join(':') || terminalId;
+}
+
+/** Parse length-prefixed UTF-8 string (Uint16 length includes null terminator per spec). */
+function parseLengthPrefixedString(payload: Buffer, offset: number): { value: string; nextOffset: number } | null {
+  if (offset + 2 > payload.length) return null;
+  const len = payload.readUInt16BE(offset);
+  if (len < 1 || offset + 2 + len > payload.length) return null;
+  const value = payload.subarray(offset + 2, offset + 2 + len - 1).toString('utf8');
+  return { value, nextOffset: offset + 2 + len };
+}
+
+export function parseNetworkInfoResponse(message: ProtocolMessage): NetworkInfoResponse | null {
+  if (message.command !== CommandCode.QUERY_NETWORK_INFO) return null;
+  if (message.payload.length < 1) return null;
+  const signalStrength = message.payload.readUInt8(0);
+  return {
+    command: CommandCode.QUERY_NETWORK_INFO,
+    signalStrength,
+    networkType: 'cellular',
+  };
+}
+
+export function parseIccidResponse(message: ProtocolMessage): IccidResponse | null {
+  if (message.command !== CommandCode.QUERY_ICCID) return null;
+  const parsed = parseLengthPrefixedString(message.payload, 0);
+  if (!parsed) return null;
+  return { command: CommandCode.QUERY_ICCID, iccid: parsed.value };
+}
+
+export function parseVersionResponse(message: ProtocolMessage): VersionResponse | null {
+  if (message.command !== CommandCode.QUERY_VERSION) return null;
+  const parsed = parseLengthPrefixedString(message.payload, 0);
+  if (!parsed) return null;
+  return { command: CommandCode.QUERY_VERSION, version: parsed.value };
+}
+
+export function parseServerAddressResponse(message: ProtocolMessage): ServerAddressResponse | null {
+  if (message.command !== CommandCode.QUERY_SERVER_ADDRESS) return null;
+  const parsed = parseLengthPrefixedString(message.payload, 0);
+  if (!parsed) return null;
+  const portOffset = parsed.nextOffset;
+  if (portOffset + 2 > message.payload.length) return null;
+  const port = message.payload.readUInt16BE(portOffset);
+  return {
+    command: CommandCode.QUERY_SERVER_ADDRESS,
+    address: parsed.value,
+    port,
+  };
+}
+
+export function parseStackedEjectResponse(message: ProtocolMessage): ForceEjectResponse | null {
+  if (message.command !== CommandCode.STACKED_FULL_EJECT) return null;
+  const payload = message.payload;
+  if (payload.length < 10) return null;
+  const slotNumber = payload.readUInt8(0);
+  const result = payload.readUInt8(1) as BorrowResult;
+  const terminalId = payload.subarray(2, 10).toString('hex').toUpperCase();
+  return {
+    command: CommandCode.STACKED_FULL_EJECT,
+    slotNumber,
+    result,
+    terminalId,
+  };
+}
+
+export function parseStackedCardCountResponse(message: ProtocolMessage): { count: number } | null {
+  if (message.command !== CommandCode.STACKED_QUERY_CARD) return null;
+  if (message.payload.length < 1) return null;
+  return { count: message.payload.readUInt8(0) };
+}
+
+export function validateProtocolToken(token: number): boolean {
+  return token === PROTOCOL_TOKEN;
 }
 
 // Parse complete message from buffer (handles partial reads)

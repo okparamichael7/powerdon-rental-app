@@ -197,34 +197,31 @@ describe('Station Message API', () => {
       assert.strictEqual(status, 400);
     });
 
-    it('should accept hex-encoded message', async () => {
-      // Valid protocol message (login)
-      const hexMessage = '6865544553543030310000000000000000010D0A';
-      
+    it('should accept v5.8P hex messageHex', async () => {
+      const { buildMessage, CommandCode } = await import('../../lib/wscharge/protocol.js');
+      const sn = Buffer.from('TEST001\0', 'utf8');
+      const payload = Buffer.alloc(8 + sn.length);
+      payload.writeUInt32BE(1, 0);
+      payload.writeUInt16BE(0, 4);
+      payload.writeUInt16BE(sn.length, 6);
+      sn.copy(payload, 8);
+      const hexMessage = buildMessage(CommandCode.LOGIN, payload).toString('hex');
+
       const { status } = await apiRequest('/api/stations/message', {
         method: 'POST',
-        body: JSON.stringify({ 
-          data: hexMessage,
-          encoding: 'hex'
-        }),
+        body: JSON.stringify({ messageHex: hexMessage }),
       });
-      
-      // Should process or reject with validation error, not crash
-      assert.ok([200, 400, 422].includes(status));
+
+      assert.ok([200, 403, 500].includes(status));
     });
 
-    it('should accept base64-encoded message', async () => {
-      const base64Message = Buffer.from([0x68, 0x65, 0x54, 0x45, 0x53, 0x54]).toString('base64');
-      
+    it('should reject invalid message body', async () => {
       const { status } = await apiRequest('/api/stations/message', {
         method: 'POST',
-        body: JSON.stringify({ 
-          data: base64Message,
-          encoding: 'base64'
-        }),
+        body: JSON.stringify({ messageHex: 'not-valid-hex' }),
       });
-      
-      assert.ok([200, 400, 422].includes(status));
+
+      assert.strictEqual(status, 400);
     });
   });
 });

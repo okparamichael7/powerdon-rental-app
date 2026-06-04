@@ -1,26 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { stationManager } from '@/lib/wscharge';
-import { withPublicApi } from '@/lib/api/public-route';
+import { NextRequest, NextResponse } from 'next/server'
+import { stationManager } from '@/lib/wscharge'
+import { getWsChargeMetrics } from '@/lib/wscharge/metrics'
+import { validateWsChargeConfig, getWsChargeConfig } from '@/lib/wscharge/config'
+import { getSystemHealth } from '@/lib/ops/health'
+import { withPublicApi } from '@/lib/api/public-route'
 
 /**
- * Health check endpoint for monitoring and load balancers.
- * Returns system status including connected stations and uptime.
+ * Health check — Kubernetes-style readiness plus WsCharge integration status.
  */
 export const GET = withPublicApi(async (_request: NextRequest) => {
-  const connectedStations = stationManager.getConnectedStations();
-  
+  const connectedStations = stationManager.getConnectedStations()
+  const wsConfig = validateWsChargeConfig()
+  const cfg = getWsChargeConfig()
+  const systemHealth = await getSystemHealth()
+
+  const wschargeStatus = !cfg.enabled
+    ? 'disabled'
+    : wsConfig.valid
+      ? connectedStations.length > 0
+        ? 'healthy'
+        : 'degraded'
+      : 'unhealthy'
+
+  const overall =
+    systemHealth.status === 'unhealthy' || wschargeStatus === 'unhealthy'
+      ? 'unhealthy'
+      : systemHealth.status === 'degraded' || wschargeStatus === 'degraded'
+        ? 'degraded'
+        : 'healthy'
+
   return NextResponse.json({
-    status: 'healthy',
+    status: overall,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: process.env.npm_package_version || '1.0.0',
+    version: process.env.APP_VERSION || process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    services: {
-      database: 'connected', // Would check actual DB connection in production
-      stationProxy: {
-        status: 'running',
-        connectedStations: connectedStations.length,
-      },
+    components: systemHealth.components,
+    wscharge: {
+      status: wschargeStatus,
+      enabled: cfg.enabled,
+      protocolVersion: '5.8P',
+      connectedStations: connectedStations.length,
+      configErrors: wsConfig.errors,
+      metrics: getWsChargeMetrics(),
     },
-  });
-}, 'health');
+  })
+}, 'health')

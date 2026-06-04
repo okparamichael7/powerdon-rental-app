@@ -1,6 +1,6 @@
 /**
- * High-level protocol adapter for the standalone TCP proxy server.
- * Maps WsCharge binary frames to JSON-friendly message types.
+ * @deprecated Use `lib/wscharge/protocol.ts` and `server/tcp-proxy.ts` (hex → /api/stations/message).
+ * Retained for backward-compatible imports only.
  */
 import {
   CommandCode,

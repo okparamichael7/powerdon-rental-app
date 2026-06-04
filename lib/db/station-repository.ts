@@ -536,6 +536,28 @@ class StationRepository {
     return data;
   }
 
+  async logHardwareEventIdempotent(
+    event: Partial<Database['public']['Tables']['hardware_events']['Insert']> & {
+      event_type: string;
+      direction: 'inbound' | 'outbound';
+      idempotency_key: string;
+    }
+  ): Promise<DbHardwareEvent | null> {
+    const supabase = await createServiceClient();
+
+    const { data, error } = await supabase
+      .from('hardware_events')
+      .insert(event)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') return null;
+      throw error;
+    }
+    return data;
+  }
+
   async getHardwareEvents(stationId: string, limit = 100): Promise<DbHardwareEvent[]> {
     const supabase = await createServiceClient();
     
