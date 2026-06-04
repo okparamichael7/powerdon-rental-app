@@ -42,7 +42,7 @@ export async function cancelRentalFromApi(_sessionId: string) {
   /* no-op */
 }
 
-export async function redeemRewardFromApi(_rewardId: string) {
+export async function redeemRewardFromApi(_rewardId: string, _code: string) {
   await new Promise((r) => setTimeout(r, 500))
   return { success: true as const }
 }

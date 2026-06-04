@@ -1,7 +1,26 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isStaffFromMetadata } from '@/lib/security/roles'
 
 const ADMIN_PUBLIC_PATHS = ['/admin/login', '/admin/auth']
+
+function hasValidAdminApiKey(request: NextRequest): boolean {
+  const apiKey =
+    request.headers.get('x-api-key') ||
+    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  const adminKey = process.env.ADMIN_API_KEY
+  return Boolean(adminKey && apiKey && apiKey === adminKey)
+}
+
+function isAdminRole(user: {
+  app_metadata?: Record<string, unknown>
+  user_metadata?: Record<string, unknown>
+}): boolean {
+  return isStaffFromMetadata({
+    app_metadata: user.app_metadata,
+    user_metadata: user.user_metadata,
+  })
+}
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -34,27 +53,19 @@ export async function proxy(request: NextRequest) {
       login.searchParams.set('redirect', pathname)
       return NextResponse.redirect(login)
     }
-    if (!isPublic && user) {
-      const isAdmin =
-        user.user_metadata?.is_admin === true ||
-        user.user_metadata?.role === 'admin' ||
-        user.user_metadata?.role === 'operator'
-      if (!isAdmin) {
-        return NextResponse.redirect(new URL('/admin/login?error=forbidden', request.url))
-      }
+    if (!isPublic && user && !isAdminRole(user)) {
+      return NextResponse.redirect(new URL('/admin/login?error=forbidden', request.url))
     }
   }
 
-  if (pathname.startsWith('/api/admin') && !user) {
-    return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
-  }
-
-  if (pathname.startsWith('/api/admin') && user) {
-    const isAdmin =
-      user.user_metadata?.is_admin === true ||
-      user.user_metadata?.role === 'admin' ||
-      user.user_metadata?.role === 'operator'
-    if (!isAdmin) {
+  if (pathname.startsWith('/api/admin')) {
+    if (hasValidAdminApiKey(request)) {
+      return response
+    }
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
+    }
+    if (!isAdminRole(user)) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 })
     }
   }

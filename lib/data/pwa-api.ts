@@ -1,4 +1,5 @@
 import type { ActiveSession, StationInfo, UserInfo, UserReward } from '@/lib/session-store'
+import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token'
 
 export async function loadStationFromApi(stationId: string): Promise<{ success: boolean; station?: StationInfo; error?: string }> {
   try {
@@ -36,7 +37,9 @@ export async function syncSessionFromApi(
   station: StationInfo,
 ): Promise<{ active: ActiveSession | null; terminal?: boolean }> {
   try {
-    const res = await fetch(`/api/rentals/${sessionId}`)
+    const res = await fetch(`/api/rentals/${sessionId}`, {
+      headers: sessionAuthHeaders(sessionId),
+    })
     const body = await res.json()
     if (!body.success || !body.session) {
       return { active: null, terminal: body.error === 'Session not found' }
@@ -93,6 +96,10 @@ export async function startRentalFromApi(
     if (!res.ok || !body.success) {
       return { success: false, error: body.error || 'Failed to start rental' }
     }
+    if (body.session.unlockToken && body.session.id) {
+      saveSessionToken(body.session.id, body.session.unlockToken)
+    }
+
     const session: ActiveSession = {
       id: body.session.id,
       sessionCode: body.session.sessionCode,
@@ -122,7 +129,9 @@ export async function completeRentalFromApi(
   session: ActiveSession,
   station: StationInfo | null,
 ): Promise<{ success: boolean; qualifiedForReward: boolean; reward?: UserReward }> {
-  const res = await fetch(`/api/rentals/${session.id}`)
+  const res = await fetch(`/api/rentals/${session.id}`, {
+    headers: sessionAuthHeaders(session.id),
+  })
   const body = await res.json()
   const qualified = Boolean(body.session?.rewardQualified)
   let reward: UserReward | undefined
@@ -147,11 +156,24 @@ export async function completeRentalFromApi(
 }
 
 export async function cancelRentalFromApi(sessionId: string): Promise<void> {
-  await fetch(`/api/rentals/${sessionId}/cancel`, { method: 'POST' })
+  await fetch(`/api/rentals/${sessionId}/cancel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...sessionAuthHeaders(sessionId),
+    },
+  })
 }
 
-export async function redeemRewardFromApi(rewardId: string): Promise<{ success: boolean }> {
-  const res = await fetch(`/api/rewards/${rewardId}/redeem`, { method: 'POST' })
+export async function redeemRewardFromApi(
+  rewardId: string,
+  code: string,
+): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/rewards/${rewardId}/redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
   const body = await res.json()
   return { success: Boolean(body.success) }
 }

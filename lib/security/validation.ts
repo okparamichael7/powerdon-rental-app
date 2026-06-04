@@ -53,12 +53,34 @@ export const schemas = {
     ipAddress: z.string().ip().optional(),
   }),
   
-  // Rental start request
-  rentalStart: z.object({
+  // Rental start request (public API)
+  rentalStartPublic: z.object({
     stationId: z.string().uuid(),
-    userId: z.string().uuid(),
+    userEmail: z.string().email().max(255),
+    userName: z.string().max(120).optional(),
+    phone: z.string().max(30).optional(),
+    marketingConsent: z.boolean().optional(),
+    campaignId: z.string().uuid().optional(),
     slotNumber: z.number().int().min(1).max(12).optional(),
-    paymentIntentId: z.string().min(1).max(255).optional(),
+    paymentMethodId: z.string().max(255).optional(),
+  }),
+
+  supportTicket: z.object({
+    email: z.string().email().max(255),
+    subject: z.string().min(3).max(200),
+    description: z.string().min(10).max(5000),
+    category: z.enum([
+      'rental_issue',
+      'payment_issue',
+      'return_issue',
+      'reward_issue',
+      'station_issue',
+      'account_issue',
+      'other',
+    ]),
+    sessionId: z.string().uuid().optional(),
+    priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+    website: z.string().max(0).optional(),
   }),
   
   // Station command request

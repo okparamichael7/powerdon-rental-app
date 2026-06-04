@@ -225,6 +225,20 @@ const tcpServer = net.createServer(handleConnection)
 
 tcpServer.on('listening', () => log.info('WsCharge TCP proxy listening:', tcpServer.address()))
 
+function isAuthorizedProxyRequest(req: http.IncomingMessage): boolean {
+  const expected =
+    config.api.authToken ||
+    process.env.TCP_PROXY_API_KEY ||
+    process.env.STATION_PROXY_TOKEN ||
+    ''
+  if (!expected) {
+    return process.env.NODE_ENV === 'development' && process.env.ALLOW_INSECURE_HARDWARE_DEV === 'true'
+  }
+  const auth = req.headers.authorization?.replace(/^Bearer\s+/i, '')
+  const apiKey = req.headers['x-api-key']
+  return auth === expected || apiKey === expected
+}
+
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -241,6 +255,11 @@ const httpServer = http.createServer((req, res) => {
   }
 
   if (req.url?.startsWith('/command/') && req.method === 'POST') {
+    if (!isAuthorizedProxyRequest(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success: false, error: 'Unauthorized' }))
+      return
+    }
     const externalId = decodeURIComponent(req.url.split('/')[2] || '')
     const connId = externalIdToConnectionId.get(externalId)
     const conn = connId ? connections.get(connId) : undefined
@@ -277,6 +296,11 @@ const httpServer = http.createServer((req, res) => {
   }
 
   if (req.url === '/stations' && req.method === 'GET') {
+    if (!isAuthorizedProxyRequest(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success: false, error: 'Unauthorized' }))
+      return
+    }
     const list = [...connections.values()]
       .filter((c) => c.externalId)
       .map((c) => ({
@@ -299,7 +323,11 @@ const httpServer = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer, path: config.ws.path })
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  if (!isAuthorizedProxyRequest(req)) {
+    ws.close(1008, 'Unauthorized')
+    return
+  }
   wsClients.add(ws)
   ws.on('close', () => wsClients.delete(ws))
 })

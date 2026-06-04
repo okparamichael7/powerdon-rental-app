@@ -27,11 +27,37 @@ export function AdminLoginForm() {
     setLoading(true)
     setError('')
 
+    const attempt = await fetch('/api/auth/login-attempt', { method: 'POST' })
+    if (attempt.status === 429) {
+      setError('Too many login attempts. Please wait and try again.')
+      setLoading(false)
+      return
+    }
+
     const supabase = createClient()
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
     if (signInError) {
       setError(signInError.message)
+      setLoading(false)
+      return
+    }
+
+    const user = signInData.user
+    const isStaff =
+      user?.app_metadata?.is_admin === true ||
+      user?.app_metadata?.role === 'admin' ||
+      user?.app_metadata?.role === 'operator' ||
+      user?.user_metadata?.is_admin === true ||
+      user?.user_metadata?.role === 'admin' ||
+      user?.user_metadata?.role === 'operator'
+
+    if (!isStaff) {
+      await supabase.auth.signOut()
+      setError('Your account does not have admin access.')
       setLoading(false)
       return
     }

@@ -355,7 +355,12 @@ export const mockRewardProvider: IRewardProvider = {
 
 // Payment/email/reward integrations: use Stripe + DB in production flows.
 // Hardware control uses lib/wscharge stationManager and /api/stations routes directly.
+import { productionEmailProvider } from './production-providers';
+import { isMockDataEnabled } from '@/lib/services/config';
+
+const useMockIntegrations = isMockDataEnabled();
+
 export const paymentProvider = mockPaymentProvider;
 export const hardwareProvider = mockHardwareProvider;
-export const emailProvider = mockEmailProvider;
+export const emailProvider = useMockIntegrations ? mockEmailProvider : productionEmailProvider;
 export const rewardProvider = mockRewardProvider;

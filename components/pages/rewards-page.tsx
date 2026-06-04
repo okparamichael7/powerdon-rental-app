@@ -47,9 +47,9 @@ export function RewardsPage({ isOnline, onNavigate }: RewardsPageProps) {
   };
 
   // Handle redeem
-  const handleRedeem = async (rewardId: string) => {
+  const handleRedeem = async (rewardId: string, rewardCode: string) => {
     setIsRedeeming(true);
-    await redeemReward(rewardId);
+    await redeemReward(rewardId, rewardCode);
     setIsRedeeming(false);
     setSelectedReward(null);
   };
@@ -508,7 +508,7 @@ function IssuedDetailView({
   copied: boolean;
   isRedeeming: boolean;
   onCopy: (code: string) => void;
-  onRedeem: (id: string) => void;
+  onRedeem: (id: string, code: string) => void;
   onBack: () => void;
   getTimeRemaining: (date: Date) => string;
 }) {
@@ -607,7 +607,7 @@ function IssuedDetailView({
         {/* Redeem Button */}
         <div className="space-y-3">
           <Button 
-            onClick={() => onRedeem(reward.id)}
+            onClick={() => onRedeem(reward.id, reward.code)}
             disabled={isRedeeming}
             className="w-full h-12 text-sm font-medium"
           >

@@ -17,6 +17,7 @@ import { formatTime } from '@/lib/utils';
 import { RentalCheckout } from '@/components/stripe/checkout';
 import { isStripeCheckoutEnabled, isStripeMisconfigured } from '@/lib/services/config';
 import { getPwaDataLayer } from '@/lib/data';
+import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token';
 
 type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
@@ -175,14 +176,24 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     setStep('payment');
   };
 
-  const handleStripeCheckoutSuccess = async (sessionCode: string) => {
+  const handleStripeCheckoutSuccess = async (
+    sessionCode: string,
+    unlockToken?: string,
+    sessionId?: string,
+  ) => {
     if (!currentStation) return;
     setIsProcessing(true);
     setStep('unlocking');
     setUnlockProgress(40);
 
     try {
-      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionCode)}`);
+      if (unlockToken && sessionId) {
+        saveSessionToken(sessionId, unlockToken);
+      }
+      const lookupId = sessionId || sessionCode;
+      const res = await fetch(`/api/rentals/${encodeURIComponent(lookupId)}`, {
+        headers: sessionAuthHeaders(sessionId || sessionCode),
+      });
       const body = await res.json();
       if (!res.ok || !body.success) {
         setErrorMessage(body.error || 'Failed to confirm payment');

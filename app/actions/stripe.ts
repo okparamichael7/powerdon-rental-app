@@ -3,7 +3,8 @@
 import { createCheckoutSession, getOrCreateCustomer, getCheckoutSession } from '@/lib/stripe/payment-service'
 import { DEFAULT_PRICING, generateIdempotencyKey } from '@/lib/stripe/types'
 import { createServiceClient } from '@/lib/supabase/admin'
-import { userRepository, sessionRepository, campaignRepository } from '@/lib/db'
+import { userRepository, sessionRepository, stationRepository } from '@/lib/db'
+import { prepareRentalStart, loadCampaignPricing } from '@/lib/rental/start-orchestrator'
 import type { DbUser, DbRentalSession } from '@/lib/db/types'
 import { logger } from '@/lib/observability/logger'
 
@@ -19,6 +20,8 @@ export interface StartRentalCheckoutResult {
   success: boolean
   clientSecret?: string
   sessionCode?: string
+  sessionId?: string
+  unlockToken?: string
   error?: string
 }
 
@@ -37,37 +40,32 @@ export async function startRentalCheckout(
     const dbUser = await userRepository.getOrCreate(params.email, { name: params.name })
     const userId = dbUser.id
 
-    let depositAmount = DEFAULT_PRICING.preAuthAmountCents
-    let hourlyRate = 200
-    let dailyCap = DEFAULT_PRICING.dailyCapAmountCents / 100
+    const station = await stationRepository.getById(params.stationId)
+    const pricing = await loadCampaignPricing(params.campaignId, station?.campaign_id ?? null)
+    const depositAmount = Math.round(pricing.depositAmount * 100) || DEFAULT_PRICING.preAuthAmountCents
 
-    if (params.campaignId) {
-      const campaign = await campaignRepository.getById(params.campaignId)
-      if (campaign?.is_active) {
-        depositAmount = Math.round(Number(campaign.deposit_amount) * 100)
-        hourlyRate = Math.round(Number(campaign.hourly_rate) * 100)
-        dailyCap = Number(campaign.daily_cap)
-      }
-    }
-
-    const sessionCode = generateSessionCode()
-
+    let createdSession: DbRentalSession
+    let unlockToken: string
     try {
-      await sessionRepository.create({
+      const prepared = await prepareRentalStart({
         userId,
-        campaignId: params.campaignId,
-        pickupStationId: params.stationId,
-        pickupSlotNumber: params.slotNumber,
-        depositAmount: depositAmount / 100,
-        hourlyRate: hourlyRate / 100,
-        dailyCap,
-        rewardThresholdMinutes: 60,
+        stationId: params.stationId,
+        slotNumber: params.slotNumber,
+        campaignId: pricing.campaignId,
+        depositAmount: pricing.depositAmount,
+        hourlyRate: pricing.hourlyRate,
+        dailyCap: pricing.dailyCap,
+        rewardThresholdMinutes: pricing.rewardThresholdMinutes,
       })
+      createdSession = prepared.session
+      unlockToken = prepared.unlockToken
     } catch {
       return { success: false, error: 'Failed to create rental session' }
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+    const sessionCode = createdSession.session_code
 
     const checkoutResult = await createCheckoutSession({
       customerId: customer.id,
@@ -86,6 +84,8 @@ export async function startRentalCheckout(
       success: true,
       clientSecret: checkoutResult.clientSecret,
       sessionCode,
+      sessionId: createdSession.id,
+      unlockToken,
     }
   } catch (error) {
     logger.error('Error starting rental checkout', {

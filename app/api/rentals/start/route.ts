@@ -4,47 +4,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sessionRepository, userRepository, stationRepository, campaignRepository } from '@/lib/db';
 import { enforceRateLimit } from '@/lib/api/route-helpers';
+import { validateBody, schemas } from '@/lib/security/validation';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import crypto from 'crypto';
 
-interface StartRentalRequest {
-  stationId: string;
-  slotNumber?: number;
-  userEmail: string;
-  userName?: string;
-  phone?: string;
-  marketingConsent?: boolean;
-  campaignId?: string;
-  // Payment details (for future Stripe integration)
-  paymentMethodId?: string;
-}
-
 export async function POST(request: NextRequest) {
-  const rateLimited = enforceRateLimit(request, 'rentalStart');
+  const rateLimited = await enforceRateLimit(request, 'rentalStart');
   if (rateLimited) return rateLimited;
 
   try {
-    const body: StartRentalRequest = await request.json();
+    const validated = await validateBody(request, schemas.rentalStartPublic);
+    if (!validated.success) return validated.error;
+
+    const body = validated.data;
     const { stationId, slotNumber, userEmail, userName, phone, marketingConsent } = body;
     let { campaignId } = body;
-
-    // Validate required fields
-    if (!stationId || !userEmail) {
-      return NextResponse.json(
-        { success: false, error: 'stationId and userEmail are required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(userEmail)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
 
     // Get station from database
     const station = await stationRepository.getById(stationId);

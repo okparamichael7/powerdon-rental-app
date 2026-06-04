@@ -3,6 +3,7 @@ import { stationManager } from '@/lib/wscharge'
 import { getWsChargeMetrics } from '@/lib/wscharge/metrics'
 import { validateWsChargeConfig, getWsChargeConfig } from '@/lib/wscharge/config'
 import { getSystemHealth } from '@/lib/ops/health'
+import { getProductionEnvChecks, productionEnvReady } from '@/lib/env/production-check'
 import { withPublicApi } from '@/lib/api/public-route'
 
 /**
@@ -36,6 +37,8 @@ export const GET = withPublicApi(async (_request: NextRequest) => {
     version: process.env.APP_VERSION || process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     components: systemHealth.components,
+    productionReady: productionEnvReady(),
+    envChecks: process.env.NODE_ENV === 'production' ? getProductionEnvChecks() : undefined,
     wscharge: {
       status: wschargeStatus,
       enabled: cfg.enabled,

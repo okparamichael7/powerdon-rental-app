@@ -1,7 +1,7 @@
 // WsCharge Protocol exports
 export * from './protocol'
 export * from './station-manager'
-export * from './protocol-handler'
+// protocol-handler is server-only — import from '@/lib/wscharge/protocol-handler' in API routes
 export * from './config'
 export * from './constants'
 export * from './metrics'

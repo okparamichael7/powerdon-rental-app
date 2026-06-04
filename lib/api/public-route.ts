@@ -12,7 +12,7 @@ export function withPublicApi(
   rateLimitKey: RateLimitKey = 'api',
 ): RouteHandler {
   return async (request, context) => {
-    const rateLimited = enforceRateLimit(request, rateLimitKey)
+    const rateLimited = await enforceRateLimit(request, rateLimitKey)
     if (rateLimited) return rateLimited
     return handler(request, context)
   }

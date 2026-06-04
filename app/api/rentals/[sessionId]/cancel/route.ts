@@ -4,6 +4,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sessionRepository, stationRepository } from '@/lib/db';
 import { withPublicApi } from '@/lib/api/public-route';
+import { authorizeSessionAccess } from '@/lib/security/session-access';
+import { cancelRentalPaymentHold } from '@/lib/rental/finalize-payment';
+import { notifyDepositRefunded } from '@/lib/rental/notifications';
 
 export const POST = withPublicApi(async (
   request: NextRequest,
@@ -15,9 +18,6 @@ export const POST = withPublicApi(async (
     if (!session) {
       session = await sessionRepository.getByCode(sessionIdParam);
     }
-    const sessionId = session?.id ?? sessionIdParam;
-    const body = await request.json().catch(() => ({}));
-    const { reason } = body;
 
     if (!session) {
       return NextResponse.json(
@@ -26,11 +26,15 @@ export const POST = withPublicApi(async (
       );
     }
 
-    // Can only cancel pending sessions
+    const access = await authorizeSessionAccess(request, session);
+    if (!access.authorized) {
+      return access.response;
+    }
+
     if (session.status !== 'pending') {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Can only cancel pending sessions',
           currentStatus: session.status,
         },
@@ -38,20 +42,25 @@ export const POST = withPublicApi(async (
       );
     }
 
-    // Release the reserved slot
+    const body = await request.json().catch(() => ({}));
+    const { reason } = body as { reason?: string };
+
     await stationRepository.updateSlot(session.pickup_station_id, session.pickup_slot_number, {
-      status: 'occupied', // Return to occupied
+      status: 'occupied',
     });
 
-    // Cancel the session
+    await cancelRentalPaymentHold(session, reason || 'user_cancelled');
     await sessionRepository.cancelSession(session.id, reason);
 
-    // Add timeline event
     await sessionRepository.addEvent(session.id, {
       type: 'admin',
       description: reason ? `Session cancelled: ${reason}` : 'Session cancelled by user',
       metadata: { reason },
     });
+
+    if (session.user?.email) {
+      await notifyDepositRefunded(session.user.email, session.deposit_amount);
+    }
 
     return NextResponse.json({
       success: true,

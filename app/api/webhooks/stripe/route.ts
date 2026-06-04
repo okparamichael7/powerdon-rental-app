@@ -14,7 +14,7 @@ const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
 // =============================================================================
 
 export async function POST(request: NextRequest) {
-  const rateLimited = enforceRateLimit(request, 'webhook')
+  const rateLimited = await enforceRateLimit(request, 'webhook')
   if (rateLimited) return rateLimited
 
   const span = logger.startSpan('stripe.webhook')
@@ -60,6 +60,20 @@ export async function POST(request: NextRequest) {
       eventType: event.type,
       livemode: event.livemode,
     })
+
+    const supabase = await createServiceClient()
+    const { error: insertError } = await supabase.from('stripe_webhook_events').insert({
+      event_id: event.id,
+      event_type: event.type,
+    })
+
+    if (insertError?.code === '23505') {
+      return NextResponse.json({ received: true, eventId: event.id, duplicate: true })
+    }
+    if (insertError) {
+      logger.error('Webhook idempotency insert failed', { error: insertError.message })
+      return NextResponse.json({ error: 'Idempotency store error' }, { status: 500 })
+    }
 
     // Handle the event
     const result = await handleWebhookEvent(event)
@@ -397,6 +411,12 @@ async function handleCheckoutSessionExpired(
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session as expired
+    const { data: rentalRow } = await supabase
+      .from('rental_sessions')
+      .select('id, pickup_station_id, pickup_slot_number')
+      .eq('session_code', sessionId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('rental_sessions')
       .update({
@@ -414,6 +434,15 @@ async function handleCheckoutSessionExpired(
       logger.error('Failed to update session on checkout expiration', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
+    if (rentalRow?.pickup_station_id && rentalRow.pickup_slot_number != null) {
+      await supabase
+        .from('station_slots')
+        .update({ status: 'occupied', last_status_change: new Date().toISOString() })
+        .eq('station_id', rentalRow.pickup_station_id)
+        .eq('slot_number', rentalRow.pickup_slot_number)
+        .eq('status', 'reserved')
+    }
+
     logger.info('Checkout session expired', { sessionId, checkoutSessionId: session.id })
 
     return { success: true, message: 'Session expiration recorded' }
@@ -428,16 +457,44 @@ async function handleCheckoutSessionExpired(
 // =============================================================================
 
 async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResult> {
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : charge.payment_intent?.id
+
   logger.info('Charge refunded', {
     chargeId: charge.id,
     amount: charge.amount_refunded,
-    paymentIntentId: charge.payment_intent,
+    paymentIntentId,
   })
 
-  // Optionally update rental session with refund info
-  // This would require looking up the session by payment_intent_id
+  if (!paymentIntentId) {
+    return { success: true, message: 'No payment_intent on charge' }
+  }
 
-  return { success: true, message: 'Refund recorded' }
+  try {
+    const supabase = createServiceClient()
+    const { error } = await supabase
+      .from('rental_sessions')
+      .update({
+        payment_status: 'refunded',
+        amount_refunded: charge.amount_refunded / 100,
+        metadata: {
+          stripe_charge_id: charge.id,
+          refunded_at: new Date().toISOString(),
+        },
+      })
+      .eq('payment_intent_id', paymentIntentId)
+
+    if (error) {
+      logger.error('Failed to update session on refund', { error: error.message, paymentIntentId })
+      return { success: false, message: error.message }
+    }
+
+    return { success: true, message: 'Session refund recorded' }
+  } catch (error) {
+    return { success: false, message: String(error) }
+  }
 }
 
 async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookResult> {

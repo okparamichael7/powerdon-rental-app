@@ -24,7 +24,7 @@ interface RentalCheckoutProps {
   slotNumber: number
   campaignId?: string
   depositAmount: number // In cents
-  onSuccess?: (sessionCode: string) => void
+  onSuccess?: (sessionCode: string, unlockToken?: string, sessionId?: string) => void
   onCancel?: () => void
   onError?: (error: string) => void
 }
@@ -42,6 +42,8 @@ export function RentalCheckout({
 }: RentalCheckoutProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [sessionCode, setSessionCode] = useState<string | null>(null)
+  const [unlockToken, setUnlockToken] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,6 +66,8 @@ export function RentalCheckout({
         if (result.success && result.clientSecret && result.sessionCode) {
           setClientSecret(result.clientSecret)
           setSessionCode(result.sessionCode)
+          if (result.unlockToken) setUnlockToken(result.unlockToken)
+          if (result.sessionId) setSessionId(result.sessionId)
         } else {
           setError(result.error || 'Failed to start checkout')
           onError?.(result.error || 'Failed to start checkout')
@@ -97,7 +101,7 @@ export function RentalCheckout({
       const status = await getCheckoutStatus(sessionCode)
       
       if (status.status === 'completed') {
-        onSuccess?.(sessionCode)
+        onSuccess?.(sessionCode, unlockToken ?? undefined, sessionId ?? undefined)
         return
       }
       
@@ -112,7 +116,7 @@ export function RentalCheckout({
     }
     
     onError?.('Timeout waiting for payment confirmation')
-  }, [sessionCode, onSuccess, onError])
+  }, [sessionCode, unlockToken, sessionId, onSuccess, onError])
 
   if (loading) {
     return (

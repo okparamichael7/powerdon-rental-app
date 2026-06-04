@@ -413,12 +413,19 @@ async function processBorrowResult(
   const sessions = await sessionRepository.getAll({
     stationId,
     status: ['pending'],
-    limit: 10,
+    limit: 20,
   })
 
-  const session = sessions.find(
-    (s) => s.pickup_station_id === stationId && s.pickup_slot_number === slotNumber
-  )
+  const matching = sessions
+    .filter(
+      (s) => s.pickup_station_id === stationId && s.pickup_slot_number === slotNumber,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )
+
+  const session = matching[0]
 
   if (!session) {
     console.warn('[Borrow] No pending session found for:', { stationId, slotNumber })
@@ -495,12 +502,56 @@ async function processReturn(
     ? durationMinutes >= session.reward_threshold_minutes
     : false
 
+  let finalAmountCharged = Math.round(amountCharged * 100) / 100
+  let finalAmountRefunded = amountRefunded
+
+  if (session.payment_intent_id) {
+    try {
+      const base =
+        process.env.API_BASE_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        'http://127.0.0.1:3000'
+      const internalKey =
+        process.env.INTERNAL_API_KEY ||
+        process.env.TCP_PROXY_API_KEY ||
+        process.env.STATION_PROXY_TOKEN ||
+        process.env.CRON_SECRET
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (internalKey) headers.Authorization = `Bearer ${internalKey}`
+
+      const billingRes = await fetch(
+        `${base}/api/internal/sessions/${session.id}/finalize-return`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ durationMinutes }),
+        },
+      )
+      if (billingRes.ok) {
+        const billing = (await billingRes.json()) as {
+          chargedAmount?: number
+          refundedAmount?: number
+        }
+        if (typeof billing.chargedAmount === 'number') {
+          finalAmountCharged = billing.chargedAmount
+        }
+        if (typeof billing.refundedAmount === 'number') {
+          finalAmountRefunded = billing.refundedAmount
+        }
+      } else {
+        console.error('[Return] Billing finalize HTTP failed:', billingRes.status)
+      }
+    } catch (paymentError) {
+      console.error('[Return] Stripe finalize failed:', paymentError)
+    }
+  }
+
   await sessionRepository.completeSession(session.id, {
     returnStationId: stationId,
     returnSlotNumber: slotNumber,
     durationMinutes,
-    amountCharged: Math.round(amountCharged * 100) / 100,
-    amountRefunded,
+    amountCharged: finalAmountCharged,
+    amountRefunded: finalAmountRefunded,
     rewardQualified,
   })
 
@@ -515,6 +566,16 @@ async function processReturn(
       amountCharged: Math.round(amountCharged * 100) / 100,
     },
   })
+
+  const completed = await sessionRepository.getById(session.id)
+  if (completed?.user?.email) {
+    const { notifyRentalCompleted } = await import('@/lib/rental/notifications')
+    await notifyRentalCompleted(
+      completed.user.email,
+      completed.session_code,
+      finalAmountCharged,
+    )
+  }
 
   if (rewardQualified && session.campaign_id) {
     const expiresAt = new Date()

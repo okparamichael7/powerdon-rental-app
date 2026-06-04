@@ -30,7 +30,7 @@ interface AppState {
   syncActiveSession: () => Promise<void>;
   completeRental: () => Promise<{ success: boolean; qualifiedForReward: boolean }>;
   cancelRental: () => void;
-  redeemReward: (rewardId: string) => Promise<{ success: boolean }>;
+  redeemReward: (rewardId: string, rewardCode?: string) => Promise<{ success: boolean }>;
   clearAllState: () => void;
 }
 
@@ -243,9 +243,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [activeSession, useMock, setActiveSession]);
 
   const redeemReward = useCallback(
-    async (rewardId: string): Promise<{ success: boolean }> => {
+    async (rewardId: string, rewardCode?: string): Promise<{ success: boolean }> => {
       if (!useMock) {
-        const result = await getPwaDataLayer().redeemRewardFromApi(rewardId);
+        const code = rewardCode ?? rewards.find((r) => r.id === rewardId)?.code;
+        if (!code) return { success: false };
+        const result = await getPwaDataLayer().redeemRewardFromApi(rewardId, code);
         if (!result.success) return { success: false };
       }
       updateReward(rewardId, {
@@ -254,7 +256,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
       return { success: true };
     },
-    [updateReward, useMock],
+    [updateReward, useMock, rewards],
   );
 
   const clearAllState = useCallback(() => {

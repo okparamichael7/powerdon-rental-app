@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test:wscharge": "npx tsx --test lib/wscharge/protocol.test.ts lib/wscharge/validation.test.ts",
+    "test:security": "npx tsx --test lib/security/session-access.test.ts",
+    "test": "npm run test:wscharge && npm run test:security",
     "tcp-proxy": "npx tsx server/tcp-proxy.ts"
   },
   "dependencies": {

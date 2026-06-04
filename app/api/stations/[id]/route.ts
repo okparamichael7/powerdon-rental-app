@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository, campaignRepository } from '@/lib/db';
-import { enforceRateLimit } from '@/lib/api/route-helpers';
+import { enforceRateLimit, requireAdminSession } from '@/lib/api/route-helpers';
 
 // GET /api/stations/[id] - Get station details (database and/or live hardware)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const rateLimited = enforceRateLimit(request, 'api');
+  const rateLimited = await enforceRateLimit(request, 'api');
   if (rateLimited) return rateLimited;
 
   const { id: stationId } = await params;
@@ -91,13 +91,18 @@ export async function GET(
   }
 }
 
-// POST /api/stations/[id] - Send command to station
+// POST /api/stations/[id] - Send command to station (admin/operator only)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const adminGate = await requireAdminSession(request);
+  if (!adminGate.ok) {
+    return adminGate.response;
+  }
+
   const { id: stationId } = await params;
-  
+
   try {
     const body = await request.json();
     const { command, slotNumber } = body as { 

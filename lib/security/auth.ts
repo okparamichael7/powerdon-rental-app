@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/observability/logger';
+import { resolveStaffRole } from '@/lib/security/roles';
 
 export type UserRole = 'user' | 'admin' | 'operator' | 'service';
 
@@ -34,13 +35,13 @@ export async function getAuthContext(request: NextRequest): Promise<AuthContext 
       return null;
     }
     
-    // Check if user is admin (stored in user metadata)
-    const isAdmin = user.user_metadata?.is_admin === true || 
-                    user.user_metadata?.role === 'admin';
-    
-    const role: UserRole = isAdmin ? 'admin' : 
-                          user.user_metadata?.role || 'user';
-    
+    const staffRole = resolveStaffRole({
+      app_metadata: user.app_metadata as Record<string, unknown>,
+      user_metadata: user.user_metadata as Record<string, unknown>,
+    })
+    const isAdmin = staffRole === 'admin'
+    const role: UserRole = staffRole ?? 'user'
+
     return {
       userId: user.id,
       email: user.email,

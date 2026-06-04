@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { enforceRateLimit } from '@/lib/api/route-helpers'
 import { supportRepository } from '@/lib/db'
+import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function POST(request: NextRequest) {
-  const rateLimited = enforceRateLimit(request, 'api')
+  const rateLimited = await enforceRateLimit(request, 'api')
   if (rateLimited) return rateLimited
 
-  try {
-    const body = await request.json()
-    if (!body.email || !body.subject || !body.description || !body.category) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
-    }
+  const validated = await validateBody(request, schemas.supportTicket)
+  if (!validated.success) return validated.error
 
+  const body = validated.data
+  if (body.website) {
+    return NextResponse.json({ success: false, error: 'Rejected' }, { status: 400 })
+  }
+
+  try {
     const ticket = await supportRepository.create({
       email: body.email,
       sessionId: body.sessionId,
