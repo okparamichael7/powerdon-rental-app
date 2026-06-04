@@ -213,6 +213,7 @@ More detail: [docs/wscharge/RUNBOOK.md](./wscharge/RUNBOOK.md)
 
 ## 7. Related documentation
 
+- [Vercel environment variables](./VERCEL_ENV.md)
 - [Staff access (admin roles)](./STAFF_ACCESS.md)
 - [PWA rental flow](./PWA_RENTAL_FLOW.md)
 - [Testing a real station](./TESTING_REAL_STATION.md)
