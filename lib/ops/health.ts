@@ -107,11 +107,20 @@ async function checkTcpProxy(): Promise<ComponentHealth> {
       lastCheck: new Date(),
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Connection failed';
+    const devHint =
+      process.env.NODE_ENV === 'development'
+        ? ' — start proxy: npm run tcp-proxy (or unset TCP_PROXY_URL for UI-only dev)'
+        : '';
+    // In development, unreachable proxy is degraded (optional process). In production, unhealthy.
+    const status: HealthStatus =
+      process.env.NODE_ENV === 'development' ? 'degraded' : 'unhealthy';
+
     return {
       name: 'tcp-proxy',
-      status: 'unhealthy',
+      status,
       latency: Math.round(performance.now() - start),
-      message: error instanceof Error ? error.message : 'Connection failed',
+      message: `${message}${devHint}`,
       lastCheck: new Date(),
     };
   }
