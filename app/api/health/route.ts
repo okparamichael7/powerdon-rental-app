@@ -44,6 +44,11 @@ export const GET = withPublicApi(async (_request: NextRequest) => {
       enabled: cfg.enabled,
       protocolVersion: '5.8P',
       connectedStations: connectedStations.length,
+      stations: connectedStations.map((c) => ({
+        deviceId: c.productSn,
+        status: c.isOnline ? 'online' : 'offline',
+        lastHeartbeat: c.lastHeartbeat.toISOString(),
+      })),
       configErrors: wsConfig.errors,
       metrics: getWsChargeMetrics(),
     },

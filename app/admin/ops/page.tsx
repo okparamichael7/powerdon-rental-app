@@ -32,19 +32,23 @@ interface StationStatus {
   lastHeartbeat: string;
 }
 
+interface WsChargeHealth {
+  status: string;
+  enabled?: boolean;
+  protocolVersion?: string;
+  connectedStations: number;
+  stations?: StationStatus[];
+  configErrors?: string[];
+}
+
 interface SystemHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
   version: string;
   uptime: number;
   timestamp: string;
   components: ComponentHealth[];
-  services: {
-    stationProxy: {
-      status: string;
-      connectedStations: number;
-      stations: StationStatus[];
-    };
-  };
+  wscharge?: WsChargeHealth;
+  productionReady?: boolean;
 }
 
 interface MetricsData {
@@ -238,7 +242,7 @@ export default function OpsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {health?.services.stationProxy.connectedStations || 0}
+              {health?.wscharge?.connectedStations ?? 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Active connections
@@ -378,7 +382,7 @@ export default function OpsPage() {
       </div>
 
       {/* Connected Stations */}
-      {health?.services.stationProxy.stations && health.services.stationProxy.stations.length > 0 && (
+      {health?.wscharge?.stations && health.wscharge.stations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Connected Stations</CardTitle>
@@ -388,7 +392,7 @@ export default function OpsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {health.services.stationProxy.stations.map((station) => (
+              {health.wscharge.stations.map((station) => (
                 <div
                   key={station.deviceId}
                   className="flex items-center justify-between p-3 border rounded-lg"
