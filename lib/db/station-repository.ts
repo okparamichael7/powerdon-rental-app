@@ -1,6 +1,6 @@
 // Station Repository - Database operations for stations and hardware
-import { createClient } from '@/lib/supabase/server';
-import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
+import { createServiceClient } from '@/lib/supabase/admin';
+import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, Json, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
 
 export interface StationWithSlots extends DbStation {
   slots: DbStationSlot[];
@@ -31,7 +31,7 @@ class StationRepository {
   // ============================================================================
 
   async getAll(filters?: StationFilters): Promise<StationWithSlots[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     let query = supabase
       .from('stations')
@@ -69,16 +69,17 @@ class StationRepository {
 
     if (error) throw error;
 
-    return (data || []).map(station => ({
+    type StationRow = DbStation & { slots?: DbStationSlot[] | null };
+    return ((data || []) as StationRow[]).map((station): StationWithSlots => ({
       ...station,
       slots: station.slots || [],
-      available_slots: (station.slots || []).filter((s: DbStationSlot) => s.status === 'occupied').length,
-      occupied_slots: (station.slots || []).filter((s: DbStationSlot) => s.status === 'empty' || s.status === 'reserved').length,
+      available_slots: (station.slots || []).filter((s) => s.status === 'occupied').length,
+      occupied_slots: (station.slots || []).filter((s) => s.status === 'empty' || s.status === 'reserved').length,
     }));
   }
 
   async getById(id: string): Promise<StationWithSlots | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('stations')
@@ -103,7 +104,7 @@ class StationRepository {
   }
 
   async getByExternalId(externalId: string): Promise<StationWithSlots | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('stations')
@@ -128,7 +129,7 @@ class StationRepository {
   }
 
   async create(station: Database['public']['Tables']['stations']['Insert']): Promise<DbStation> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('stations')
@@ -141,7 +142,7 @@ class StationRepository {
   }
 
   async update(id: string, updates: Database['public']['Tables']['stations']['Update']): Promise<DbStation> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('stations')
@@ -155,7 +156,7 @@ class StationRepository {
   }
 
   async updateByExternalId(externalId: string, updates: Database['public']['Tables']['stations']['Update']): Promise<DbStation> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('stations')
@@ -169,7 +170,7 @@ class StationRepository {
   }
 
   async updateStatus(id: string, status: StationStatus): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('stations')
@@ -184,7 +185,7 @@ class StationRepository {
     temperature?: number;
     connectionIp?: string;
   }): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('stations')
@@ -202,7 +203,7 @@ class StationRepository {
   }
 
   async delete(id: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('stations')
@@ -221,7 +222,7 @@ class StationRepository {
     connectionPort?: number;
     totalSlots?: number;
   }): Promise<DbStation> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     // Check if station already exists
     const existing = await this.getByExternalId(externalId);
@@ -285,7 +286,7 @@ class StationRepository {
   // ============================================================================
 
   async getSlots(stationId: string): Promise<DbStationSlot[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('station_slots')
@@ -298,7 +299,7 @@ class StationRepository {
   }
 
   async getSlot(stationId: string, slotNumber: number): Promise<DbStationSlot | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('station_slots')
@@ -316,7 +317,7 @@ class StationRepository {
   }
 
   async updateSlot(stationId: string, slotNumber: number, updates: Database['public']['Tables']['station_slots']['Update']): Promise<DbStationSlot> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('station_slots')
@@ -341,7 +342,7 @@ class StationRepository {
     powerBankId?: string;
     isCharging?: boolean;
   }>): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     // Update each slot
     for (const slot of inventory) {
@@ -361,7 +362,7 @@ class StationRepository {
   }
 
   async getAvailableSlot(stationId: string): Promise<DbStationSlot | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('station_slots')
@@ -381,7 +382,7 @@ class StationRepository {
   }
 
   async reserveSlot(stationId: string, slotNumber: number): Promise<boolean> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('station_slots')
@@ -401,7 +402,7 @@ class StationRepository {
   }
 
   async releaseSlot(stationId: string, slotNumber: number): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('station_slots')
@@ -421,8 +422,11 @@ class StationRepository {
   // HARDWARE COMMANDS
   // ============================================================================
 
-  async createCommand(command: Database['public']['Tables']['hardware_commands']['Insert']): Promise<DbHardwareCommand> {
-    const supabase = await createClient();
+  async createCommand(command: Partial<Database['public']['Tables']['hardware_commands']['Insert']> & {
+    station_id: string;
+    command_type: CommandType;
+  }): Promise<DbHardwareCommand> {
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_commands')
@@ -435,7 +439,7 @@ class StationRepository {
   }
 
   async getCommand(id: string): Promise<DbHardwareCommand | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_commands')
@@ -452,7 +456,7 @@ class StationRepository {
   }
 
   async getPendingCommands(stationId: string, limit = 10): Promise<DbHardwareCommand[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_commands')
@@ -469,7 +473,7 @@ class StationRepository {
   }
 
   async updateCommand(id: string, updates: Database['public']['Tables']['hardware_commands']['Update']): Promise<DbHardwareCommand> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_commands')
@@ -494,7 +498,7 @@ class StationRepository {
       status: 'completed',
       completed_at: new Date().toISOString(),
       response_code: response.code,
-      response_data: response.data || {},
+      response_data: (response.data || {}) as Json,
     });
   }
 
@@ -516,8 +520,11 @@ class StationRepository {
   // HARDWARE EVENTS
   // ============================================================================
 
-  async logHardwareEvent(event: Database['public']['Tables']['hardware_events']['Insert']): Promise<DbHardwareEvent> {
-    const supabase = await createClient();
+  async logHardwareEvent(event: Partial<Database['public']['Tables']['hardware_events']['Insert']> & {
+    event_type: string;
+    direction: 'inbound' | 'outbound';
+  }): Promise<DbHardwareEvent> {
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_events')
@@ -530,7 +537,7 @@ class StationRepository {
   }
 
   async getHardwareEvents(stationId: string, limit = 100): Promise<DbHardwareEvent[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('hardware_events')
@@ -548,7 +555,7 @@ class StationRepository {
   // ============================================================================
 
   async markOfflineStations(timeoutMinutes = 3): Promise<number> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
     

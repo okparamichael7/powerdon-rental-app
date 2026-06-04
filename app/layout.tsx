@@ -9,7 +9,12 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'PowerDon - Power Bank Rental',
   description: 'Rent a high-capacity power bank in seconds. QR-based rental and rewards platform for events and festivals.',
-  generator: 'v0.app',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PowerDon',
+  },
   icons: {
     icon: [
       {

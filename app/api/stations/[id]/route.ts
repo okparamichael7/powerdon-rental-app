@@ -2,20 +2,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
+import { stationRepository, campaignRepository } from '@/lib/db';
+import { enforceRateLimit } from '@/lib/api/route-helpers';
 
-// GET /api/stations/[id] - Get station details
+// GET /api/stations/[id] - Get station details (database and/or live hardware)
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const rateLimited = enforceRateLimit(request, 'api');
+  if (rateLimited) return rateLimited;
+
   const { id: stationId } = await params;
-  
+  const source = request.nextUrl.searchParams.get('source') || 'both';
+
   try {
+    if (source === 'database' || source === 'both') {
+      let dbStation = await stationRepository.getById(stationId);
+      if (!dbStation) {
+        dbStation = await stationRepository.getByExternalId(stationId);
+      }
+      if (dbStation) {
+        const memoryStation = stationManager.getStation(stationId) ||
+          (dbStation.external_id ? stationManager.getStation(dbStation.external_id) : undefined);
+        let campaign = null;
+        if (dbStation.campaign_id) {
+          campaign = await campaignRepository.getById(dbStation.campaign_id);
+        }
+        const availableSlots = dbStation.slots?.filter((s) => s.status === 'occupied').length ?? 0;
+        return NextResponse.json({
+          success: true,
+          data: {
+            id: dbStation.id,
+            name: dbStation.name,
+            location: dbStation.location,
+            status: memoryStation?.isOnline ? 'online' : dbStation.status,
+            isOnline: memoryStation?.isOnline ?? dbStation.status === 'online',
+            totalSlots: dbStation.total_slots,
+            availableSlots,
+            campaignId: dbStation.campaign_id,
+            campaignName: campaign?.name ?? campaign?.event_name,
+            hourlyRate: campaign ? Number(campaign.hourly_rate) : 2,
+            dailyCap: campaign ? Number(campaign.daily_cap) : 10,
+            depositAmount: campaign ? Number(campaign.deposit_amount) : 25,
+            rewardThresholdMinutes: campaign?.reward_threshold_minutes ?? 60,
+            rewardDescription: campaign?.reward_description ?? '',
+            lastHeartbeat: dbStation.last_heartbeat,
+            inventory: dbStation.slots?.map((slot) => ({
+              slotNumber: slot.slot_number,
+              status: slot.status,
+              batteryLevel: slot.battery_level,
+            })),
+          },
+        });
+      }
+    }
+
     const station = stationManager.getStation(stationId);
-    
     if (!station) {
       return NextResponse.json(
-        { success: false, error: 'Station not found or not connected' },
+        { success: false, error: 'Station not found' },
         { status: 404 }
       );
     }
@@ -23,21 +69,17 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
+        id: station.stationId,
         stationId: station.stationId,
         productSn: station.productSn,
         isOnline: station.isOnline,
         connectedAt: station.connectedAt.toISOString(),
         lastHeartbeat: station.lastHeartbeat.toISOString(),
-        lastInventoryUpdate: station.lastInventoryUpdate?.toISOString() || null,
-        signalStrength: station.signalStrength,
-        iccid: station.iccid,
-        firmwareVersion: station.firmwareVersion,
         inventory: station.inventory.map(slot => ({
           slotNumber: slot.slotNumber,
           terminalId: protocol.formatTerminalId(slot.terminalId),
           batteryLevel: protocol.batteryLevelToPercent(slot.batteryLevel),
         })),
-        pendingCommands: station.pendingCommands.length,
       },
     });
   } catch (error) {

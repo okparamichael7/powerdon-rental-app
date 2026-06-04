@@ -16,6 +16,13 @@ export async function GET(request: Request): Promise<NextResponse> {
   const apiKey = searchParams.get('key');
   const expectedKey = process.env.METRICS_API_KEY;
 
+  if (process.env.NODE_ENV === 'production' && !expectedKey) {
+    return NextResponse.json(
+      { error: 'Metrics endpoint disabled: set METRICS_API_KEY' },
+      { status: 503 },
+    );
+  }
+
   if (expectedKey && authHeader !== `Bearer ${expectedKey}` && apiKey !== expectedKey) {
     return NextResponse.json(
       { error: 'Unauthorized' },

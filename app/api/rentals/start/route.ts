@@ -2,7 +2,8 @@
 // POST /api/rentals/start
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sessionRepository, userRepository, stationRepository } from '@/lib/db';
+import { sessionRepository, userRepository, stationRepository, campaignRepository } from '@/lib/db';
+import { enforceRateLimit } from '@/lib/api/route-helpers';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import crypto from 'crypto';
@@ -20,9 +21,13 @@ interface StartRentalRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = enforceRateLimit(request, 'rentalStart');
+  if (rateLimited) return rateLimited;
+
   try {
     const body: StartRentalRequest = await request.json();
-    const { stationId, slotNumber, userEmail, userName, phone, marketingConsent, campaignId } = body;
+    const { stationId, slotNumber, userEmail, userName, phone, marketingConsent } = body;
+    let { campaignId } = body;
 
     // Validate required fields
     if (!stationId || !userEmail) {
@@ -112,11 +117,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get campaign settings (or use defaults)
-    const depositAmount = 25.00;
-    const hourlyRate = 2.00;
-    const dailyCap = 10.00;
-    const rewardThresholdMinutes = 60;
+    let depositAmount = 25.00;
+    let hourlyRate = 2.00;
+    let dailyCap = 10.00;
+    let rewardThresholdMinutes = 60;
+
+    if (campaignId) {
+      const campaign = await campaignRepository.getById(campaignId);
+      if (campaign?.is_active) {
+        depositAmount = Number(campaign.deposit_amount);
+        hourlyRate = Number(campaign.hourly_rate);
+        dailyCap = Number(campaign.daily_cap);
+        rewardThresholdMinutes = campaign.reward_threshold_minutes;
+      }
+    } else if (station.campaign_id) {
+      const campaign = await campaignRepository.getById(station.campaign_id);
+      if (campaign?.is_active) {
+        depositAmount = Number(campaign.deposit_amount);
+        hourlyRate = Number(campaign.hourly_rate);
+        dailyCap = Number(campaign.daily_cap);
+        rewardThresholdMinutes = campaign.reward_threshold_minutes;
+        campaignId = campaign.id;
+      }
+    }
 
     // Generate unlock token
     const unlockToken = crypto.randomBytes(16).toString('hex');
@@ -151,14 +174,16 @@ export async function POST(request: NextRequest) {
     let hardwareCommandSent = false;
     if (station.external_id) {
       try {
-        // Create borrow command
-        const borrowCommand = protocol.buildBorrowCommand(targetSlot);
-        
-        // Send via station manager
-        const sent = stationManager.sendCommand(station.external_id, borrowCommand);
-        hardwareCommandSent = sent;
+        const payload = Buffer.alloc(1);
+        payload.writeUInt8(targetSlot, 0);
+        const result = await stationManager.sendCommand(
+          station.external_id,
+          protocol.CommandCode.BORROW_POWERBANK,
+          payload,
+        );
+        hardwareCommandSent = result.success;
 
-        if (sent) {
+        if (result.success) {
           // Record command in database
           await stationRepository.createCommand({
             station_id: stationId,
@@ -199,6 +224,7 @@ export async function POST(request: NextRequest) {
         dailyCap: session.daily_cap,
         unlockToken: session.unlock_token,
         unlockExpiresAt: session.unlock_token_expires_at,
+        paymentAuthorizationId: session.payment_authorization_id ?? session.payment_intent_id ?? '',
       },
       hardwareCommandSent,
       message: hardwareCommandSent 

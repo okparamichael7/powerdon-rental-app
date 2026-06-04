@@ -163,7 +163,7 @@ export default function SessionsPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner size="lg" />
+              <Spinner className="h-8 w-8" />
             </div>
           ) : (
             <>

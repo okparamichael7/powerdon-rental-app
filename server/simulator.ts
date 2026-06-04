@@ -764,4 +764,5 @@ if (require.main === module) {
   simulator.start();
 }
 
-export { WsChargeSimulator, StationSimulator, SimulatorConfig };
+export { WsChargeSimulator, StationSimulator };
+export type { SimulatorConfig };

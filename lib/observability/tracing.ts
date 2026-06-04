@@ -60,7 +60,7 @@ export function extractTraceContext(request: NextRequest): TraceContext {
 /**
  * Add trace headers to outgoing response
  */
-export function addTraceHeaders(response: NextResponse, context: TraceContext): NextResponse {
+export function addTraceHeaders<T>(response: NextResponse<T>, context: TraceContext): NextResponse<T> {
   response.headers.set(TRACE_HEADERS.REQUEST_ID, context.requestId);
   response.headers.set(TRACE_HEADERS.CORRELATION_ID, context.correlationId);
   if (context.traceId) {

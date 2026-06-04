@@ -355,7 +355,7 @@ export default function HardwarePage() {
       {/* Station List */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <Spinner size="lg" />
+          <Spinner className="h-8 w-8" />
         </div>
       ) : stationsError ? (
         <Card>
@@ -593,7 +593,7 @@ export default function HardwarePage() {
                                 className="h-8 w-8"
                                 onClick={() => handleForceEject(selectedStation.stationId, slot.slotNumber)}
                               >
-                                <Eject className="h-4 w-4" />
+                                <LogOut className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { PowerDonLogo, ChevronDownIcon } from '@/components/volt/icons';
+import { PowerDonLogo } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/client';
+import { useActiveCampaigns } from '@/hooks/use-services';
 import {
   LayoutDashboard,
   Zap,
@@ -17,9 +19,11 @@ import {
   Settings,
   Menu,
   X,
-  Bell,
-  Search,
   Cpu,
+  CreditCard,
+  Activity,
+  UserCircle,
+  LogOut,
 } from 'lucide-react';
 
 const navigation = [
@@ -30,7 +34,10 @@ const navigation = [
   { name: 'Hardware', href: '/admin/hardware', icon: Cpu },
   { name: 'Rewards', href: '/admin/rewards', icon: Gift },
   { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Leads', href: '/admin/leads', icon: UserCircle },
+  { name: 'Billing', href: '/admin/billing', icon: CreditCard },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { name: 'Ops', href: '/admin/ops', icon: Activity },
 ];
 
 export default function AdminLayout({
@@ -39,7 +46,29 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  const { data: campaigns } = useActiveCampaigns();
+  const activeCampaign = campaigns?.[0];
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setAdminEmail(user?.email ?? null);
+    });
+  }, []);
+
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/admin/login');
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,16 +125,17 @@ export default function AdminLayout({
             })}
           </nav>
 
-          {/* Campaign Selector */}
-          <div className="px-3 py-3">
-            <button className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted transition-colors">
-              <div className="text-left">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Campaign</p>
-                <p className="font-medium text-foreground text-[13px]">Sundance 2024</p>
-              </div>
-              <ChevronDownIcon size={14} className="text-muted-foreground" />
-            </button>
-          </div>
+          {activeCampaign && (
+            <div className="px-3 py-3">
+              <Link
+                href="/admin/campaigns"
+                className="block px-3 py-2 rounded-md hover:bg-muted transition-colors"
+              >
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Active campaign</p>
+                <p className="font-medium text-foreground text-[13px] truncate">{activeCampaign.name}</p>
+              </Link>
+            </div>
+          )}
 
           {/* Settings */}
           <div className="px-3 pb-4">
@@ -132,29 +162,15 @@ export default function AdminLayout({
               <Menu size={18} />
             </button>
             
-            {/* Search */}
-            <div className="hidden md:flex items-center gap-2 text-muted-foreground">
-              <Search size={14} />
-              <span className="text-[13px]">Search</span>
-              <kbd className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-2">
-                ⌘K
-              </kbd>
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Notifications */}
-            <button className="relative p-2 rounded-full hover:bg-muted transition-colors">
-              <Bell size={16} className="text-muted-foreground" />
-              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-foreground rounded-full" />
-            </button>
-
-            {/* User menu */}
-            <Button variant="ghost" size="sm" className="gap-2 px-2">
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-[11px] font-medium text-foreground">JD</span>
-              </div>
-              <span className="hidden md:block text-[13px]">John Doe</span>
+            <span className="hidden md:block text-[13px] text-muted-foreground truncate max-w-[200px]">
+              {adminEmail ?? 'Admin'}
+            </span>
+            <Button variant="ghost" size="sm" className="gap-2 px-2" onClick={handleSignOut}>
+              <LogOut size={16} />
+              <span className="hidden md:inline text-[13px]">Sign out</span>
             </Button>
           </div>
         </header>

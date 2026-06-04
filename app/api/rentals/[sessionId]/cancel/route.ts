@@ -3,19 +3,22 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { sessionRepository, stationRepository } from '@/lib/db';
+import { withPublicApi } from '@/lib/api/public-route';
 
-export async function POST(
+export const POST = withPublicApi(async (
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
+  context?: { params: Promise<{ sessionId: string }> },
+) => {
   try {
-    const { sessionId } = await params;
+    const { sessionId: sessionIdParam } = await context!.params;
+    let session = await sessionRepository.getById(sessionIdParam);
+    if (!session) {
+      session = await sessionRepository.getByCode(sessionIdParam);
+    }
+    const sessionId = session?.id ?? sessionIdParam;
     const body = await request.json().catch(() => ({}));
     const { reason } = body;
 
-    // Get the session
-    const session = await sessionRepository.getById(sessionId);
-    
     if (!session) {
       return NextResponse.json(
         { success: false, error: 'Session not found' },
@@ -61,4 +64,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+}, 'api');

@@ -1,5 +1,5 @@
 // Session Repository - Database operations for rental sessions
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/admin';
 import type { 
   Database, 
   DbRentalSession, 
@@ -56,7 +56,7 @@ class SessionRepository {
   // ============================================================================
 
   async getAll(filters?: SessionFilters): Promise<SessionWithRelations[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     let query = supabase
       .from('rental_sessions')
@@ -112,7 +112,7 @@ class SessionRepository {
   }
 
   async getById(id: string): Promise<SessionWithRelations | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rental_sessions')
@@ -136,7 +136,7 @@ class SessionRepository {
   }
 
   async getByCode(code: string): Promise<SessionWithRelations | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rental_sessions')
@@ -160,7 +160,7 @@ class SessionRepository {
   }
 
   async getActiveByUserId(userId: string): Promise<SessionWithRelations | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rental_sessions')
@@ -181,7 +181,7 @@ class SessionRepository {
   }
 
   async getActiveByUserEmail(email: string): Promise<SessionWithRelations | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     // First get user by email
     const { data: user } = await supabase
@@ -196,7 +196,7 @@ class SessionRepository {
   }
 
   async create(data: CreateSessionData): Promise<DbRentalSession> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data: session, error } = await supabase
       .from('rental_sessions')
@@ -228,7 +228,7 @@ class SessionRepository {
   }
 
   async update(id: string, updates: Database['public']['Tables']['rental_sessions']['Update']): Promise<DbRentalSession> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rental_sessions')
@@ -293,7 +293,7 @@ class SessionRepository {
   }
 
   async delete(id: string): Promise<void> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('rental_sessions')
@@ -316,7 +316,7 @@ class SessionRepository {
     ipAddress?: string;
     userAgent?: string;
   }): Promise<DbSessionEvent> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('session_events')
@@ -338,7 +338,7 @@ class SessionRepository {
   }
 
   async getEvents(sessionId: string): Promise<DbSessionEvent[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('session_events')
@@ -355,7 +355,7 @@ class SessionRepository {
   // ============================================================================
 
   async getActiveCount(): Promise<number> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { count, error } = await supabase
       .from('rental_sessions')
@@ -372,7 +372,7 @@ class SessionRepository {
     activeSessions: number;
     totalRevenue: number;
   }> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -384,11 +384,11 @@ class SessionRepository {
 
     if (error) throw error;
 
-    const sessions = data || [];
+    const sessions = (data || []) as Pick<DbRentalSession, 'status' | 'amount_charged'>[];
     return {
       totalSessions: sessions.length,
-      completedSessions: sessions.filter(s => s.status === 'completed').length,
-      activeSessions: sessions.filter(s => s.status === 'active' || s.status === 'pending').length,
+      completedSessions: sessions.filter((s) => s.status === 'completed').length,
+      activeSessions: sessions.filter((s) => s.status === 'active' || s.status === 'pending').length,
       totalRevenue: sessions.reduce((sum, s) => sum + (s.amount_charged || 0), 0),
     };
   }
@@ -398,7 +398,7 @@ class SessionRepository {
   // ============================================================================
 
   async expirePendingSessions(timeoutMinutes = 15): Promise<number> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
     
@@ -414,7 +414,7 @@ class SessionRepository {
   }
 
   async getExpiredActiveSessions(maxHours = 48): Promise<DbRentalSession[]> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const cutoff = new Date(Date.now() - maxHours * 60 * 60 * 1000).toISOString();
     
@@ -434,8 +434,23 @@ class SessionRepository {
 // ============================================================================
 
 class UserRepository {
+  async getAll(filters?: { search?: string; marketingConsent?: boolean; limit?: number }): Promise<DbUser[]> {
+    const supabase = createServiceClient();
+    let query = supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (filters?.marketingConsent !== undefined) {
+      query = query.eq('marketing_consent', filters.marketingConsent);
+    }
+    if (filters?.search) {
+      query = query.or(`email.ilike.%${filters.search}%,name.ilike.%${filters.search}%`);
+    }
+    if (filters?.limit) query = query.limit(filters.limit);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
   async getById(id: string): Promise<DbUser | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('users')
@@ -452,7 +467,7 @@ class UserRepository {
   }
 
   async getByEmail(email: string): Promise<DbUser | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('users')
@@ -469,7 +484,7 @@ class UserRepository {
   }
 
   async getByAuthUserId(authUserId: string): Promise<DbUser | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('users')
@@ -493,7 +508,7 @@ class UserRepository {
     marketingConsent?: boolean;
     stripeCustomerId?: string;
   }): Promise<DbUser> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('users')
@@ -518,7 +533,7 @@ class UserRepository {
   }
 
   async update(id: string, updates: Database['public']['Tables']['users']['Update']): Promise<DbUser> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('users')
@@ -567,8 +582,19 @@ class UserRepository {
 // ============================================================================
 
 class RewardRepository {
+  async getAll(filters?: { status?: string[]; search?: string; limit?: number }): Promise<DbReward[]> {
+    const supabase = createServiceClient();
+    let query = supabase.from('rewards').select('*').order('issued_at', { ascending: false });
+    if (filters?.status?.length) query = query.in('status', filters.status);
+    if (filters?.search) query = query.ilike('code', `%${filters.search}%`);
+    if (filters?.limit) query = query.limit(filters.limit);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
   async getById(id: string): Promise<DbReward | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')
@@ -585,7 +611,7 @@ class RewardRepository {
   }
 
   async getByCode(code: string): Promise<DbReward | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')
@@ -602,7 +628,7 @@ class RewardRepository {
   }
 
   async getBySessionId(sessionId: string): Promise<DbReward | null> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')
@@ -627,7 +653,7 @@ class RewardRepository {
     description?: string;
     expiresAt: Date;
   }): Promise<DbReward> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')
@@ -651,7 +677,7 @@ class RewardRepository {
   }
 
   async issue(id: string): Promise<DbReward> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')
@@ -668,7 +694,7 @@ class RewardRepository {
     redemptionLocation?: string;
     redeemedByStaffId?: string;
   }): Promise<DbReward> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data: reward, error } = await supabase
       .from('rewards')
@@ -687,7 +713,7 @@ class RewardRepository {
   }
 
   async expireOldRewards(): Promise<number> {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { data, error } = await supabase
       .from('rewards')

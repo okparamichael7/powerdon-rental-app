@@ -5,8 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository } from '@/lib/db';
+import { withPublicApi } from '@/lib/api/public-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withPublicApi(async (request: NextRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const source = searchParams.get('source') || 'both'; // 'memory', 'database', 'both'
@@ -151,4 +152,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

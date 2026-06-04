@@ -97,6 +97,7 @@ export default function CampaignsPage() {
       rewardType: 'voucher',
       rewardValue: parseFloat(createForm.rewardValue),
       rewardDescription: createForm.rewardDescription,
+      stationIds: [],
     });
     
     if (result) {

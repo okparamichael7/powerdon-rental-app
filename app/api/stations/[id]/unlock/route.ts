@@ -4,12 +4,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
+import { withPublicApi } from '@/lib/api/public-route';
 
-export async function POST(
+export const POST = withPublicApi(async (
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: stationId } = await params;
+  context?: { params: Promise<{ id: string }> },
+) => {
+  const { id: stationId } = await context!.params;
   
   try {
     const body = await request.json();
@@ -113,4 +114,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

@@ -12,7 +12,7 @@ export function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not set')
     }
     _stripe = new Stripe(apiKey, {
-      apiVersion: '2025-04-30.basil',
+      apiVersion: '2026-05-27.dahlia',
       appInfo: {
         name: 'PowerDon Rental Platform',
         version: '1.0.0',
@@ -26,7 +26,7 @@ export function getStripe(): Stripe {
 // For backwards compatibility - getter that lazily initializes
 export const stripe = new Proxy({} as Stripe, {
   get(_target, prop) {
-    return (getStripe() as Record<string | symbol, unknown>)[prop]
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop]
   },
 })
 

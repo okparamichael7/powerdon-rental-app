@@ -56,7 +56,7 @@ export function BottomNav({
               aria-current={isActive ? 'page' : undefined}
             >
               <div className="relative">
-                <Icon size={22} strokeWidth={isActive ? 2 : 1.5} />
+                <Icon size={22} className={isActive ? 'opacity-100' : 'opacity-70'} />
                 {showBadge && (
                   <span 
                     className={cn(

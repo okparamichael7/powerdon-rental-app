@@ -61,7 +61,7 @@ export async function createCustomer(params: CreateCustomerParams): Promise<Cust
       created: new Date(customer.created * 1000),
     }
   } catch (error) {
-    logger.error('Failed to create customer', { error, email: params.email })
+    logger.error('Failed to create customer', { error: error instanceof Error ? error : String(error), email: params.email })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -101,7 +101,7 @@ export async function getOrCreateCustomer(params: CreateCustomerParams): Promise
     // Create new customer
     return await createCustomer(params)
   } catch (error) {
-    logger.error('Failed to get or create customer', { error, email: params.email })
+    logger.error('Failed to get or create customer', { error: error instanceof Error ? error : String(error), email: params.email })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -132,7 +132,7 @@ export async function updateCustomerPaymentMethod(
 
     logger.info('Updated customer payment method', { customerId, paymentMethodId })
   } catch (error) {
-    logger.error('Failed to update customer payment method', { error, customerId })
+    logger.error('Failed to update customer payment method', { error: error instanceof Error ? error : String(error), customerId })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -190,7 +190,7 @@ export async function createPaymentIntentWithHold(
     return paymentIntent
   } catch (error) {
     logger.error('Failed to create payment intent', {
-      error,
+      error: error instanceof Error ? error : String(error),
       sessionId: params.metadata.sessionId,
     })
     throw handleStripeError(error)
@@ -248,7 +248,7 @@ export async function capturePayment(
     return capturedIntent
   } catch (error) {
     logger.error('Failed to capture payment', {
-      error,
+      error: error instanceof Error ? error : String(error),
       paymentIntentId: params.paymentIntentId,
     })
     throw handleStripeError(error)
@@ -268,12 +268,17 @@ export async function cancelPaymentIntent(
   const span = logger.startSpan('stripe.cancelPaymentIntent')
   
   try {
+    if (cancellationReason) {
+      await stripe.paymentIntents.update(paymentIntentId, {
+        metadata: {
+          canceled_at: new Date().toISOString(),
+          cancellation_reason: cancellationReason,
+        },
+      })
+    }
+
     const canceledIntent = await stripe.paymentIntents.cancel(paymentIntentId, {
       cancellation_reason: 'requested_by_customer',
-      metadata: {
-        canceled_at: new Date().toISOString(),
-        cancellation_reason: cancellationReason || 'user_canceled',
-      },
     })
 
     logger.info('Payment intent canceled', {
@@ -283,7 +288,7 @@ export async function cancelPaymentIntent(
 
     return canceledIntent
   } catch (error) {
-    logger.error('Failed to cancel payment intent', { error, paymentIntentId })
+    logger.error('Failed to cancel payment intent', { error: error instanceof Error ? error : String(error), paymentIntentId })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -324,7 +329,7 @@ export async function createRefund(
     return refund
   } catch (error) {
     logger.error('Failed to create refund', {
-      error,
+      error: error instanceof Error ? error : String(error),
       paymentIntentId: params.paymentIntentId,
     })
     throw handleStripeError(error)
@@ -346,7 +351,7 @@ export async function getPaymentIntent(
       expand: ['customer', 'payment_method', 'charges'],
     })
   } catch (error) {
-    logger.error('Failed to retrieve payment intent', { error, paymentIntentId })
+    logger.error('Failed to retrieve payment intent', { error: error instanceof Error ? error : String(error), paymentIntentId })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -367,7 +372,7 @@ export async function createCheckoutSession(
   
   try {
     const session = await stripe.checkout.sessions.create({
-      ui_mode: 'embedded',
+      ui_mode: 'embedded' as Stripe.Checkout.SessionCreateParams['ui_mode'],
       mode: 'payment',
       customer: params.customerId,
       customer_email: params.customerId ? undefined : params.customerEmail,
@@ -415,7 +420,7 @@ export async function createCheckoutSession(
     }
   } catch (error) {
     logger.error('Failed to create checkout session', {
-      error,
+      error: error instanceof Error ? error : String(error),
       sessionId: params.sessionId,
     })
     throw handleStripeError(error)
@@ -437,7 +442,7 @@ export async function getCheckoutSession(
       expand: ['payment_intent', 'customer'],
     })
   } catch (error) {
-    logger.error('Failed to retrieve checkout session', { error, checkoutSessionId })
+    logger.error('Failed to retrieve checkout session', { error: error instanceof Error ? error : String(error), checkoutSessionId })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -524,7 +529,7 @@ export async function completeRentalPayment(
     }
   } catch (error) {
     logger.error('Failed to complete rental payment', {
-      error,
+      error: error instanceof Error ? error : String(error),
       paymentIntentId,
       durationMinutes,
     })
@@ -559,7 +564,7 @@ export async function handleLostDevice(
 
     return captured
   } catch (error) {
-    logger.error('Failed to handle lost device payment', { error, paymentIntentId })
+    logger.error('Failed to handle lost device payment', { error: error instanceof Error ? error : String(error), paymentIntentId })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -606,7 +611,7 @@ export async function getPaymentIntentsForReport(
 
     return paymentIntents
   } catch (error) {
-    logger.error('Failed to get payment intents for report', { error })
+    logger.error('Failed to get payment intents for report', { error: error instanceof Error ? error : String(error) })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -648,7 +653,7 @@ export async function getRefundsForReport(
 
     return refunds
   } catch (error) {
-    logger.error('Failed to get refunds for report', { error })
+    logger.error('Failed to get refunds for report', { error: error instanceof Error ? error : String(error) })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -667,7 +672,7 @@ export async function getDisputes(
     const response = await stripe.disputes.list({ limit })
     return response.data
   } catch (error) {
-    logger.error('Failed to get disputes', { error })
+    logger.error('Failed to get disputes', { error: error instanceof Error ? error : String(error) })
     throw handleStripeError(error)
   } finally {
     span.end()
@@ -684,7 +689,7 @@ function handleStripeError(error: unknown): StripeServiceError {
   }
 
   if (error instanceof stripe.errors.StripeError) {
-    return StripeServiceError.fromStripeError(error as Stripe.errors.StripeError)
+    return StripeServiceError.fromStripeError(error)
   }
 
   if (error instanceof Error) {

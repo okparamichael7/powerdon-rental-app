@@ -283,69 +283,82 @@ export interface Database {
         Row: DbCampaign;
         Insert: Omit<DbCampaign, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<DbCampaign, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       stations: {
         Row: DbStation;
         Insert: Omit<DbStation, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<DbStation, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       station_slots: {
         Row: DbStationSlot;
         Insert: Omit<DbStationSlot, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<DbStationSlot, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       power_banks: {
         Row: DbPowerBank;
         Insert: Omit<DbPowerBank, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<DbPowerBank, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       users: {
         Row: DbUser;
         Insert: Omit<DbUser, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<DbUser, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       rental_sessions: {
         Row: DbRentalSession;
         Insert: Omit<DbRentalSession, 'id' | 'created_at' | 'updated_at' | 'session_code'> & { id?: string; session_code?: string };
         Update: Partial<Omit<DbRentalSession, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       session_events: {
         Row: DbSessionEvent;
         Insert: Omit<DbSessionEvent, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<DbSessionEvent, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       rewards: {
         Row: DbReward;
         Insert: Omit<DbReward, 'id' | 'created_at' | 'updated_at' | 'code'> & { id?: string; code?: string };
         Update: Partial<Omit<DbReward, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       hardware_commands: {
         Row: DbHardwareCommand;
         Insert: Omit<DbHardwareCommand, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<DbHardwareCommand, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       hardware_events: {
         Row: DbHardwareEvent;
         Insert: Omit<DbHardwareEvent, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<DbHardwareEvent, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       support_tickets: {
         Row: DbSupportTicket;
         Insert: Omit<DbSupportTicket, 'id' | 'created_at' | 'updated_at' | 'ticket_number'> & { id?: string; ticket_number?: string };
         Update: Partial<Omit<DbSupportTicket, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       analytics_daily: {
         Row: DbAnalyticsDaily;
         Insert: Omit<DbAnalyticsDaily, 'id' | 'computed_at'> & { id?: string };
         Update: Partial<Omit<DbAnalyticsDaily, 'id'>>;
+        Relationships: [];
       };
       system_settings: {
         Row: DbSystemSetting;
         Insert: DbSystemSetting;
         Update: Partial<Omit<DbSystemSetting, 'key'>>;
+        Relationships: [];
       };
     };
-    Views: {};
+    Views: Record<string, never>;
     Functions: {
       generate_session_code: {
         Args: Record<string, never>;

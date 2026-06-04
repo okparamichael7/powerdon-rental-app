@@ -353,7 +353,8 @@ export const mockRewardProvider: IRewardProvider = {
 // EXPORTED INTEGRATION INSTANCES
 // ============================================================
 
-// In production, these would be replaced with real implementations
+// Payment/email/reward integrations: use Stripe + DB in production flows.
+// Hardware control uses lib/wscharge stationManager and /api/stations routes directly.
 export const paymentProvider = mockPaymentProvider;
 export const hardwareProvider = mockHardwareProvider;
 export const emailProvider = mockEmailProvider;

@@ -6,25 +6,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository, sessionRepository, rewardRepository } from '@/lib/db';
-import type { SlotStatus } from '@/lib/db/types';
+import type { SlotStatus, Json } from '@/lib/db/types';
 
-// Verify request is from TCP proxy (optional security)
-function verifyProxyRequest(request: NextRequest): boolean {
-  const proxyHeader = request.headers.get('x-station-proxy');
-  
-  // In development, allow all requests
-  if (process.env.NODE_ENV === 'development') {
-    return true;
-  }
-  
-  // In production, require proxy header or API key
-  const authHeader = request.headers.get('authorization');
-  const expectedToken = process.env.STATION_PROXY_TOKEN;
-  
-  return proxyHeader === 'true' || (expectedToken && authHeader === `Bearer ${expectedToken}`);
+function toJson(value: unknown): Json {
+  return JSON.parse(JSON.stringify(value)) as Json;
 }
 
 export async function POST(request: NextRequest) {
+  const { requireServiceOrAdmin } = await import('@/lib/api/route-helpers');
+  const auth = await requireServiceOrAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { stationId, messageHex, connectionId, remoteAddress } = body as {
@@ -66,10 +58,7 @@ export async function POST(request: NextRequest) {
             // Register or update station in database
             try {
               const station = await stationRepository.registerFromHardware(loginMsg.productSn, {
-                iccid: loginMsg.iccid,
-                firmwareVersion: loginMsg.firmwareVersion,
                 connectionIp: remoteAddress,
-                totalSlots: loginMsg.slotCount,
               });
               dbStationId = station.id;
 
@@ -82,9 +71,8 @@ export async function POST(request: NextRequest) {
                 raw_data: messageHex,
                 parsed_data: {
                   productSn: loginMsg.productSn,
-                  iccid: loginMsg.iccid,
-                  firmwareVersion: loginMsg.firmwareVersion,
-                  slotCount: loginMsg.slotCount,
+                  random: loginMsg.random,
+                  magic: loginMsg.magic,
                 },
               });
             } catch (dbError) {
@@ -135,10 +123,12 @@ export async function POST(request: NextRequest) {
                 try {
                   const inventory = inventoryResponse.slots.map((slot) => ({
                     slotNumber: slot.slotNumber,
-                    status: mapHardwareSlotStatus(slot.status),
-                    batteryLevel: slot.batteryLevel,
-                    powerBankId: slot.terminalId,
-                    isCharging: slot.isCharging,
+                    status: slot.terminalId && slot.terminalId !== '0000000000000000'
+                      ? ('occupied' as SlotStatus)
+                      : ('empty' as SlotStatus),
+                    batteryLevel: protocol.batteryLevelToPercent(slot.batteryLevel),
+                    powerBankId: slot.terminalId || undefined,
+                    isCharging: false,
                   }));
                   await stationRepository.updateInventory(dbStationId, inventory);
 
@@ -148,7 +138,7 @@ export async function POST(request: NextRequest) {
                     event_type: 'inventory',
                     direction: 'inbound',
                     raw_data: messageHex,
-                    parsed_data: inventoryResponse,
+                    parsed_data: toJson({ slotCount: inventoryResponse.slots.length }),
                   });
                 } catch (dbError) {
                   console.error('[DB] Error updating inventory:', dbError);
@@ -183,7 +173,7 @@ export async function POST(request: NextRequest) {
                     event_type: 'return',
                     direction: 'inbound',
                     raw_data: messageHex,
-                    parsed_data: returnMsg,
+                    parsed_data: toJson(returnMsg),
                   });
                 } catch (dbError) {
                   console.error('[DB] Error processing return:', dbError);
@@ -220,7 +210,7 @@ export async function POST(request: NextRequest) {
                     event_type: 'borrow',
                     direction: 'inbound',
                     raw_data: messageHex,
-                    parsed_data: borrowResponse,
+                    parsed_data: toJson(borrowResponse),
                   });
                 } catch (dbError) {
                   console.error('[DB] Error processing borrow result:', dbError);
@@ -254,7 +244,7 @@ export async function POST(request: NextRequest) {
                     event_type: 'force_eject',
                     direction: 'inbound',
                     raw_data: messageHex,
-                    parsed_data: ejectResponse,
+                    parsed_data: toJson(ejectResponse),
                   });
                 } catch (dbError) {
                   console.error('[DB] Error logging force eject:', dbError);

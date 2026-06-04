@@ -1,7 +1,8 @@
 'use server'
 
 import { getPaymentIntentsForReport, getRefundsForReport, getDisputes } from '@/lib/stripe/payment-service'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/admin'
+import type { DbRentalSession } from '@/lib/db/types'
 import { logger } from '@/lib/observability/logger'
 import { formatCurrency } from '@/lib/stripe/types'
 
@@ -112,7 +113,7 @@ export async function getBillingOverview(
         dayData.transactions++
       } else if (pi.status === 'requires_capture') {
         authorizedPending++
-      } else if (pi.status === 'canceled' && pi.cancellation_reason === 'failed') {
+      } else if (pi.status === 'canceled') {
         failedTransactions++
       }
 
@@ -183,7 +184,7 @@ export async function getBillingOverview(
       disputes: processedDisputes,
     }
   } catch (error) {
-    logger.error('Error getting billing overview', { error })
+    logger.error('Error getting billing overview', { error: error instanceof Error ? error : String(error) })
     throw error
   } finally {
     span.end()
@@ -197,18 +198,15 @@ async function getDatabaseMetrics(startDate: Date, endDate: Date): Promise<{
   revenueByStation: RevenueByStation[]
 }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServiceClient()
     
     // Get revenue by station
     const { data: stationRevenue } = await supabase
       .from('rental_sessions')
       .select(`
-        start_station_id,
-        total_charge,
-        stations!rental_sessions_start_station_id_fkey (
-          id,
-          name
-        )
+        pickup_station_id,
+        amount_charged,
+        pickup_station:stations!pickup_station_id(id, name)
       `)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
@@ -216,10 +214,14 @@ async function getDatabaseMetrics(startDate: Date, endDate: Date): Promise<{
 
     const stationMap = new Map<string, { name: string; revenue: number; transactions: number }>()
     
-    for (const session of stationRevenue || []) {
-      const stationId = session.start_station_id
-      const stationName = (session.stations as { name: string } | null)?.name || 'Unknown'
-      const charge = Number(session.total_charge) || 0
+    for (const session of (stationRevenue || []) as Array<{
+      pickup_station_id: string
+      amount_charged: number | null
+      pickup_station: { id: string; name: string } | null
+    }>) {
+      const stationId = session.pickup_station_id
+      const stationName = session.pickup_station?.name || 'Unknown'
+      const charge = Number(session.amount_charged) || 0
       
       if (!stationMap.has(stationId)) {
         stationMap.set(stationId, { name: stationName, revenue: 0, transactions: 0 })
@@ -241,7 +243,7 @@ async function getDatabaseMetrics(startDate: Date, endDate: Date): Promise<{
 
     return { revenueByStation }
   } catch (error) {
-    logger.error('Error getting database metrics', { error })
+    logger.error('Error getting database metrics', { error: error instanceof Error ? error : String(error) })
     return { revenueByStation: [] }
   }
 }
@@ -273,7 +275,7 @@ export async function getSessionPaymentDetails(sessionCode: string): Promise<{
   error?: string
 }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServiceClient()
     
     const { data: session, error } = await supabase
       .from('rental_sessions')
@@ -285,11 +287,13 @@ export async function getSessionPaymentDetails(sessionCode: string): Promise<{
       return { session: null, paymentIntent: null, error: 'Session not found' }
     }
 
+    const row = session as DbRentalSession
+
     // Get Stripe payment intent if available
     let paymentIntent = null
-    if (session.payment_intent_id) {
+    if (row.payment_intent_id) {
       const { getPaymentIntent } = await import('@/lib/stripe/payment-service')
-      const pi = await getPaymentIntent(session.payment_intent_id)
+      const pi = await getPaymentIntent(row.payment_intent_id)
       paymentIntent = {
         id: pi.id,
         amount: pi.amount,
@@ -301,22 +305,25 @@ export async function getSessionPaymentDetails(sessionCode: string): Promise<{
 
     return {
       session: {
-        id: session.id,
-        sessionCode: session.session_code,
-        status: session.status,
-        paymentStatus: session.payment_status,
-        depositAmount: Math.round(Number(session.deposit_amount) * 100),
-        totalCharge: Math.round(Number(session.total_charge) * 100),
-        rentalCharge: Math.round(Number(session.rental_charge) * 100),
-        refundAmount: Math.round(Number(session.refund_amount) * 100),
-        durationMinutes: session.duration_minutes,
-        startedAt: session.started_at,
-        endedAt: session.ended_at,
+        id: row.id,
+        sessionCode: row.session_code,
+        status: row.status,
+        paymentStatus: row.payment_status,
+        depositAmount: Math.round(Number(row.deposit_amount) * 100),
+        totalCharge: Math.round(Number(row.amount_charged) * 100),
+        rentalCharge: Math.round(Number(row.amount_charged) * 100),
+        refundAmount: Math.round(Number(row.amount_refunded) * 100),
+        durationMinutes: row.duration_minutes,
+        startedAt: row.started_at,
+        endedAt: row.ended_at,
       },
       paymentIntent,
     }
   } catch (error) {
-    logger.error('Error getting session payment details', { error, sessionCode })
+    logger.error('Error getting session payment details', {
+      error: error instanceof Error ? error : String(error),
+      sessionCode,
+    })
     return { session: null, paymentIntent: null, error: 'Failed to get payment details' }
   }
 }
@@ -330,23 +337,25 @@ export async function processManualRefund(
   reason: string
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServiceClient()
     
     // Get session
     const { data: session, error: sessionError } = await supabase
       .from('rental_sessions')
-      .select('payment_intent_id, total_charge')
+      .select('payment_intent_id, amount_charged')
       .eq('session_code', sessionCode)
       .single()
 
-    if (sessionError || !session?.payment_intent_id) {
+    const row = session as Pick<DbRentalSession, 'payment_intent_id' | 'amount_charged'> | null
+
+    if (sessionError || !row?.payment_intent_id) {
       return { success: false, error: 'Session or payment not found' }
     }
 
     // Process refund
     const { createRefund } = await import('@/lib/stripe/payment-service')
     const refund = await createRefund({
-      paymentIntentId: session.payment_intent_id,
+      paymentIntentId: row.payment_intent_id,
       amountCents,
       reason: 'requested_by_customer',
       metadata: {
@@ -357,17 +366,16 @@ export async function processManualRefund(
     })
 
     // Update session
-    await supabase
-      .from('rental_sessions')
-      .update({
-        refund_amount: amountCents / 100,
-        metadata: {
-          refund_id: refund.id,
-          refund_processed_at: new Date().toISOString(),
-          refund_reason: reason,
-        },
-      })
-      .eq('session_code', sessionCode)
+    const updatePayload: Partial<DbRentalSession> = {
+      amount_refunded: amountCents / 100,
+      metadata: {
+        refund_id: refund.id,
+        refund_processed_at: new Date().toISOString(),
+        refund_reason: reason,
+      },
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('rental_sessions').update(updatePayload).eq('session_code', sessionCode)
 
     logger.info('Manual refund processed', {
       sessionCode,
@@ -377,7 +385,10 @@ export async function processManualRefund(
 
     return { success: true, refundId: refund.id }
   } catch (error) {
-    logger.error('Error processing manual refund', { error, sessionCode })
+    logger.error('Error processing manual refund', {
+      error: error instanceof Error ? error : String(error),
+      sessionCode,
+    })
     return { success: false, error: 'Failed to process refund' }
   }
 }
@@ -423,7 +434,7 @@ export async function exportBillingCSV(
 
     return { success: true, csv }
   } catch (error) {
-    logger.error('Error exporting billing CSV', { error })
+    logger.error('Error exporting billing CSV', { error: error instanceof Error ? error : String(error) })
     return { success: false, error: 'Failed to export billing data' }
   }
 }

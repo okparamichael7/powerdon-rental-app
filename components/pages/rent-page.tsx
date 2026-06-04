@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import {
   PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
-  XCircleIcon, RefreshIcon, CheckCircleIcon, ChevronLeftIcon
+  XCircleIcon, RefreshIcon, CheckCircleIcon, ArrowLeftIcon
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,9 @@ import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
 import { formatCurrency } from '@/lib/session-store';
 import { formatTime } from '@/lib/utils';
+import { RentalCheckout } from '@/components/stripe/checkout';
+import { isStripeCheckoutEnabled, isStripeMisconfigured } from '@/lib/services/config';
+import { getPwaDataLayer } from '@/lib/data';
 
 type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
@@ -70,7 +73,7 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 };
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
-  const { activeSession, currentStation, user, startRental, setUser, setActiveSession } = useAppState();
+  const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation } = useAppState();
 
   const [step, setStep] = useState<RentStep>('landing');
   const [isLoading, setIsLoading] = useState(true);
@@ -97,8 +100,24 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     const initPage = async () => {
       setIsLoading(true);
 
-      // Simulate loading station data
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const stationId = params.get('station') || params.get('stationId');
+        if (stationId && !currentStation) {
+          const loaded = await loadStation(stationId);
+          if (!loaded.success) {
+            setError('station_unavailable');
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      if (!currentStation) {
+        setError('station_unavailable');
+        setIsLoading(false);
+        return;
+      }
 
       if (!isOnline) {
         setError('network');
@@ -156,55 +175,90 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     setStep('payment');
   };
 
-  // Handle payment authorization
-  const handlePayment = async () => {
+  const handleStripeCheckoutSuccess = async (sessionCode: string) => {
+    if (!currentStation) return;
     setIsProcessing(true);
-    setError(null);
+    setStep('unlocking');
+    setUnlockProgress(40);
 
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      if (!isOnline) {
-        throw new Error('network');
+      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionCode)}`);
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        setErrorMessage(body.error || 'Failed to confirm payment');
+        setError('payment_failed');
+        setStep('error');
+        return;
       }
 
-      // Proceed to unlocking
-      setStep('unlocking');
-      setAssignedSlot(Math.floor(Math.random() * 12) + 1);
-
-      // Simulate unlock process
-      let progress = 0;
-      const interval = setInterval(async () => {
-        progress += 10;
-        setUnlockProgress(progress);
-
-        if (progress >= 100) {
-          clearInterval(interval);
-
-          // Start the actual rental
-          const result = await startRental({
-            email,
-            name: name || undefined,
-            termsAccepted,
-            marketingConsent,
-          });
-
-          if (result.success) {
-            setStep('success');
-          } else {
-            setErrorMessage(result.error || 'Failed to start rental');
-            setError('general');
-            setStep('error');
-          }
-        }
-      }, 400);
-    } catch (err) {
+      setUser({ email, name: name || undefined, termsAccepted, marketingConsent });
+      const session = getPwaDataLayer().sessionFromCheckoutApi(body.session, currentStation);
+      setActiveSession(session);
+      setUnlockProgress(100);
+      setStep('success');
+    } catch {
       setError('network');
       setStep('error');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePayment = async () => {
+    setIsProcessing(true);
+    setError(null);
+
+    if (!isOnline) {
+      setError('network');
+      setStep('error');
+      setIsProcessing(false);
+      return;
+    }
+
+    if (!currentStation) {
+      setErrorMessage('Station not loaded. Scan the QR code on the cabinet.');
+      setError('station_unavailable');
+      setStep('error');
+      setIsProcessing(false);
+      return;
+    }
+
+    setUser({
+      email,
+      name: name || undefined,
+      termsAccepted,
+      marketingConsent,
+    });
+
+    if (isStripeCheckoutEnabled()) {
+      setIsProcessing(false);
+      return;
+    }
+
+    setStep('unlocking');
+    setUnlockProgress(20);
+
+    const result = await startRental({
+      email,
+      name: name || undefined,
+      termsAccepted,
+      marketingConsent,
+    });
+
+    setUnlockProgress(100);
+
+    if (result.success) {
+      setAssignedSlot(null);
+      setStep('success');
+    } else {
+      setErrorMessage(result.error || 'Failed to start rental');
+      if (result.error?.includes('active rental')) setError('duplicate_session');
+      else if (result.error?.includes('Station')) setError('station_unavailable');
+      else setError('general');
+      setStep('error');
+    }
+
+    setIsProcessing(false);
   };
 
   // Handle error actions
@@ -323,15 +377,52 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         )}
 
         {step === 'payment' && currentStation && (
-          <PaymentStep
-            key="payment"
-            station={currentStation}
-            paymentMethod={paymentMethod}
-            setPaymentMethod={setPaymentMethod}
-            isProcessing={isProcessing}
-            onBack={() => setStep('info')}
-            onSubmit={handlePayment}
-          />
+          isStripeMisconfigured() ? (
+            <motion.div key="payment-misconfigured" className="flex flex-col min-h-screen px-5 py-8">
+              <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
+              <p className="text-destructive font-medium">Payment is not configured</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Stripe secret key is set but NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is missing. Add the publishable key or remove STRIPE_SECRET_KEY for deposit-only mode.
+              </p>
+            </motion.div>
+          ) : isStripeCheckoutEnabled() ? (
+            <motion.div
+              key="payment-stripe"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col min-h-screen"
+            >
+              <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
+              <main className="flex-1 px-5 py-6">
+                <RentalCheckout
+                  email={email}
+                  name={name || undefined}
+                  stationId={currentStation.id}
+                  slotNumber={1}
+                  campaignId={currentStation.campaignId}
+                  depositAmount={Math.round(currentStation.depositAmount * 100)}
+                  onSuccess={handleStripeCheckoutSuccess}
+                  onCancel={() => setStep('info')}
+                  onError={(msg) => {
+                    setErrorMessage(msg);
+                    setError('payment_failed');
+                    setStep('error');
+                  }}
+                />
+              </main>
+            </motion.div>
+          ) : (
+            <PaymentStep
+              key="payment"
+              station={currentStation}
+              paymentMethod={paymentMethod}
+              setPaymentMethod={setPaymentMethod}
+              isProcessing={isProcessing}
+              onBack={() => setStep('info')}
+              onSubmit={handlePayment}
+            />
+          )
         )}
 
         {step === 'unlocking' && currentStation && (

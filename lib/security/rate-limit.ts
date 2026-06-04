@@ -73,6 +73,20 @@ export const RATE_LIMITS = {
     maxRequests: 200,
     keyPrefix: 'admin',
   },
+
+  // Stripe webhooks (signature verified separately)
+  webhook: {
+    windowMs: 60 * 1000,
+    maxRequests: 120,
+    keyPrefix: 'webhook',
+  },
+
+  // Health probes
+  health: {
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    keyPrefix: 'health',
+  },
 };
 
 /**
@@ -200,4 +214,6 @@ export const rateLimiters = {
   rentalStart: rateLimit(RATE_LIMITS.rentalStart),
   auth: rateLimit(RATE_LIMITS.auth),
   admin: rateLimit(RATE_LIMITS.admin),
+  webhook: rateLimit(RATE_LIMITS.webhook),
+  health: rateLimit(RATE_LIMITS.health),
 };

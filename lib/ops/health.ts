@@ -7,7 +7,7 @@
  * - Kubernetes-compatible endpoints (/health/live, /health/ready)
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/admin';
 import { logger } from '@/lib/observability/logger';
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
@@ -37,7 +37,7 @@ const startTime = Date.now();
 async function checkDatabase(): Promise<ComponentHealth> {
   const start = performance.now();
   try {
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const { error } = await supabase.from('stations').select('id').limit(1);
     const latency = Math.round(performance.now() - start);
     

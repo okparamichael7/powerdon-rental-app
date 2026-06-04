@@ -4,7 +4,7 @@
 import * as net from 'net';
 import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { WsChargeProtocol, MessageType } from '../wscharge/protocol';
+import { WsChargeProtocol, MessageType } from '../lib/wscharge/proxy-protocol';
 
 // Configuration
 const config = {

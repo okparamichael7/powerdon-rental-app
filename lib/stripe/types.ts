@@ -290,7 +290,7 @@ export class StripeServiceError extends Error {
     this.name = 'StripeServiceError'
   }
 
-  static fromStripeError(error: Stripe.errors.StripeError): StripeServiceError {
+  static fromStripeError(error: InstanceType<typeof Stripe.errors.StripeError>): StripeServiceError {
     const retryable = ['rate_limit_error', 'api_connection_error'].includes(error.type)
     const statusCode = error.statusCode || 500
     

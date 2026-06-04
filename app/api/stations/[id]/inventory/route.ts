@@ -4,12 +4,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
+import { withPublicApi } from '@/lib/api/public-route';
 
-export async function GET(
+export const GET = withPublicApi(async (
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: stationId } = await params;
+  context?: { params: Promise<{ id: string }> },
+) => {
+  const { id: stationId } = await context!.params;
   
   try {
     const station = stationManager.getStation(stationId);
@@ -50,14 +51,14 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST /api/stations/[id]/inventory - Request inventory refresh
-export async function POST(
+export const POST = withPublicApi(async (
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: stationId } = await params;
+  context?: { params: Promise<{ id: string }> },
+) => {
+  const { id: stationId } = await context!.params;
   
   try {
     const station = stationManager.getStation(stationId);
@@ -119,4 +120,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { logger } from '@/lib/observability/logger'
-import { createClient } from '@/lib/supabase/server'
-import { alertManager, type AlertSeverity } from '@/lib/ops/alerting'
+import { createServiceClient } from '@/lib/supabase/admin'
+import { alertManager } from '@/lib/ops/alerting'
+import { enforceRateLimit } from '@/lib/api/route-helpers'
 
 // Webhook secret from environment
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -13,6 +14,9 @@ const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
 // =============================================================================
 
 export async function POST(request: NextRequest) {
+  const rateLimited = enforceRateLimit(request, 'webhook')
+  if (rateLimited) return rateLimited
+
   const span = logger.startSpan('stripe.webhook')
   
   try {
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
       processed: result.success,
     })
   } catch (error) {
-    logger.error('Webhook processing error', { error })
+    logger.error('Webhook processing error', { error: error instanceof Error ? error : String(error) })
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -154,7 +158,7 @@ async function handlePaymentIntentSucceeded(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session with payment success
     const { error } = await supabase
@@ -188,7 +192,7 @@ async function handlePaymentIntentSucceeded(
 
     return { success: true, message: 'Payment succeeded and session updated' }
   } catch (error) {
-    logger.error('Error handling payment_intent.succeeded', { error, sessionId })
+    logger.error('Error handling payment_intent.succeeded', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -199,7 +203,7 @@ async function handlePaymentIntentFailed(
   const sessionId = paymentIntent.metadata.session_id
   
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session with payment failure
     const { error } = await supabase
@@ -218,15 +222,15 @@ async function handlePaymentIntentFailed(
       .eq('session_code', sessionId)
 
     if (error) {
-      logger.error('Failed to update session on payment failure', { error, sessionId })
+      logger.error('Failed to update session on payment failure', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
     // Send alert for payment failure
     await alertManager.send({
-      severity: AlertSeverity.WARNING,
+      severity: 'warning',
       title: 'Payment Failed',
       message: `Payment failed for session ${sessionId}`,
-      details: {
+      metadata: {
         paymentIntentId: paymentIntent.id,
         errorCode: paymentIntent.last_payment_error?.code,
         errorMessage: paymentIntent.last_payment_error?.message,
@@ -242,7 +246,7 @@ async function handlePaymentIntentFailed(
 
     return { success: true, message: 'Payment failure recorded' }
   } catch (error) {
-    logger.error('Error handling payment_intent.payment_failed', { error, sessionId })
+    logger.error('Error handling payment_intent.payment_failed', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -253,7 +257,7 @@ async function handlePaymentIntentCanceled(
   const sessionId = paymentIntent.metadata.session_id
   
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session
     const { error } = await supabase
@@ -268,14 +272,14 @@ async function handlePaymentIntentCanceled(
       .eq('session_code', sessionId)
 
     if (error) {
-      logger.error('Failed to update session on payment cancellation', { error, sessionId })
+      logger.error('Failed to update session on payment cancellation', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
     logger.info('Payment intent canceled', { sessionId, paymentIntentId: paymentIntent.id })
 
     return { success: true, message: 'Payment cancellation recorded' }
   } catch (error) {
-    logger.error('Error handling payment_intent.canceled', { error, sessionId })
+    logger.error('Error handling payment_intent.canceled', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -290,7 +294,7 @@ async function handlePaymentIntentAuthorized(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session with authorization
     const { error } = await supabase
@@ -308,7 +312,7 @@ async function handlePaymentIntentAuthorized(
       .eq('session_code', sessionId)
 
     if (error) {
-      logger.error('Failed to update session authorization', { error, sessionId })
+      logger.error('Failed to update session authorization', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
     logger.info('Payment intent authorized', {
@@ -319,7 +323,7 @@ async function handlePaymentIntentAuthorized(
 
     return { success: true, message: 'Authorization recorded' }
   } catch (error) {
-    logger.error('Error handling authorization', { error, sessionId })
+    logger.error('Error handling authorization', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -341,7 +345,7 @@ async function handleCheckoutSessionCompleted(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Get the payment intent from the session
     const paymentIntentId = typeof session.payment_intent === 'string'
@@ -363,7 +367,7 @@ async function handleCheckoutSessionCompleted(
       .eq('session_code', sessionId)
 
     if (error) {
-      logger.error('Failed to update session on checkout completion', { error, sessionId })
+      logger.error('Failed to update session on checkout completion', { error: error instanceof Error ? error : String(error), sessionId })
       return { success: false, message: `Database error: ${error.message}` }
     }
 
@@ -375,7 +379,7 @@ async function handleCheckoutSessionCompleted(
 
     return { success: true, message: 'Checkout completed and session updated' }
   } catch (error) {
-    logger.error('Error handling checkout.session.completed', { error, sessionId })
+    logger.error('Error handling checkout.session.completed', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -390,7 +394,7 @@ async function handleCheckoutSessionExpired(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
     // Update rental session as expired
     const { error } = await supabase
@@ -407,14 +411,14 @@ async function handleCheckoutSessionExpired(
       .eq('session_code', sessionId)
 
     if (error) {
-      logger.error('Failed to update session on checkout expiration', { error, sessionId })
+      logger.error('Failed to update session on checkout expiration', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
     logger.info('Checkout session expired', { sessionId, checkoutSessionId: session.id })
 
     return { success: true, message: 'Session expiration recorded' }
   } catch (error) {
-    logger.error('Error handling checkout.session.expired', { error, sessionId })
+    logger.error('Error handling checkout.session.expired', { error: error instanceof Error ? error : String(error), sessionId })
     return { success: false, message: String(error) }
   }
 }
@@ -439,10 +443,10 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
 async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookResult> {
   // Critical alert for disputes
   await alertManager.send({
-    severity: AlertSeverity.CRITICAL,
+    severity: 'critical',
     title: 'Stripe Dispute Created',
     message: `A dispute has been created for charge ${dispute.charge}`,
-    details: {
+    metadata: {
       disputeId: dispute.id,
       chargeId: typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id,
       amount: dispute.amount,
@@ -465,10 +469,10 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<WebhookResu
   const won = dispute.status === 'won'
   
   await alertManager.send({
-    severity: won ? AlertSeverity.INFO : AlertSeverity.WARNING,
+    severity: won ? 'info' : 'warning',
     title: `Stripe Dispute ${won ? 'Won' : 'Lost'}`,
     message: `Dispute ${dispute.id} has been ${dispute.status}`,
-    details: {
+    metadata: {
       disputeId: dispute.id,
       amount: dispute.amount,
       status: dispute.status,

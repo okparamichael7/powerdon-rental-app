@@ -178,7 +178,7 @@ export default function StationsPage() {
       {/* Stations Grid */}
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <Spinner size="lg" />
+          <Spinner className="h-8 w-8" />
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

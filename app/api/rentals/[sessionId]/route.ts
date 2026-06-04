@@ -3,13 +3,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { sessionRepository } from '@/lib/db';
+import { withPublicApi } from '@/lib/api/public-route';
 
-export async function GET(
+export const GET = withPublicApi(async (
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
+  context?: { params: Promise<{ sessionId: string }> },
+) => {
   try {
-    const { sessionId } = await params;
+    const { sessionId } = await context!.params;
 
     // Try to find by ID first, then by session code
     let session = await sessionRepository.getById(sessionId);
@@ -117,4 +118,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});

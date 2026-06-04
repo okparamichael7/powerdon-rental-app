@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
+import { withPublicApi } from '@/lib/api/public-route';
 
 /**
  * Health check endpoint for monitoring and load balancers.
  * Returns system status including connected stations and uptime.
  */
-export async function GET() {
+export const GET = withPublicApi(async (_request: NextRequest) => {
   const connectedStations = stationManager.getConnectedStations();
   
   return NextResponse.json({
@@ -22,4 +23,4 @@ export async function GET() {
       },
     },
   });
-}
+}, 'health');

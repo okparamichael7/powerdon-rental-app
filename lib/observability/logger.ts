@@ -124,12 +124,8 @@ class Logger {
    */
   private formatError(error: Error | string | unknown): Record<string, unknown> {
     if (error instanceof Error) {
-      return {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        ...(error as Error & Record<string, unknown>),
-      };
+      const { name, message, stack, ...rest } = error as Error & Record<string, unknown>;
+      return { name, message, stack, ...rest };
     }
     return { message: String(error) };
   }

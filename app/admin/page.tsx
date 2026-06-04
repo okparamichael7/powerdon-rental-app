@@ -73,29 +73,29 @@ export default function AdminOverviewPage() {
     {
       name: 'Active Sessions',
       value: dashboardStats.activeSessions,
-      change: '+12%',
-      changeType: 'positive' as const,
+      change: null,
+      changeType: 'neutral' as const,
       icon: Zap,
     },
     {
       name: 'Total Revenue',
       value: `€${formatNumber(dashboardStats.totalRevenue)}`,
-      change: '+8.2%',
-      changeType: 'positive' as const,
+      change: null,
+      changeType: 'neutral' as const,
       icon: Euro,
     },
     {
       name: 'Rewards Issued',
       value: dashboardStats.totalRewardsIssued,
-      change: '+23%',
-      changeType: 'positive' as const,
+      change: null,
+      changeType: 'neutral' as const,
       icon: Gift,
     },
     {
       name: 'Stations Online',
       value: `${dashboardStats.stationsOnline}/${dashboardStats.stationsTotal}`,
-      change: '-1',
-      changeType: 'negative' as const,
+      change: null,
+      changeType: 'neutral' as const,
       icon: Radio,
     },
   ] : [];
@@ -113,7 +113,7 @@ export default function AdminOverviewPage() {
   if (isLoading && !dashboardStats) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Spinner size="lg" />
+        <Spinner className="h-8 w-8" />
       </div>
     );
   }
@@ -154,10 +154,8 @@ export default function AdminOverviewPage() {
           <div key={stat.name} className="space-y-1">
             <p className="text-xs text-muted-foreground">{stat.name}</p>
             <p className="text-2xl font-medium text-foreground tabular-nums">{stat.value}</p>
-            <p className={`text-xs ${
-              stat.changeType === 'positive' ? 'text-muted-foreground' : 'text-muted-foreground'
-            }`}>
-              {stat.change} vs last week
+            <p className="text-xs text-muted-foreground">
+              {stat.change ? `${stat.change} vs last week` : 'Live from database'}
             </p>
           </div>
         ))}
@@ -247,9 +245,9 @@ export default function AdminOverviewPage() {
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                     }}
-                    formatter={(value: number, name: string, props: { payload: { percentage: number } }) => [
-                      `${value.toLocaleString()} (${props.payload.percentage}%)`,
-                      'Count'
+                    formatter={(value: number) => [
+                      `${Number(value).toLocaleString()}`,
+                      'Count',
                     ]}
                   />
                   <Bar 
