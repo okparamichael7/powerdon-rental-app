@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/observability/logger';
-import { resolveStaffRole } from '@/lib/security/roles';
+import { resolveStaffAccess } from '@/lib/security/staff-access';
 
 export type UserRole = 'user' | 'admin' | 'operator' | 'service';
 
@@ -35,7 +35,7 @@ export async function getAuthContext(request: NextRequest): Promise<AuthContext 
       return null;
     }
     
-    const staffRole = resolveStaffRole({
+    const { role: staffRole } = await resolveStaffAccess(user.id, {
       app_metadata: user.app_metadata as Record<string, unknown>,
       user_metadata: user.user_metadata as Record<string, unknown>,
     })

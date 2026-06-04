@@ -15,6 +15,7 @@ export type EventType = 'scan' | 'auth' | 'payment' | 'unlock' | 'pickup' | 'ret
 export type SupportCategory = 'rental_issue' | 'payment_issue' | 'return_issue' | 'reward_issue' | 'station_issue' | 'account_issue' | 'other';
 export type SupportPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type SupportStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
+export type StaffRoleType = 'admin' | 'operator';
 
 // Database row types
 export interface DbCampaign {
@@ -277,6 +278,21 @@ export interface DbSystemSetting {
   updated_by: string | null;
 }
 
+export interface DbStaffRole {
+  id: string;
+  auth_user_id: string;
+  role: StaffRoleType;
+  email: string;
+  granted_by: string | null;
+  granted_at: string;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  notes: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database schema type for Supabase client
 export interface Database {
   public: {
@@ -359,6 +375,15 @@ export interface Database {
         Update: Partial<Omit<DbSystemSetting, 'key'>>;
         Relationships: [];
       };
+      staff_roles: {
+        Row: DbStaffRole;
+        Insert: Omit<DbStaffRole, 'id' | 'created_at' | 'updated_at' | 'granted_at'> & {
+          id?: string;
+          granted_at?: string;
+        };
+        Update: Partial<Omit<DbStaffRole, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -404,6 +429,7 @@ export interface Database {
       support_category: SupportCategory;
       support_priority: SupportPriority;
       support_status: SupportStatus;
+      staff_role_type: StaffRoleType;
     };
   };
 }

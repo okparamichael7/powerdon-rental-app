@@ -5,6 +5,7 @@ import { logger } from '@/lib/observability/logger'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { alertManager } from '@/lib/ops/alerting'
 import { enforceRateLimit } from '@/lib/api/route-helpers'
+import { dispatchBorrowBySessionCode } from '@/lib/rental/dispatch-borrow'
 
 // Webhook secret from environment
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -329,10 +330,13 @@ async function handlePaymentIntentAuthorized(
       logger.error('Failed to update session authorization', { error: error instanceof Error ? error : String(error), sessionId })
     }
 
+    const borrow = await dispatchBorrowBySessionCode(sessionId)
     logger.info('Payment intent authorized', {
       sessionId,
       paymentIntentId: paymentIntent.id,
       amount: paymentIntent.amount,
+      borrowDispatched: borrow.success,
+      borrowSkipped: borrow.skipped,
     })
 
     return { success: true, message: 'Authorization recorded' }
@@ -385,10 +389,13 @@ async function handleCheckoutSessionCompleted(
       return { success: false, message: `Database error: ${error.message}` }
     }
 
+    const borrow = await dispatchBorrowBySessionCode(sessionId)
     logger.info('Checkout session completed', {
       sessionId,
       checkoutSessionId: session.id,
       paymentIntentId,
+      borrowDispatched: borrow.success,
+      borrowSkipped: borrow.skipped,
     })
 
     return { success: true, message: 'Checkout completed and session updated' }

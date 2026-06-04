@@ -28,7 +28,7 @@ Copy from `.env.example` into `.env.local` and fill at minimum:
 
 ### Admin access
 
-Configure Supabase Auth and an admin user (e.g. `user_metadata.is_admin: true`) to use `/admin/*`.
+Configure Supabase Auth and staff roles — see [STAFF_ACCESS.md](./STAFF_ACCESS.md). Run migrations `007_staff_roles.sql` and `008_staff_audit_log.sql`, then grant access at `/admin/staff` or set `BOOTSTRAP_ADMIN_EMAIL` for first login.
 
 ### Payments (optional)
 
@@ -213,6 +213,7 @@ More detail: [docs/wscharge/RUNBOOK.md](./wscharge/RUNBOOK.md)
 
 ## 7. Related documentation
 
+- [Staff access (admin roles)](./STAFF_ACCESS.md)
 - [PWA rental flow](./PWA_RENTAL_FLOW.md)
 - [Testing a real station](./TESTING_REAL_STATION.md)
 - [WsCharge overview](./wscharge/README.md)

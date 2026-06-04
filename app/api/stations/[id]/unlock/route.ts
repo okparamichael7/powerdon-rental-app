@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
-import { sessionRepository } from '@/lib/db';
+import { sessionRepository, stationRepository } from '@/lib/db';
 import { withPublicApi } from '@/lib/api/public-route';
 import { authorizeSessionAccess } from '@/lib/security/session-access';
 
@@ -71,8 +71,16 @@ export const POST = withPublicApi(async (
       );
     }
 
-    const station = stationManager.getStation(stationId);
-    if (!station || !station.isOnline) {
+    const dbStation = await stationRepository.getById(stationId);
+    if (!dbStation?.external_id) {
+      return NextResponse.json(
+        { success: false, error: 'Station hardware not configured' },
+        { status: 503 }
+      );
+    }
+
+    const connection = stationManager.getStation(dbStation.external_id);
+    if (!connection || !connection.isOnline) {
       return NextResponse.json(
         { success: false, error: 'Station not connected' },
         { status: 503 }
@@ -85,7 +93,7 @@ export const POST = withPublicApi(async (
     } else if (session.pickup_slot_number) {
       targetSlot = session.pickup_slot_number;
     } else {
-      const bestSlot = stationManager.getBestAvailableSlot(stationId);
+      const bestSlot = stationManager.getBestAvailableSlot(dbStation.external_id);
       if (!bestSlot) {
         return NextResponse.json(
           { success: false, error: 'No power banks available' },
@@ -95,7 +103,7 @@ export const POST = withPublicApi(async (
       targetSlot = bestSlot.slotNumber;
     }
 
-    const slotInfo = station.inventory.find(s => s.slotNumber === targetSlot);
+    const slotInfo = connection.inventory.find(s => s.slotNumber === targetSlot);
     if (!slotInfo) {
       return NextResponse.json(
         { success: false, error: 'Slot not available' },
@@ -107,7 +115,7 @@ export const POST = withPublicApi(async (
     payload.writeUInt8(targetSlot, 0);
 
     const result = await stationManager.sendCommand<protocol.BorrowResponse>(
-      stationId,
+      dbStation.external_id,
       protocol.CommandCode.BORROW_POWERBANK,
       payload
     );

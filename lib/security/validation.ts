@@ -65,6 +65,12 @@ export const schemas = {
     paymentMethodId: z.string().max(255).optional(),
   }),
 
+  grantStaffRole: z.object({
+    email: z.string().email().max(255),
+    role: z.enum(['admin', 'operator']),
+    notes: z.string().max(500).optional(),
+  }),
+
   supportTicket: z.object({
     email: z.string().email().max(255),
     subject: z.string().min(3).max(200),

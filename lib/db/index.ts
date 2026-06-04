@@ -5,3 +5,4 @@ export { sessionRepository, userRepository, rewardRepository, type SessionWithRe
 export { campaignRepository } from './campaign-repository';
 export { analyticsRepository } from './analytics-repository';
 export { supportRepository } from './support-repository';
+export { staffRoleRepository, type DbStaffRole, type StaffRoleType, type GrantStaffRoleInput } from './staff-role-repository';

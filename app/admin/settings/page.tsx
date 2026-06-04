@@ -35,13 +35,18 @@ export default function AdminSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Admin access</CardTitle>
+          <CardTitle>Staff access</CardTitle>
           <CardDescription>
-            Staff accounts require Supabase Auth with user_metadata.is_admin or role operator/admin.
+            Roles are stored in <code className="text-xs">staff_roles</code> (linked to Supabase Auth). JWT
+            app_metadata is synced automatically on grant/revoke.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Configure admin users in the Supabase dashboard under Authentication → Users → user metadata.
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>
+            Manage staff at <a href="/admin/staff" className="underline text-foreground">/admin/staff</a> (admin
+            only). First deploy: run migration 007 and set <code className="text-xs">BOOTSTRAP_ADMIN_EMAIL</code>{' '}
+            to your Auth user email for one-time bootstrap on login.
+          </p>
         </CardContent>
       </Card>
     </div>

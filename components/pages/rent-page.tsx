@@ -202,6 +202,31 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         return;
       }
 
+      setUnlockProgress(60);
+      if (
+        unlockToken &&
+        sessionId &&
+        currentStation &&
+        ['pending', 'active'].includes(body.session?.status)
+      ) {
+        const unlockRes = await fetch(`/api/stations/${currentStation.id}/unlock`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...sessionAuthHeaders(sessionId),
+          },
+          body: JSON.stringify({
+            sessionId,
+            unlockToken,
+            slotNumber: body.session?.pickupSlotNumber,
+          }),
+        });
+        if (!unlockRes.ok) {
+          const unlockBody = await unlockRes.json().catch(() => ({}));
+          console.warn('[Rent] Unlock after Stripe payment:', unlockBody.error || unlockRes.status);
+        }
+      }
+
       setUser({ email, name: name || undefined, termsAccepted, marketingConsent });
       const session = getPwaDataLayer().sessionFromCheckoutApi(body.session, currentStation);
       setActiveSession(session);

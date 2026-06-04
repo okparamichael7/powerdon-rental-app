@@ -38,6 +38,25 @@ export async function requireAdminSession(request: NextRequest): Promise<
   return { ok: true, auth }
 }
 
+/** Admin-only mutations (e.g. grant/revoke staff roles). Operators may read ops data but not manage staff. */
+export async function requireAdminOnly(request: NextRequest): Promise<
+  | { ok: true; auth: AuthContext }
+  | { ok: false; response: NextResponse }
+> {
+  const auth = await requireAdminSession(request)
+  if (!auth.ok) return auth
+  if (!auth.auth.isAdmin) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Admin role required', code: 'ADMIN_REQUIRED' },
+        { status: 403 },
+      ),
+    }
+  }
+  return auth
+}
+
 export async function requireServiceOrAdmin(request: NextRequest): Promise<
   | { ok: true; auth: AuthContext }
   | { ok: false; response: NextResponse }

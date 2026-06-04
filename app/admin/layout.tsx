@@ -23,6 +23,7 @@ import {
   CreditCard,
   Activity,
   UserCircle,
+  Shield,
   LogOut,
 } from 'lucide-react';
 
@@ -38,6 +39,7 @@ const navigation = [
   { name: 'Billing', href: '/admin/billing', icon: CreditCard },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Ops', href: '/admin/ops', icon: Activity },
+  { name: 'Staff', href: '/admin/staff', icon: Shield },
 ];
 
 export default function AdminLayout({

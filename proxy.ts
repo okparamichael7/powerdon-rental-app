@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isStaffFromMetadata } from '@/lib/security/roles'
+import { hasStaffAccess } from '@/lib/security/staff-access'
 
 const ADMIN_PUBLIC_PATHS = ['/admin/login', '/admin/auth']
 
@@ -12,11 +12,12 @@ function hasValidAdminApiKey(request: NextRequest): boolean {
   return Boolean(adminKey && apiKey && apiKey === adminKey)
 }
 
-function isAdminRole(user: {
+async function isStaffUser(user: {
+  id: string
   app_metadata?: Record<string, unknown>
   user_metadata?: Record<string, unknown>
-}): boolean {
-  return isStaffFromMetadata({
+}): Promise<boolean> {
+  return hasStaffAccess(user.id, {
     app_metadata: user.app_metadata,
     user_metadata: user.user_metadata,
   })
@@ -53,7 +54,7 @@ export async function proxy(request: NextRequest) {
       login.searchParams.set('redirect', pathname)
       return NextResponse.redirect(login)
     }
-    if (!isPublic && user && !isAdminRole(user)) {
+    if (!isPublic && user && !(await isStaffUser(user))) {
       return NextResponse.redirect(new URL('/admin/login?error=forbidden', request.url))
     }
   }
@@ -65,7 +66,7 @@ export async function proxy(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
     }
-    if (!isAdminRole(user)) {
+    if (!(await isStaffUser(user))) {
       return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 })
     }
   }

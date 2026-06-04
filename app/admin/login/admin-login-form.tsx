@@ -46,16 +46,10 @@ export function AdminLoginForm() {
       return
     }
 
-    const user = signInData.user
-    const isStaff =
-      user?.app_metadata?.is_admin === true ||
-      user?.app_metadata?.role === 'admin' ||
-      user?.app_metadata?.role === 'operator' ||
-      user?.user_metadata?.is_admin === true ||
-      user?.user_metadata?.role === 'admin' ||
-      user?.user_metadata?.role === 'operator'
+    const staffRes = await fetch('/api/auth/staff-check')
+    const staffBody = staffRes.ok ? await staffRes.json() : { isStaff: false }
 
-    if (!isStaff) {
+    if (!staffBody.isStaff) {
       await supabase.auth.signOut()
       setError('Your account does not have admin access.')
       setLoading(false)

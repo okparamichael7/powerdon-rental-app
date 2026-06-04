@@ -1,5 +1,6 @@
 /**
- * Staff role resolution — prefers app_metadata (not user-editable) over user_metadata.
+ * Legacy JWT metadata role resolution.
+ * Prefer resolveStaffAccess() (staff_roles table + metadata fallback) for app auth.
  */
 export type StaffRole = 'admin' | 'operator' | null
 

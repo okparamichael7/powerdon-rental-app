@@ -5,8 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sessionRepository, userRepository, stationRepository, campaignRepository } from '@/lib/db';
 import { enforceRateLimit } from '@/lib/api/route-helpers';
 import { validateBody, schemas } from '@/lib/security/validation';
-import { stationManager } from '@/lib/wscharge';
-import * as protocol from '@/lib/wscharge/protocol';
+import { dispatchBorrowForSession } from '@/lib/rental/dispatch-borrow';
 import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
@@ -145,42 +144,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send unlock command to hardware
-    let hardwareCommandSent = false;
-    if (station.external_id) {
-      try {
-        const payload = Buffer.alloc(1);
-        payload.writeUInt8(targetSlot, 0);
-        const result = await stationManager.sendCommand(
-          station.external_id,
-          protocol.CommandCode.BORROW_POWERBANK,
-          payload,
-        );
-        hardwareCommandSent = result.success;
-
-        if (result.success) {
-          // Record command in database
-          await stationRepository.createCommand({
-            station_id: stationId,
-            command_type: 'borrow',
-            slot_number: targetSlot,
-            payload: { sessionCode: session.session_code },
-            status: 'sent',
-            priority: 1,
-            session_id: session.id,
-            metadata: {},
-          });
-
-          await sessionRepository.addEvent(session.id, {
-            type: 'unlock',
-            description: `Unlock command sent for slot ${targetSlot}`,
-            metadata: { slotNumber: targetSlot },
-          });
-        }
-      } catch (hwError) {
-        console.error('[Rental] Error sending hardware command:', hwError);
-      }
-    }
+    const borrowResult = await dispatchBorrowForSession(session.id);
+    const hardwareCommandSent = borrowResult.success && !borrowResult.skipped;
 
     // If hardware command wasn't sent (station not connected), session stays pending
     // The TCP proxy will handle the response when it comes
