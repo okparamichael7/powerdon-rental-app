@@ -14,7 +14,7 @@ setInterval(() => {
   for (const [key, entry] of memoryStore) {
     if (entry.resetTime < now) memoryStore.delete(key)
   }
-}, 60_000)
+}, 60_000).unref()
 
 async function upstashRequest(path: string): Promise<string | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL

@@ -5,10 +5,25 @@
  * These tests use the fetch API to test endpoints against a running server.
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
 
 const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000';
+
+let serverUp = false;
+
+async function isServerReachable(): Promise<boolean> {
+  if (process.env.SKIP_INTEGRATION_TESTS === '1') return false;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${API_BASE_URL}/api/health`, { signal: controller.signal });
+    clearTimeout(timeout);
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
 
 // Helper to make API requests
 async function apiRequest(
@@ -33,20 +48,30 @@ async function apiRequest(
   return { status: response.status, data };
 }
 
+before(async () => {
+  serverUp = await isServerReachable();
+});
+
+function requireServer(t: { skip: (message?: string) => void }) {
+  if (!serverUp) t.skip('Server not reachable — run `npm run dev` or set TEST_API_URL');
+}
+
 // ============================================================================
 // Station API Tests
 // ============================================================================
 
 describe('Station API', () => {
   describe('GET /api/stations', () => {
-    it('should return list of stations', async () => {
+    it('should return list of stations', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/stations');
       
       assert.strictEqual(status, 200);
       assert.ok(Array.isArray((data as { stations: unknown[] }).stations));
     });
 
-    it('should include station details in response', async () => {
+    it('should include station details in response', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/stations');
       
       assert.strictEqual(status, 200);
@@ -62,12 +87,14 @@ describe('Station API', () => {
   });
 
   describe('GET /api/stations/:id', () => {
-    it('should return 404 for non-existent station', async () => {
+    it('should return 404 for non-existent station', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/non-existent-id');
       assert.strictEqual(status, 404);
     });
 
-    it('should return station details when found', async () => {
+    it('should return station details when found', async (t) => {
+      requireServer(t);
       // First get list to find a valid ID
       const { data: listData } = await apiRequest('/api/stations');
       const stations = (listData as { stations: Array<{ id: string }> }).stations;
@@ -81,7 +108,8 @@ describe('Station API', () => {
   });
 
   describe('POST /api/stations/:id (commands)', () => {
-    it('should reject invalid command', async () => {
+    it('should reject invalid command', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/test-station', {
         method: 'POST',
         body: JSON.stringify({ command: 'invalid_command' }),
@@ -90,7 +118,8 @@ describe('Station API', () => {
       assert.ok(status === 400 || status === 404);
     });
 
-    it('should accept valid reboot command format', async () => {
+    it('should accept valid reboot command format', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/stations/test-station', {
         method: 'POST',
         body: JSON.stringify({ command: 'reboot' }),
@@ -108,7 +137,8 @@ describe('Station API', () => {
 
 describe('Station Inventory API', () => {
   describe('GET /api/stations/:id/inventory', () => {
-    it('should return inventory data', async () => {
+    it('should return inventory data', async (t) => {
+      requireServer(t);
       const { data: listData } = await apiRequest('/api/stations');
       const stations = (listData as { stations: Array<{ id: string }> }).stations;
       
@@ -127,7 +157,8 @@ describe('Station Inventory API', () => {
   });
 
   describe('POST /api/stations/:id/inventory (refresh)', () => {
-    it('should trigger inventory refresh', async () => {
+    it('should trigger inventory refresh', async (t) => {
+      requireServer(t);
       const { data: listData } = await apiRequest('/api/stations');
       const stations = (listData as { stations: Array<{ id: string }> }).stations;
       
@@ -149,7 +180,8 @@ describe('Station Inventory API', () => {
 
 describe('Station Unlock API', () => {
   describe('POST /api/stations/:id/unlock', () => {
-    it('should require slot number', async () => {
+    it('should require slot number', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/test-station/unlock', {
         method: 'POST',
         body: JSON.stringify({}),
@@ -158,7 +190,8 @@ describe('Station Unlock API', () => {
       assert.ok(status === 400 || status === 404);
     });
 
-    it('should validate slot number is positive', async () => {
+    it('should validate slot number is positive', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/stations/test-station/unlock', {
         method: 'POST',
         body: JSON.stringify({ slotNumber: -1 }),
@@ -170,7 +203,8 @@ describe('Station Unlock API', () => {
       }
     });
 
-    it('should accept valid unlock request format', async () => {
+    it('should accept valid unlock request format', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/test-station/unlock', {
         method: 'POST',
         body: JSON.stringify({ slotNumber: 1 }),
@@ -188,7 +222,8 @@ describe('Station Unlock API', () => {
 
 describe('Station Message API', () => {
   describe('POST /api/stations/message', () => {
-    it('should require message data', async () => {
+    it('should require message data', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/message', {
         method: 'POST',
         body: JSON.stringify({}),
@@ -197,7 +232,8 @@ describe('Station Message API', () => {
       assert.strictEqual(status, 400);
     });
 
-    it('should accept v5.8P hex messageHex', async () => {
+    it('should accept v5.8P hex messageHex', async (t) => {
+      requireServer(t);
       const { buildMessage, CommandCode } = await import('../../lib/wscharge/protocol.js');
       const sn = Buffer.from('TEST001\0', 'utf8');
       const payload = Buffer.alloc(8 + sn.length);
@@ -215,7 +251,8 @@ describe('Station Message API', () => {
       assert.ok([200, 403, 500].includes(status));
     });
 
-    it('should reject invalid message body', async () => {
+    it('should reject invalid message body', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/stations/message', {
         method: 'POST',
         body: JSON.stringify({ messageHex: 'not-valid-hex' }),
@@ -232,7 +269,8 @@ describe('Station Message API', () => {
 
 describe('Rental API', () => {
   describe('POST /api/rentals/start', () => {
-    it('should require station ID', async () => {
+    it('should require station ID', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/rentals/start', {
         method: 'POST',
         body: JSON.stringify({
@@ -245,7 +283,8 @@ describe('Rental API', () => {
       assert.ok(response.error);
     });
 
-    it('should require email', async () => {
+    it('should require email', async (t) => {
+      requireServer(t);
       const { status, data } = await apiRequest('/api/rentals/start', {
         method: 'POST',
         body: JSON.stringify({
@@ -258,7 +297,8 @@ describe('Rental API', () => {
       assert.ok(response.error);
     });
 
-    it('should validate email format', async () => {
+    it('should validate email format', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/rentals/start', {
         method: 'POST',
         body: JSON.stringify({
@@ -270,7 +310,8 @@ describe('Rental API', () => {
       assert.strictEqual(status, 400);
     });
 
-    it('should accept valid rental start request', async () => {
+    it('should accept valid rental start request', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/rentals/start', {
         method: 'POST',
         body: JSON.stringify({
@@ -286,14 +327,16 @@ describe('Rental API', () => {
   });
 
   describe('GET /api/rentals/:sessionId', () => {
-    it('should return 404 for non-existent session', async () => {
+    it('should return 404 for non-existent session', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/rentals/non-existent-session-id');
       assert.strictEqual(status, 404);
     });
   });
 
   describe('POST /api/rentals/:sessionId/cancel', () => {
-    it('should return 404 for non-existent session', async () => {
+    it('should return 404 for non-existent session', async (t) => {
+      requireServer(t);
       const { status } = await apiRequest('/api/rentals/non-existent-session-id/cancel', {
         method: 'POST',
       });
@@ -307,7 +350,8 @@ describe('Rental API', () => {
 // ============================================================================
 
 describe('Health Check', () => {
-  it('should respond to health endpoint', async () => {
+  it('should respond to health endpoint', async (t) => {
+      requireServer(t);
     const { status } = await apiRequest('/api/health');
     // Either we have a health endpoint or we get 404
     assert.ok([200, 404].includes(status));
@@ -319,7 +363,8 @@ describe('Health Check', () => {
 // ============================================================================
 
 describe('Error Handling', () => {
-  it('should return JSON error for invalid JSON body', async () => {
+  it('should return JSON error for invalid JSON body', async (t) => {
+      requireServer(t);
     const response = await fetch(`${API_BASE_URL}/api/stations/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -329,7 +374,8 @@ describe('Error Handling', () => {
     assert.strictEqual(response.status, 400);
   });
 
-  it('should handle missing Content-Type gracefully', async () => {
+  it('should handle missing Content-Type gracefully', async (t) => {
+      requireServer(t);
     const response = await fetch(`${API_BASE_URL}/api/stations/message`, {
       method: 'POST',
       body: JSON.stringify({ data: 'test' }),

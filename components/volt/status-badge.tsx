@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { SessionStatus, StationStatus, RewardStatus, PaymentStatus } from '@/lib/types';
+import { getStatusBadgeConfig } from '@/lib/admin/status-config';
 
 interface StatusBadgeProps {
   status: SessionStatus | StationStatus | RewardStatus | PaymentStatus;
@@ -11,31 +12,32 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   // Session statuses
-  pending: { label: 'Pending', className: 'bg-muted text-muted-foreground' },
-  active: { label: 'Active', className: 'bg-foreground text-background' },
-  completed: { label: 'Completed', className: 'bg-muted text-muted-foreground' },
-  expired: { label: 'Expired', className: 'bg-muted text-muted-foreground' },
-  failed: { label: 'Failed', className: 'bg-destructive/10 text-destructive' },
+  pending: getStatusBadgeConfig('pending'),
+  active: getStatusBadgeConfig('active'),
+  completed: getStatusBadgeConfig('completed'),
+  expired: getStatusBadgeConfig('expired'),
+  failed: getStatusBadgeConfig('failed'),
+  cancelled: getStatusBadgeConfig('cancelled'),
   
   // Station statuses
-  online: { label: 'Online', className: 'bg-foreground text-background' },
-  offline: { label: 'Offline', className: 'bg-muted text-muted-foreground' },
-  maintenance: { label: 'Maintenance', className: 'bg-muted text-muted-foreground' },
-  'low-battery': { label: 'Low Battery', className: 'bg-muted text-muted-foreground' },
+  online: getStatusBadgeConfig('online'),
+  offline: getStatusBadgeConfig('offline'),
+  maintenance: getStatusBadgeConfig('maintenance'),
+  'low-battery': getStatusBadgeConfig('low-battery'),
   
   // Reward statuses
-  qualified: { label: 'Qualified', className: 'bg-muted text-muted-foreground' },
-  issued: { label: 'Issued', className: 'bg-foreground text-background' },
-  redeemed: { label: 'Redeemed', className: 'bg-muted text-muted-foreground' },
+  qualified: getStatusBadgeConfig('qualified'),
+  issued: getStatusBadgeConfig('issued'),
+  redeemed: getStatusBadgeConfig('redeemed'),
   
   // Payment statuses
-  authorized: { label: 'Authorized', className: 'bg-muted text-muted-foreground' },
-  captured: { label: 'Captured', className: 'bg-foreground text-background' },
-  refunded: { label: 'Refunded', className: 'bg-muted text-muted-foreground' },
+  authorized: getStatusBadgeConfig('authorized'),
+  captured: getStatusBadgeConfig('captured'),
+  refunded: getStatusBadgeConfig('refunded'),
 };
 
 export function StatusBadge({ status, className, size = 'md' }: StatusBadgeProps) {
-  const config = statusConfig[status] || { label: status, className: 'bg-muted text-muted-foreground' };
+  const config = statusConfig[status] || getStatusBadgeConfig(String(status));
   
   return (
     <span

@@ -11,7 +11,14 @@
     "test:security": "npx tsx --test lib/security/session-access.test.ts",
     "test:admin": "npx tsx --test lib/admin/date-range.test.ts lib/db/schema-compat.test.ts",
     "test:pwa": "npx tsx --test lib/pwa/pricing-display.test.ts lib/pwa/charge-estimate-client.test.ts",
-    "test": "npm run test:wscharge && npm run test:security && npm run test:admin && npm run test:pwa",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:integration": "node scripts/run-tests.mjs integration",
+    "test:all": "node scripts/run-tests.mjs all",
+    "test:ci": "npm run test:unit && npm run test:integration",
+    "test:ci:full": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test": "npm run test:ci",
     "tcp-proxy": "npx tsx server/tcp-proxy.ts"
   },
   "dependencies": {
@@ -74,6 +81,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "19.2.14",
@@ -82,6 +90,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "1.3.3",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "wait-on": "^8.0.3"
   }
 }

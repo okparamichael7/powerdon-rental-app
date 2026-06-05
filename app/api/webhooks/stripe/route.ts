@@ -6,6 +6,16 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { alertManager } from '@/lib/ops/alerting'
 import { enforceRateLimit } from '@/lib/api/route-helpers'
 import { dispatchBorrowBySessionCode } from '@/lib/rental/dispatch-borrow'
+import {
+  isDuplicateWebhookEvent,
+  mapChargeRefundedUpdate,
+  mapCheckoutSessionCompletedUpdate,
+  mapCheckoutSessionExpiredUpdate,
+  mapPaymentIntentAuthorizedUpdate,
+  mapPaymentIntentCanceledUpdate,
+  mapPaymentIntentFailedUpdate,
+  mapPaymentIntentSucceededUpdate,
+} from '@/lib/stripe/webhook-state-mappers'
 
 // Webhook secret from environment
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -68,7 +78,7 @@ export async function POST(request: NextRequest) {
       event_type: event.type,
     })
 
-    if (insertError?.code === '23505') {
+    if (isDuplicateWebhookEvent(insertError?.code)) {
       return NextResponse.json({ received: true, eventId: event.id, duplicate: true })
     }
     if (insertError) {
@@ -163,7 +173,8 @@ async function handleWebhookEvent(event: Stripe.Event): Promise<WebhookResult> {
 async function handlePaymentIntentSucceeded(
   paymentIntent: Stripe.PaymentIntent
 ): Promise<WebhookResult> {
-  const sessionId = paymentIntent.metadata.session_id
+  const mapped = mapPaymentIntentSucceededUpdate(paymentIntent)
+  const sessionId = mapped.sessionCode
   
   if (!sessionId) {
     logger.warn('Payment intent succeeded without session_id', {
@@ -175,19 +186,9 @@ async function handlePaymentIntentSucceeded(
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Update rental session with payment success
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_status: 'captured',
-        payment_intent_id: paymentIntent.id,
-        total_charge: paymentIntent.amount_received / 100,
-        metadata: {
-          stripe_payment_intent: paymentIntent.id,
-          captured_at: new Date().toISOString(),
-          amount_received: paymentIntent.amount_received,
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -215,25 +216,15 @@ async function handlePaymentIntentSucceeded(
 async function handlePaymentIntentFailed(
   paymentIntent: Stripe.PaymentIntent
 ): Promise<WebhookResult> {
-  const sessionId = paymentIntent.metadata.session_id
+  const mapped = mapPaymentIntentFailedUpdate(paymentIntent)
+  const sessionId = mapped.sessionCode
   
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Update rental session with payment failure
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_status: 'failed',
-        status: 'failed',
-        error_message: paymentIntent.last_payment_error?.message || 'Payment failed',
-        metadata: {
-          stripe_payment_intent: paymentIntent.id,
-          failed_at: new Date().toISOString(),
-          failure_code: paymentIntent.last_payment_error?.code,
-          failure_message: paymentIntent.last_payment_error?.message,
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -269,21 +260,15 @@ async function handlePaymentIntentFailed(
 async function handlePaymentIntentCanceled(
   paymentIntent: Stripe.PaymentIntent
 ): Promise<WebhookResult> {
-  const sessionId = paymentIntent.metadata.session_id
+  const mapped = mapPaymentIntentCanceledUpdate(paymentIntent)
+  const sessionId = mapped.sessionCode
   
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Update rental session
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_status: 'canceled',
-        metadata: {
-          stripe_payment_intent: paymentIntent.id,
-          canceled_at: new Date().toISOString(),
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -302,7 +287,8 @@ async function handlePaymentIntentCanceled(
 async function handlePaymentIntentAuthorized(
   paymentIntent: Stripe.PaymentIntent
 ): Promise<WebhookResult> {
-  const sessionId = paymentIntent.metadata.session_id
+  const mapped = mapPaymentIntentAuthorizedUpdate(paymentIntent)
+  const sessionId = mapped.sessionCode
   
   if (!sessionId) {
     return { success: true, message: 'No session_id in metadata' }
@@ -311,19 +297,9 @@ async function handlePaymentIntentAuthorized(
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Update rental session with authorization
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_status: 'authorized',
-        payment_intent_id: paymentIntent.id,
-        deposit_amount: paymentIntent.amount / 100,
-        metadata: {
-          stripe_payment_intent: paymentIntent.id,
-          authorized_at: new Date().toISOString(),
-          authorized_amount: paymentIntent.amount,
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -353,7 +329,8 @@ async function handlePaymentIntentAuthorized(
 async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session
 ): Promise<WebhookResult> {
-  const sessionId = session.metadata?.session_id
+  const mapped = mapCheckoutSessionCompletedUpdate(session)
+  const sessionId = mapped.sessionCode
   
   if (!sessionId) {
     logger.warn('Checkout session completed without session_id', {
@@ -365,23 +342,14 @@ async function handleCheckoutSessionCompleted(
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Get the payment intent from the session
-    const paymentIntentId = typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id
 
-    // Update rental session
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_intent_id: paymentIntentId,
-        payment_status: 'authorized',
-        status: 'pending', // Ready for hardware unlock
-        metadata: {
-          checkout_session_id: session.id,
-          completed_at: new Date().toISOString(),
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -408,7 +376,8 @@ async function handleCheckoutSessionCompleted(
 async function handleCheckoutSessionExpired(
   session: Stripe.Checkout.Session
 ): Promise<WebhookResult> {
-  const sessionId = session.metadata?.session_id
+  const mapped = mapCheckoutSessionExpiredUpdate(session)
+  const sessionId = mapped.sessionCode
   
   if (!sessionId) {
     return { success: true, message: 'No session_id in metadata' }
@@ -417,7 +386,6 @@ async function handleCheckoutSessionExpired(
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
-    // Update rental session as expired
     const { data: rentalRow } = await supabase
       .from('rental_sessions')
       .select('id, pickup_station_id, pickup_slot_number')
@@ -426,15 +394,7 @@ async function handleCheckoutSessionExpired(
 
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        status: 'cancelled',
-        payment_status: 'expired',
-        error_message: 'Checkout session expired',
-        metadata: {
-          checkout_session_id: session.id,
-          expired_at: new Date().toISOString(),
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('session_code', sessionId)
 
     if (error) {
@@ -464,10 +424,8 @@ async function handleCheckoutSessionExpired(
 // =============================================================================
 
 async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResult> {
-  const paymentIntentId =
-    typeof charge.payment_intent === 'string'
-      ? charge.payment_intent
-      : charge.payment_intent?.id
+  const mapped = mapChargeRefundedUpdate(charge)
+  const paymentIntentId = mapped.paymentIntentId
 
   logger.info('Charge refunded', {
     chargeId: charge.id,
@@ -483,14 +441,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
     const supabase = createServiceClient()
     const { error } = await supabase
       .from('rental_sessions')
-      .update({
-        payment_status: 'refunded',
-        amount_refunded: charge.amount_refunded / 100,
-        metadata: {
-          stripe_charge_id: charge.id,
-          refunded_at: new Date().toISOString(),
-        },
-      })
+      .update(mapped.rentalSession)
       .eq('payment_intent_id', paymentIntentId)
 
     if (error) {
