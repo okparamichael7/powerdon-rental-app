@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/sheet"
 import { Search, Users, Mail, Download, UserCheck, UserX, Clock, Zap, MapPin, Calendar } from "lucide-react"
 import { useUsers, useSessions } from "@/hooks/use-services"
+import { downloadCsv } from "@/lib/admin/export-csv"
+import { AdminErrorBanner } from "@/components/admin/admin-states"
 import { formatDateTime } from "@/lib/utils"
 import type { User, RentalSession } from "@/lib/types"
 
@@ -40,7 +42,7 @@ export default function LeadsPage() {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([])
   const [selectedLead, setSelectedLead] = useState<User | null>(null)
 
-  const { data: users, loading: usersLoading, fetchUsers } = useUsers()
+  const { data: users, loading: usersLoading, error: usersError, fetchUsers, refetch } = useUsers()
   const { data: allSessions, fetchSessions } = useSessions()
 
   // Fetch users on mount with filters
@@ -100,19 +102,29 @@ export default function LeadsPage() {
           <h1 className="text-xl font-semibold text-foreground">Leads & CRM</h1>
           <p className="text-sm text-muted-foreground">Manage captured user data and consent</p>
         </div>
-        <div className="flex gap-2">
-          {selectedLeads.length > 0 && (
-            <Button variant="outline">
-              <Mail className="mr-2 h-4 w-4" />
-              Email ({selectedLeads.length})
-            </Button>
-          )}
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          disabled={!filteredLeads.length}
+          onClick={() =>
+            downloadCsv(
+              'powerdon-leads.csv',
+              ['email', 'name', 'marketingConsent', 'totalRentals', 'createdAt'],
+              filteredLeads.map((l) => [
+                l.email,
+                l.name ?? '',
+                l.marketingConsent,
+                l.totalRentals,
+                new Date(l.createdAt).toISOString(),
+              ]),
+            )
+          }
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Export
+        </Button>
       </div>
+
+      {usersError && <AdminErrorBanner message={usersError} onRetry={() => refetch()} />}
 
       {/* Stats Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -361,12 +373,8 @@ export default function LeadsPage() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div className="flex items-center justify-between py-2 border-b">
-                      <span className="text-sm text-muted-foreground">Terms Accepted</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">Yes</Badge>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b">
-                      <span className="text-sm text-muted-foreground">Privacy Policy</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">Accepted</Badge>
+                      <span className="text-sm text-muted-foreground">Account created</span>
+                      <span className="text-sm">{formatDateTime(new Date(selectedLead.createdAt))}</span>
                     </div>
                     <div className="flex items-center justify-between py-2">
                       <span className="text-sm text-muted-foreground">Marketing Emails</span>
@@ -408,13 +416,14 @@ export default function LeadsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1">
-                    <Mail className="mr-2 h-4 w-4" />
-                    Send Email
+                {selectedLead.email && (
+                  <Button variant="outline" className="w-full" asChild>
+                    <a href={`mailto:${selectedLead.email}`}>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Contact via email
+                    </a>
                   </Button>
-                  <Button variant="outline" className="flex-1">Edit</Button>
-                </div>
+                )}
               </div>
             </>
           )}

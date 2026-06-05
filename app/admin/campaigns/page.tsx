@@ -15,6 +15,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useCampaigns, useCreateCampaign, useUpdateCampaign } from '@/hooks/use-services';
+import { campaignService } from '@/lib/services';
+import { isSuccessResponse } from '@/lib/api/client';
 import type { Campaign } from '@/lib/types';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { 
@@ -116,6 +118,11 @@ export default function CampaignsPage() {
       });
       refetch();
     }
+  };
+
+  const handleToggleActive = async (campaign: Campaign) => {
+    const result = await campaignService.toggleCampaignActive(campaign.id, !campaign.isActive);
+    if (isSuccessResponse(result)) refetch();
   };
 
   const handleUpdateCampaign = async () => {
@@ -249,6 +256,7 @@ export default function CampaignsPage() {
             key={campaign.id}
             campaign={campaign}
             onEdit={() => setSelectedCampaign(campaign)}
+            onToggleActive={() => handleToggleActive(campaign)}
           />
         ))}
       </div>
@@ -279,10 +287,12 @@ export default function CampaignsPage() {
 // Campaign Card Component
 function CampaignCard({ 
   campaign, 
-  onEdit 
+  onEdit,
+  onToggleActive,
 }: { 
   campaign: Campaign; 
   onEdit: () => void;
+  onToggleActive: () => void;
 }) {
   return (
     <Card className="relative overflow-hidden">
@@ -388,8 +398,8 @@ function CampaignCard({
             <Edit size={14} className="mr-2" />
             Edit
           </Button>
-          <Button variant="outline" className="flex-1" asChild>
-            <a href="/admin/analytics">View Analytics</a>
+          <Button variant={campaign.isActive ? 'secondary' : 'default'} className="flex-1" onClick={onToggleActive}>
+            {campaign.isActive ? 'Deactivate' : 'Activate'}
           </Button>
         </div>
       </CardContent>

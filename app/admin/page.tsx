@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatTime, formatNumber } from '@/lib/utils';
+import { formatTime, formatNumber, formatDateTime } from '@/lib/utils';
+import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states';
 import { StatusBadge } from '@/components/volt/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useDashboardStats, useSessions, useStations } from '@/hooks/use-services';
@@ -28,14 +29,18 @@ import type { FunnelAnalytics } from '@/lib/api/types';
 
 export default function AdminOverviewPage() {
   // Fetch data via service hooks
-  const { data: dashboardStats, loading: statsLoading } = useDashboardStats();
-  const { data: sessions, loading: sessionsLoading, fetchSessions } = useSessions();
-  const { data: stations, loading: stationsLoading, fetchStations } = useStations();
+  const { data: dashboardStats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
+  const { data: sessions, loading: sessionsLoading, error: sessionsError, fetchSessions } = useSessions();
+  const { data: stations, loading: stationsLoading, error: stationsError, fetchStations } = useStations();
   
-  // Local state for analytics data
   const [revenueData, setRevenueData] = useState<{ date: string; revenue: number; sessions: number }[]>([]);
   const [funnelData, setFunnelData] = useState<FunnelAnalytics['stages']>([]);
+  const [activityFeed, setActivityFeed] = useState<
+    { type: string; label: string; user: string; station: string; time: string }[]
+  >([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Fetch sessions and stations on mount
   useEffect(() => {
@@ -44,25 +49,31 @@ export default function AdminOverviewPage() {
   }, [fetchSessions, fetchStations]);
 
   // Fetch analytics data
-  useEffect(() => {
-    async function loadAnalytics() {
-      setAnalyticsLoading(true);
-      try {
-        const [revenueRes, funnelRes] = await Promise.all([
-          analyticsService.getDailyRevenue(),
-          analyticsService.getFunnelAnalytics(),
-        ]);
-        
-        if (isSuccessResponse(revenueRes)) {
-          setRevenueData(revenueRes.data);
-        }
-        if (isSuccessResponse(funnelRes)) {
-          setFunnelData(funnelRes.data.stages);
-        }
-      } finally {
-        setAnalyticsLoading(false);
-      }
+  const loadAnalytics = async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const [revenueRes, funnelRes, activityRes] = await Promise.all([
+        analyticsService.getDailyRevenue({ days: 14 }),
+        analyticsService.getFunnelAnalytics(),
+        analyticsService.getRecentActivity(),
+      ]);
+
+      if (isSuccessResponse(revenueRes)) setRevenueData(revenueRes.data);
+      else setAnalyticsError('Failed to load revenue data');
+
+      if (isSuccessResponse(funnelRes)) setFunnelData(funnelRes.data.stages);
+      if (isSuccessResponse(activityRes)) setActivityFeed(activityRes.data);
+
+      setLastUpdated(new Date());
+    } catch {
+      setAnalyticsError('Failed to load analytics');
+    } finally {
+      setAnalyticsLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadAnalytics();
   }, []);
 
@@ -129,9 +140,21 @@ export default function AdminOverviewPage() {
           </p>
         </div>
         <p className="text-xs text-muted-foreground mt-2 md:mt-0">
-          Updated just now
+          {lastUpdated ? `Updated ${formatTime(lastUpdated)}` : 'Loading…'}
         </p>
       </div>
+
+      {(statsError || sessionsError || stationsError || analyticsError) && (
+        <AdminErrorBanner
+          message={statsError || sessionsError || stationsError || analyticsError || 'Data load error'}
+          onRetry={() => {
+            refetchStats();
+            fetchSessions({ limit: 5 });
+            fetchStations({ limit: 4 });
+            loadAnalytics();
+          }}
+        />
+      )}
 
       {/* Alerts Banner */}
       {dashboardStats && dashboardStats.stationsOnline < dashboardStats.stationsTotal && (
@@ -171,6 +194,9 @@ export default function AdminOverviewPage() {
           </div>
           <div>
             <div className="h-64">
+              {revenueData.length === 0 && !analyticsLoading ? (
+                <AdminEmptyState title="No revenue data yet" description="Completed rentals will appear here." />
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueData}>
                   <defs>
@@ -210,6 +236,7 @@ export default function AdminOverviewPage() {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -277,9 +304,10 @@ export default function AdminOverviewPage() {
               <div className="flex items-center justify-center h-32">
                 <Spinner />
               </div>
+            ) : recentSessions.length === 0 ? (
+              <AdminEmptyState title="No sessions yet" description="Rental sessions will appear here as customers rent." />
             ) : (
               <>
-                {/* Desktop Table */}
                 <div className="hidden md:block">
                   <table className="w-full">
                     <thead>
@@ -368,6 +396,8 @@ export default function AdminOverviewPage() {
               <div className="flex items-center justify-center h-32">
                 <Spinner />
               </div>
+            ) : stationHealth.length === 0 ? (
+              <AdminEmptyState title="No stations" description="Stations register when hardware connects." />
             ) : (
               stationHealth.map((station) => (
                 <div
@@ -417,27 +447,23 @@ export default function AdminOverviewPage() {
           <span className="text-xs text-muted-foreground">Real-time</span>
         </div>
         <div className="space-y-0">
-          {[
-            { type: 'rental_start', user: 'alex@email.com', station: 'A-001', time: '2m' },
-            { type: 'return', user: 'maria@email.com', station: 'B-003', time: '5m' },
-            { type: 'reward', user: 'john@email.com', station: '-', time: '8m' },
-            { type: 'rental_start', user: 'sam@email.com', station: 'A-002', time: '12m' },
-            { type: 'return', user: 'lisa@email.com', station: 'C-001', time: '15m' },
-          ].map((activity, index) => (
-            <div key={index} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-foreground">
-                  {activity.type === 'rental_start' && 'Rental started'}
-                  {activity.type === 'return' && 'Power bank returned'}
-                  {activity.type === 'reward' && 'Reward claimed'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {activity.user}{activity.station !== '-' && ` · ${activity.station}`}
-                </p>
+          {activityFeed.length === 0 ? (
+            <AdminEmptyState title="No recent activity" />
+          ) : (
+            activityFeed.map((activity, index) => (
+              <div key={`${activity.time}-${index}`} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground">{activity.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {activity.user}{activity.station !== '—' && ` · ${activity.station}`}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                  {formatDateTime(new Date(activity.time))}
+                </span>
               </div>
-              <span className="text-xs text-muted-foreground">{activity.time}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

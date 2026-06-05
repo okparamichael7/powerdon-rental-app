@@ -1,4 +1,6 @@
 // Database module exports
+// Repositories use the Supabase service role (bypasses RLS). All callers must enforce
+// auth at the API/route layer via requireAdminSession, authorizeSessionAccess, etc.
 export * from './types';
 export { stationRepository, type StationWithSlots, type StationFilters, type CommandFilters } from './station-repository';
 export { sessionRepository, userRepository, rewardRepository, type SessionWithRelations, type SessionFilters, type CreateSessionData } from './session-repository';

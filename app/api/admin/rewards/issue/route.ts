@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { rewardRepository, sessionRepository, campaignRepository } from '@/lib/db'
 import { mapRewardFromDb } from '@/lib/mappers/domain-mappers'
+import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
 
-  const body = await request.json()
-  const { sessionId, campaignId } = body as { sessionId?: string; campaignId?: string }
+  const validated = await validateBody(request, schemas.issueReward)
+  if (!validated.success) return validated.error
 
-  if (!sessionId || !campaignId) {
-    return NextResponse.json({ success: false, error: 'sessionId and campaignId required' }, { status: 400 })
-  }
+  const { sessionId, campaignId } = validated.data
 
   try {
     const session = await sessionRepository.getById(sessionId)

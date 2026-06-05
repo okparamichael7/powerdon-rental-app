@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { userRepository } from '@/lib/db'
 import { mapUserFromDb } from '@/lib/mappers/domain-mappers'
+import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +27,9 @@ export async function PATCH(
   if (!auth.ok) return auth.response
 
   const { id } = await params
-  const body = await request.json()
+  const validated = await validateBody(request, schemas.updateUser)
+  if (!validated.success) return validated.error
+  const body = validated.data
   const user = await userRepository.update(id, {
     name: body.name,
     phone: body.phone,

@@ -2,6 +2,8 @@
 
 Use this guide after applying Supabase migrations (`002`, `003`, `004`) to verify the PowerDon rental app and WsCharge v5.8P integration.
 
+**Production deploy:** see [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md).
+
 ## Prerequisites
 
 - Node.js 18+ installed
@@ -214,6 +216,7 @@ More detail: [docs/wscharge/RUNBOOK.md](./wscharge/RUNBOOK.md)
 ## 7. Related documentation
 
 - [Vercel environment variables](./VERCEL_ENV.md)
+- [Hetzner TCP proxy setup](./HETZNER_TCP_PROXY_SETUP.md)
 - [Staff access (admin roles)](./STAFF_ACCESS.md)
 - [PWA rental flow](./PWA_RENTAL_FLOW.md)
 - [Testing a real station](./TESTING_REAL_STATION.md)

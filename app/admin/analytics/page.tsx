@@ -26,8 +26,11 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
-import { Download, TrendingUp, Clock, Zap, Euro, Gift, RefreshCw, AlertCircle } from "lucide-react"
+import { Download, Clock, Zap, Euro, Gift, RefreshCw, AlertCircle } from "lucide-react"
 import { formatNumber } from '@/lib/utils';
+import { daysFromRange } from '@/lib/admin/date-range';
+import { downloadCsv } from '@/lib/admin/export-csv';
+import { AdminEmptyState } from '@/components/admin/admin-states';
 import { analyticsService } from '@/lib/services';
 import { isSuccessResponse } from '@/lib/api/client';
 import type { 
@@ -36,15 +39,6 @@ import type {
   RewardAnalytics, 
   FunnelAnalytics 
 } from '@/lib/api/types';
-
-// Duration distribution (static for now - could be computed from session analytics)
-const durationDistribution = [
-  { name: "< 30 min", value: 15, color: "#e5e7eb" },
-  { name: "30-60 min", value: 25, color: "#93c5fd" },
-  { name: "1-2 hrs", value: 35, color: "#3b82f6" },
-  { name: "2-4 hrs", value: 18, color: "#1d4ed8" },
-  { name: "> 4 hrs", value: 7, color: "#1e3a8a" },
-];
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('7d');
@@ -57,18 +51,24 @@ export default function AnalyticsPage() {
   const [rewardData, setRewardData] = useState<RewardAnalytics | null>(null);
   const [funnelData, setFunnelData] = useState<FunnelAnalytics | null>(null);
   const [hourlyData, setHourlyData] = useState<{ hour: string; count: number }[]>([]);
+  const [durationDistribution, setDurationDistribution] = useState<
+    { name: string; value: number; count: number; color: string }[]
+  >([]);
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const days = daysFromRange(timeRange);
     
     try {
-      const [revenueRes, sessionRes, rewardRes, funnelRes, hourlyRes] = await Promise.all([
-        analyticsService.getRevenueAnalytics(),
-        analyticsService.getSessionAnalytics(),
-        analyticsService.getRewardAnalytics(),
+      const range = { days };
+      const [revenueRes, sessionRes, rewardRes, funnelRes, hourlyRes, durationRes] = await Promise.all([
+        analyticsService.getRevenueAnalytics(range),
+        analyticsService.getSessionAnalytics(range),
+        analyticsService.getRewardAnalytics(range),
         analyticsService.getFunnelAnalytics(),
-        analyticsService.getHourlyDistribution(),
+        analyticsService.getHourlyDistribution(range),
+        analyticsService.getDurationDistribution(range),
       ]);
       
       if (isSuccessResponse(revenueRes)) setRevenueData(revenueRes.data);
@@ -76,12 +76,13 @@ export default function AnalyticsPage() {
       if (isSuccessResponse(rewardRes)) setRewardData(rewardRes.data);
       if (isSuccessResponse(funnelRes)) setFunnelData(funnelRes.data);
       if (isSuccessResponse(hourlyRes)) setHourlyData(hourlyRes.data);
+      if (isSuccessResponse(durationRes)) setDurationDistribution(durationRes.data);
     } catch (err) {
       setError('Failed to load analytics data');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [timeRange]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -153,7 +154,18 @@ export default function AnalyticsPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            disabled={!revenueData}
+            onClick={() => {
+              if (!revenueData) return;
+              downloadCsv(
+                `powerdon-analytics-${timeRange}.csv`,
+                ['period', 'revenue', 'sessions'],
+                revenueData.revenueByPeriod.map((r) => [r.period, r.revenue, r.sessions]),
+              );
+            }}
+          >
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -166,10 +178,6 @@ export default function AnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <Euro className="h-5 w-5 text-muted-foreground" />
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                +23%
-              </span>
             </div>
             <p className="text-xl font-semibold text-foreground">
               {revenueData ? `€${formatNumber(revenueData.totalRevenue)}` : '-'}
@@ -181,10 +189,6 @@ export default function AnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <Zap className="h-5 w-5 text-muted-foreground" />
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                +18%
-              </span>
             </div>
             <p className="text-xl font-semibold text-foreground">
               {sessionData ? formatNumber(sessionData.totalSessions) : '-'}
@@ -196,10 +200,6 @@ export default function AnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                +5%
-              </span>
             </div>
             <p className="text-xl font-semibold text-foreground">
               {sessionData ? formatDuration(sessionData.averageDuration) : '-'}
@@ -211,10 +211,6 @@ export default function AnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <Gift className="h-5 w-5 text-muted-foreground" />
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                +12%
-              </span>
             </div>
             <p className="text-xl font-semibold text-foreground">
               {rewardData ? `${rewardData.redemptionRate.toFixed(0)}%` : '-'}
@@ -302,6 +298,9 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
+              {durationDistribution.length === 0 || durationDistribution.every((d) => d.count === 0) ? (
+                <AdminEmptyState title="No completed rentals in range" />
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -326,16 +325,19 @@ export default function AnalyticsPage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
+              )}
             </div>
+            {durationDistribution.some((d) => d.count > 0) && (
             <div className="grid grid-cols-2 gap-2 mt-4">
               {durationDistribution.map((item) => (
                 <div key={item.name} className="flex items-center gap-2 text-sm">
                   <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-muted-foreground">{item.name}</span>
-                  <span className="font-medium ml-auto">{item.value}%</span>
+                  <span className="font-medium ml-auto">{item.value}% ({item.count})</span>
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
 

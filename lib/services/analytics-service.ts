@@ -30,6 +30,8 @@ export interface IAnalyticsService {
   getFunnelAnalytics(campaignId?: string): Promise<ApiResponse<FunnelAnalytics>>;
   getHourlyDistribution(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ hour: string; count: number }[]>>;
   getDailyRevenue(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ date: string; revenue: number; sessions: number }[]>>;
+  getDurationDistribution(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ name: string; value: number; count: number; color: string }[]>>;
+  getRecentActivity(): Promise<ApiResponse<{ type: string; label: string; user: string; station: string; time: string }[]>>;
 }
 
 // Mock implementation
@@ -138,6 +140,16 @@ class MockAnalyticsService implements IAnalyticsService {
       revenue: d.revenue,
       sessions: d.sessions,
     })));
+  }
+
+  async getDurationDistribution(): Promise<ApiResponse<{ name: string; value: number; count: number; color: string }[]>> {
+    await simulateNetworkDelay();
+    return createSuccessResponse([]);
+  }
+
+  async getRecentActivity(): Promise<ApiResponse<{ type: string; label: string; user: string; station: string; time: string }[]>> {
+    await simulateNetworkDelay();
+    return createSuccessResponse([]);
   }
 }
 

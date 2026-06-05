@@ -2,13 +2,25 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { getAdminDataSource, isMockDataEnabled } from '@/lib/services/config'
 
 export default function AdminSettingsPage() {
+  const pwaMock = isMockDataEnabled()
+
   const checks = [
     { name: 'Supabase URL', ok: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) },
     { name: 'Stripe publishable', ok: Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) },
-    { name: 'Mock data mode', ok: process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' },
     { name: 'App URL', ok: Boolean(process.env.NEXT_PUBLIC_APP_URL) },
+    {
+      name: 'Admin data source',
+      ok: true,
+      label: getAdminDataSource(),
+    },
+    {
+      name: 'PWA mock mode (customer app only)',
+      ok: !pwaMock,
+      label: pwaMock ? 'Enabled' : 'Disabled',
+    },
   ]
 
   return (
@@ -21,15 +33,25 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Runtime configuration</CardTitle>
-          <CardDescription>Values exposed to the browser are shown here. Secrets are configured server-side only.</CardDescription>
+          <CardDescription>
+            Admin always uses production APIs via <code className="text-xs">lib/services/index.ts</code>. PWA mock is
+            independent.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {checks.map((c) => (
             <div key={c.name} className="flex items-center justify-between py-2 border-b last:border-0">
               <span className="text-sm">{c.name}</span>
-              <Badge variant={c.ok ? 'default' : 'secondary'}>{c.ok ? 'Set' : 'Not set'}</Badge>
+              <Badge variant={c.ok ? 'default' : 'destructive'}>
+                {'label' in c && c.label ? c.label : c.ok ? 'Set' : 'Not set'}
+              </Badge>
             </div>
           ))}
+          {pwaMock && (
+            <p className="text-sm text-muted-foreground pt-2">
+              PWA mock is on for the customer app only; admin always uses production APIs.
+            </p>
+          )}
         </CardContent>
       </Card>
 

@@ -7,6 +7,7 @@ import * as protocol from '@/lib/wscharge/protocol';
 import { sessionRepository, stationRepository } from '@/lib/db';
 import { withPublicApi } from '@/lib/api/public-route';
 import { authorizeSessionAccess } from '@/lib/security/session-access';
+import { validateBody, schemas } from '@/lib/security/validation';
 
 export const POST = withPublicApi(async (
   request: NextRequest,
@@ -15,19 +16,10 @@ export const POST = withPublicApi(async (
   const { id: stationId } = await context!.params;
 
   try {
-    const body = await request.json();
-    const { slotNumber, sessionId, unlockToken } = body as {
-      slotNumber?: number;
-      sessionId: string;
-      unlockToken?: string;
-    };
+    const validated = await validateBody(request, schemas.unlockRequest);
+    if (!validated.success) return validated.error;
 
-    if (!sessionId) {
-      return NextResponse.json(
-        { success: false, error: 'Session ID is required' },
-        { status: 400 }
-      );
-    }
+    const { slotNumber, sessionId, unlockToken } = validated.data;
 
     let session = await sessionRepository.getById(sessionId);
     if (!session) {

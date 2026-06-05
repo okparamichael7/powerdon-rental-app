@@ -1,5 +1,6 @@
 'use server'
 
+import { assertStaffSession } from '@/lib/admin/assert-staff-server'
 import { getPaymentIntentsForReport, getRefundsForReport, getDisputes } from '@/lib/stripe/payment-service'
 import { createServiceClient } from '@/lib/supabase/admin'
 import type { DbRentalSession } from '@/lib/db/types'
@@ -72,6 +73,7 @@ export interface BillingReport {
 export async function getBillingOverview(
   days: number = 30
 ): Promise<BillingReport> {
+  await assertStaffSession()
   const span = logger.startSpan('actions.getBillingOverview')
   
   try {

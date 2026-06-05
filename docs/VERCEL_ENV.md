@@ -39,7 +39,8 @@ On Vercel you set `TCP_PROXY_URL` to the proxy’s **HTTP** endpoint (port **808
 | Variable | Value |
 |----------|--------|
 | `NODE_ENV` | `production` (Vercel sets automatically) |
-| `NEXT_PUBLIC_USE_MOCK_DATA` | **Unset** or `false` |
+| `NEXT_PUBLIC_USE_MOCK_DATA` | **Unset** or `false` (PWA only; admin ignores this) |
+| `NEXT_PUBLIC_ADMIN_USE_MOCK_DATA` | **Unset** or `false` (admin demo mode only) |
 | `ALLOW_INSECURE_HARDWARE_DEV` | **Unset** or `false` |
 
 After deploy, check `https://your-app.vercel.app/api/health` → `productionReady: true` when required vars are set.
@@ -75,6 +76,10 @@ After deploy, check `https://your-app.vercel.app/api/health` → `productionRead
 | `ALLOWED_IPS` | Comma-separated IP allowlist for internal endpoints |
 
 ---
+
+## TCP proxy on Hetzner (step-by-step)
+
+See **[HETZNER_TCP_PROXY_SETUP.md](./HETZNER_TCP_PROXY_SETUP.md)** for a full beginner guide (create VPS, firewall, PM2, env, cabinet IP).
 
 ## Do not put on Vercel (TCP proxy host only)
 
@@ -150,6 +155,7 @@ Webhook signing secrets are **per endpoint** — use a separate Stripe webhook (
 
 ## Related docs
 
+- [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md) — full production checklist (Vercel + Hetzner + Supabase + Stripe)
 - [STAFF_ACCESS.md](./STAFF_ACCESS.md) — admin bootstrap on Vercel
 - [wscharge/RUNBOOK.md](./wscharge/RUNBOOK.md) — proxy operations
 - [PWA_RENTAL_FLOW.md](./PWA_RENTAL_FLOW.md) — rental + Stripe flow

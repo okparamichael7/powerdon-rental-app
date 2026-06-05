@@ -4,6 +4,18 @@ import type { DbRentalSession } from '@/lib/db/types'
 
 export const SESSION_TOKEN_HEADER = 'x-session-token'
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const SESSION_CODE_RE = /^[A-Z0-9]{8}$/
+
+export function isSessionUuid(identifier: string): boolean {
+  return UUID_RE.test(identifier)
+}
+
+export function isSessionCode(identifier: string): boolean {
+  return SESSION_CODE_RE.test(identifier)
+}
+
 export function extractSessionToken(request: NextRequest): string | null {
   const header = request.headers.get(SESSION_TOKEN_HEADER)
   if (header?.trim()) return header.trim()
@@ -51,6 +63,18 @@ export async function authorizeSessionAccess(
       { status: 403 },
     ),
   }
+}
+
+/**
+ * UUID lookups require a valid unlock token or staff auth.
+ * Session codes may be used for status checks without revealing PII.
+ */
+export function denyUuidLookupWithoutAuth(
+  lookupKey: string,
+  authorized: boolean,
+): NextResponse | null {
+  if (authorized || !isSessionUuid(lookupKey)) return null
+  return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 })
 }
 
 /** Public-safe session fields (no PII). */

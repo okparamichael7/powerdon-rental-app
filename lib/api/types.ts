@@ -194,7 +194,7 @@ export type SupportCategory =
   | 'other';
 
 export type SupportPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type SupportStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
 
 export interface CreateSupportTicketRequest {
   category: SupportCategory;
@@ -234,8 +234,9 @@ export interface SupportTicketFilters extends PaginationParams {
 
 // Analytics API types
 export interface AnalyticsDateRange {
-  from: Date;
-  to: Date;
+  from?: Date;
+  to?: Date;
+  days?: number;
   granularity?: 'hour' | 'day' | 'week' | 'month';
 }
 

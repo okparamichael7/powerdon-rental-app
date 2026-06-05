@@ -335,26 +335,39 @@ export class ProductionRewardService implements IRewardService {
 }
 
 export class ProductionAnalyticsService implements IAnalyticsService {
+  private daysParam(dateRange?: AnalyticsDateRange): string {
+    const days = dateRange?.days ?? 30
+    return buildQuery({ days })
+  }
+
   async getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
     return apiFetch<DashboardStats>('/api/admin/analytics?type=dashboard')
   }
-  async getRevenueAnalytics(_dateRange?: AnalyticsDateRange): Promise<ApiResponse<RevenueAnalytics>> {
-    return apiFetch<RevenueAnalytics>('/api/admin/analytics?type=revenue')
+  async getRevenueAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<RevenueAnalytics>> {
+    return apiFetch<RevenueAnalytics>(`/api/admin/analytics?type=revenue${this.daysParam(dateRange)}`)
   }
-  async getSessionAnalytics(_dateRange?: AnalyticsDateRange): Promise<ApiResponse<SessionAnalytics>> {
-    return apiFetch<SessionAnalytics>('/api/admin/analytics?type=sessions')
+  async getSessionAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<SessionAnalytics>> {
+    return apiFetch<SessionAnalytics>(`/api/admin/analytics?type=sessions${this.daysParam(dateRange)}`)
   }
-  async getRewardAnalytics(_dateRange?: AnalyticsDateRange): Promise<ApiResponse<RewardAnalytics>> {
-    return apiFetch<RewardAnalytics>('/api/admin/analytics?type=rewards')
+  async getRewardAnalytics(dateRange?: AnalyticsDateRange): Promise<ApiResponse<RewardAnalytics>> {
+    return apiFetch<RewardAnalytics>(`/api/admin/analytics?type=rewards${this.daysParam(dateRange)}`)
   }
   async getFunnelAnalytics(_campaignId?: string): Promise<ApiResponse<FunnelAnalytics>> {
     return apiFetch<FunnelAnalytics>('/api/admin/analytics?type=funnel')
   }
-  async getHourlyDistribution(_dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ hour: string; count: number }[]>> {
-    return apiFetch<{ hour: string; count: number }[]>('/api/admin/analytics?type=hourly')
+  async getHourlyDistribution(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ hour: string; count: number }[]>> {
+    return apiFetch<{ hour: string; count: number }[]>(`/api/admin/analytics?type=hourly${this.daysParam(dateRange)}`)
   }
-  async getDailyRevenue(_dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ date: string; revenue: number; sessions: number }[]>> {
-    return apiFetch<{ date: string; revenue: number; sessions: number }[]>('/api/admin/analytics?type=daily-revenue')
+  async getDailyRevenue(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ date: string; revenue: number; sessions: number }[]>> {
+    return apiFetch<{ date: string; revenue: number; sessions: number }[]>(
+      `/api/admin/analytics?type=daily-revenue${this.daysParam(dateRange)}`,
+    )
+  }
+  async getDurationDistribution(dateRange?: AnalyticsDateRange): Promise<ApiResponse<{ name: string; value: number; count: number; color: string }[]>> {
+    return apiFetch(`/api/admin/analytics?type=duration${this.daysParam(dateRange)}`)
+  }
+  async getRecentActivity(): Promise<ApiResponse<{ type: string; label: string; user: string; station: string; time: string }[]>> {
+    return apiFetch('/api/admin/analytics?type=activity')
   }
 }
 

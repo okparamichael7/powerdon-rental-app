@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Search, Plus, MapPin, Battery, Wifi, WifiOff, Zap, Clock, AlertTriangle } from "lucide-react"
+import Link from "next/link"
+import { Search, MapPin, Battery, Wifi, WifiOff, Zap, Clock, AlertTriangle, Cpu } from "lucide-react"
+import { AdminErrorBanner, AdminEmptyState } from "@/components/admin/admin-states"
 import { useStations, useSessions } from "@/hooks/use-services"
 import type { Station, RentalSession } from "@/lib/types"
 import { formatDateTime } from "@/lib/utils"
@@ -30,7 +32,7 @@ export default function StationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedStation, setSelectedStation] = useState<Station | null>(null)
   
-  const { data: stations, loading, fetchStations } = useStations()
+  const { data: stations, loading, error, fetchStations, refetch } = useStations()
   const { data: allSessions, fetchSessions } = useSessions()
 
   // Fetch stations on mount with filters
@@ -89,11 +91,15 @@ export default function StationsPage() {
           <h1 className="text-xl font-semibold text-foreground">Stations</h1>
           <p className="text-sm text-muted-foreground">Monitor and manage power bank stations</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Station
+        <Button variant="outline" asChild>
+          <Link href="/admin/hardware">
+            <Cpu className="mr-2 h-4 w-4" />
+            Hardware Console
+          </Link>
         </Button>
       </div>
+
+      {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
 
       {/* Stats Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -180,6 +186,8 @@ export default function StationsPage() {
         <div className="flex items-center justify-center h-64">
           <Spinner className="h-8 w-8" />
         </div>
+      ) : filteredStations.length === 0 ? (
+        <AdminEmptyState title="No stations found" description="Stations appear when registered in the database or connected via hardware." />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredStations.map((station, index) => (
@@ -340,8 +348,9 @@ export default function StationsPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1">Edit Station</Button>
-                  <Button variant="outline" className="flex-1">View Logs</Button>
+                  <Button variant="outline" className="flex-1" asChild>
+                    <Link href={`/admin/hardware`}>Open in Hardware</Link>
+                  </Button>
                 </div>
               </div>
             </>

@@ -8,6 +8,7 @@ import { PowerDonLogo } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { useActiveCampaigns } from '@/hooks/use-services';
+import { useStaffRole } from '@/hooks/use-staff-role';
 import {
   LayoutDashboard,
   Zap,
@@ -25,21 +26,30 @@ import {
   UserCircle,
   Shield,
   LogOut,
+  LifeBuoy,
+  ScrollText,
 } from 'lucide-react';
 
-const navigation = [
+const navigation: Array<{
+  name: string
+  href: string
+  icon: typeof LayoutDashboard
+  adminOnly?: boolean
+}> = [
   { name: 'Overview', href: '/admin', icon: LayoutDashboard },
   { name: 'Sessions', href: '/admin/sessions', icon: Zap },
   { name: 'Campaigns', href: '/admin/campaigns', icon: Megaphone },
   { name: 'Stations', href: '/admin/stations', icon: Radio },
   { name: 'Hardware', href: '/admin/hardware', icon: Cpu },
   { name: 'Rewards', href: '/admin/rewards', icon: Gift },
-  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Support', href: '/admin/support', icon: LifeBuoy },
+  { name: 'Customers', href: '/admin/users', icon: Users },
   { name: 'Leads', href: '/admin/leads', icon: UserCircle },
   { name: 'Billing', href: '/admin/billing', icon: CreditCard },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Ops', href: '/admin/ops', icon: Activity },
-  { name: 'Staff', href: '/admin/staff', icon: Shield },
+  { name: 'Staff', href: '/admin/staff', icon: Shield, adminOnly: true },
+  { name: 'Audit Log', href: '/admin/audit', icon: ScrollText, adminOnly: true },
 ];
 
 export default function AdminLayout({
@@ -52,7 +62,9 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const { data: campaigns } = useActiveCampaigns();
+  const { isAdmin } = useStaffRole();
   const activeCampaign = campaigns?.[0];
+  const visibleNav = navigation.filter((item) => !item.adminOnly || isAdmin);
 
   useEffect(() => {
     const supabase = createClient();
@@ -106,7 +118,7 @@ export default function AdminLayout({
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-            {navigation.map((item) => {
+            {visibleNav.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/admin' && pathname.startsWith(item.href));
               return (

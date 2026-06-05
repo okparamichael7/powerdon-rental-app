@@ -16,6 +16,16 @@ import {
 } from '@/components/ui/sheet';
 import { useSessions } from '@/hooks/use-services';
 import { rentalService } from '@/lib/services';
+import { downloadCsv } from '@/lib/admin/export-csv';
+import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { isSuccessResponse } from '@/lib/api/client';
 import type { RentalSession, TimelineEvent } from '@/lib/types';
 import { formatDateTime, formatTime } from '@/lib/utils';
@@ -52,7 +62,10 @@ export default function SessionsPage() {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
-  const { data: sessions, loading, fetchSessions, refetch } = useSessions();
+  const { data: sessions, loading, error, fetchSessions, refetch } = useSessions();
+  const [cancelTarget, setCancelTarget] = useState<RentalSession | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // Fetch sessions with filters
   useEffect(() => {
@@ -89,6 +102,40 @@ export default function SessionsPage() {
 
   const filteredSessions = sessions || [];
 
+  const handleExport = () => {
+    downloadCsv(
+      'powerdon-sessions.csv',
+      ['sessionCode', 'userEmail', 'station', 'status', 'paymentStatus', 'amountCharged'],
+      filteredSessions.map((s) => [
+        s.sessionCode,
+        s.userEmail,
+        s.stationName,
+        s.status,
+        s.paymentStatus,
+        s.amountCharged,
+      ]),
+    );
+  };
+
+  const handleCancelSession = async () => {
+    if (!cancelTarget) return;
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const result = await rentalService.cancelSession(cancelTarget.id);
+      if (result.success) {
+        setActionMessage('Session cancelled');
+        setCancelTarget(null);
+        setSelectedSession(null);
+        refetch();
+      } else {
+        setActionMessage(result.error?.message ?? 'Cancel failed');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -100,7 +147,7 @@ export default function SessionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={!filteredSessions.length}>
             <Download size={16} className="mr-2" />
             Export
           </Button>
@@ -110,6 +157,8 @@ export default function SessionsPage() {
           </Button>
         </div>
       </div>
+
+      {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
 
       {/* Filters */}
       <Card>
@@ -165,9 +214,10 @@ export default function SessionsPage() {
             <div className="flex items-center justify-center h-64">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : filteredSessions.length === 0 ? (
+            <AdminEmptyState title="No sessions match your filters" />
           ) : (
             <>
-              {/* Desktop Table */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -419,6 +469,8 @@ export default function SessionsPage() {
                       <div className="flex items-center justify-center h-32">
                         <Spinner />
                       </div>
+                    ) : timelineEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">No timeline events recorded</p>
                     ) : (
                       <div className="space-y-4">
                         {timelineEvents.map((event, index) => {
@@ -447,20 +499,52 @@ export default function SessionsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1">
-                    Contact User
+                {actionMessage && (
+                  <p className="text-sm text-muted-foreground" role="status">{actionMessage}</p>
+                )}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {selectedSession.userEmail && (
+                    <Button variant="outline" className="flex-1" asChild>
+                      <a href={`mailto:${selectedSession.userEmail}`}>Contact User</a>
+                    </Button>
+                  )}
+                  <Button variant="outline" className="flex-1" asChild>
+                    <a href="/admin/billing">View in Billing</a>
                   </Button>
-                  <Button variant="outline" className="flex-1">
-                    Issue Refund
-                  </Button>
+                  {['pending', 'active'].includes(selectedSession.status) && (
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() => setCancelTarget(selectedSession)}
+                    >
+                      Cancel Session
+                    </Button>
+                  )}
                 </div>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel session?</DialogTitle>
+            <DialogDescription>
+              This releases the payment hold and marks session {cancelTarget?.sessionCode} as cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={actionLoading}>
+              Keep session
+            </Button>
+            <Button variant="destructive" onClick={handleCancelSession} disabled={actionLoading}>
+              {actionLoading ? 'Cancelling…' : 'Confirm cancel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -95,6 +95,88 @@ export const schemas = {
     slotNumber: z.number().int().min(1).max(12).optional(),
     settings: z.record(z.unknown()).optional(),
   }),
+
+  adminStationCommand: z.object({
+    command: z.enum([
+      'query_inventory',
+      'borrow',
+      'force_eject',
+      'full_eject',
+      'reboot',
+      'query_info',
+    ]),
+    slotNumber: z.number().int().min(1).max(12).optional(),
+  }),
+
+  unlockRequest: z.object({
+    sessionId: z.string().min(1).max(64),
+    slotNumber: z.number().int().min(1).max(12).optional(),
+    unlockToken: z.string().min(8).max(128).optional(),
+  }),
+
+  createCampaign: z.object({
+    name: z.string().min(1).max(120),
+    eventName: z.string().min(1).max(120),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    hourlyRate: z.coerce.number().min(0).max(1000),
+    dailyCap: z.coerce.number().min(0).max(10000),
+    depositAmount: z.coerce.number().min(0).max(10000),
+    rewardThresholdMinutes: z.coerce.number().int().min(0).max(10080),
+    rewardType: z.string().max(32).optional(),
+    rewardValue: z.coerce.number().min(0).max(10000),
+    rewardDescription: z.string().max(500).optional(),
+    isActive: z.boolean().optional(),
+  }),
+
+  issueReward: z.object({
+    sessionId: z.string().uuid(),
+    campaignId: z.string().uuid(),
+  }),
+
+  updateCampaign: z
+    .object({
+      name: z.string().min(1).max(120).optional(),
+      eventName: z.string().min(1).max(120).optional(),
+      startDate: z.coerce.date().optional(),
+      endDate: z.coerce.date().optional(),
+      hourlyRate: z.coerce.number().min(0).max(1000).optional(),
+      dailyCap: z.coerce.number().min(0).max(10000).optional(),
+      depositAmount: z.coerce.number().min(0).max(10000).optional(),
+      rewardThresholdMinutes: z.coerce.number().int().min(0).max(10080).optional(),
+      rewardType: z.string().max(32).optional(),
+      rewardValue: z.coerce.number().min(0).max(10000).optional(),
+      rewardDescription: z.string().max(500).optional(),
+      isActive: z.boolean().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  updateSupportTicket: z
+    .object({
+      status: z
+        .enum(['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'])
+        .optional(),
+      resolution: z.string().max(5000).optional(),
+      priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  updateUser: z
+    .object({
+      name: z.string().min(1).max(120).optional(),
+      phone: z.string().max(30).optional(),
+      marketingConsent: z.boolean().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  updateStation: z
+    .object({
+      status: z.enum(['online', 'offline', 'maintenance', 'low_battery', 'error']).optional(),
+      isEnabled: z.boolean().optional(),
+      name: z.string().min(1).max(120).optional(),
+      location: z.string().max(255).optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
 };
 
 /**

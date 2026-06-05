@@ -1,9 +1,22 @@
 /**
- * Mock data requires explicit opt-in everywhere (including development).
- * Set NEXT_PUBLIC_USE_MOCK_DATA=true only for local UI work without Supabase.
+ * PWA customer app mock layer (lib/data). Does NOT affect the admin dashboard.
+ * Set NEXT_PUBLIC_USE_MOCK_DATA=true only for offline PWA UI work without Supabase.
  */
 export function isMockDataEnabled(): boolean {
   return process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'
+}
+
+/**
+ * @deprecated Admin runtime always uses production services (lib/services/index.ts).
+ * NEXT_PUBLIC_ADMIN_USE_MOCK_DATA is ignored; kept for legacy env diagnostics only.
+ */
+export function isAdminMockDataEnabled(): boolean {
+  return false
+}
+
+/** Admin dashboard always loads from /api/admin and production service classes. */
+export function getAdminDataSource(): 'production' {
+  return 'production'
 }
 
 /** True when Stripe server key is set but the PWA publishable key is missing. */

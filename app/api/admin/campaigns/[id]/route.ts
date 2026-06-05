@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { campaignRepository } from '@/lib/db'
 import { mapCampaignFromDb } from '@/lib/mappers/domain-mappers'
+import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function GET(
   request: NextRequest,
@@ -22,18 +23,20 @@ export async function PATCH(
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
   const { id } = await params
-  const body = await request.json()
+  const validated = await validateBody(request, schemas.updateCampaign)
+  if (!validated.success) return validated.error
+  const body = validated.data
   const updated = await campaignRepository.update(id, {
     name: body.name,
     event_name: body.eventName,
-    start_date: body.startDate,
-    end_date: body.endDate,
-    hourly_rate: body.hourlyRate != null ? Number(body.hourlyRate) : undefined,
-    daily_cap: body.dailyCap != null ? Number(body.dailyCap) : undefined,
-    deposit_amount: body.depositAmount != null ? Number(body.depositAmount) : undefined,
-    reward_threshold_minutes: body.rewardThresholdMinutes != null ? Number(body.rewardThresholdMinutes) : undefined,
+    start_date: body.startDate?.toISOString(),
+    end_date: body.endDate?.toISOString(),
+    hourly_rate: body.hourlyRate,
+    daily_cap: body.dailyCap,
+    deposit_amount: body.depositAmount,
+    reward_threshold_minutes: body.rewardThresholdMinutes,
     reward_type: body.rewardType,
-    reward_value: body.rewardValue != null ? Number(body.rewardValue) : undefined,
+    reward_value: body.rewardValue,
     reward_description: body.rewardDescription,
     is_active: body.isActive,
   })

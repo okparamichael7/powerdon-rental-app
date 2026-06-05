@@ -51,32 +51,45 @@ interface SystemHealth {
   productionReady?: boolean;
 }
 
-interface MetricsData {
-  timestamp: string;
-  counters: Record<string, Array<{ value: number; labels: Record<string, string> }>>;
-  gauges: Record<string, Array<{ value: number; labels: Record<string, string> }>>;
+interface EnvCheck {
+  name: string;
+  ok: boolean;
+  required: boolean;
+}
+
+interface OpsSnapshot {
+  productionReady: boolean;
+  envChecks: EnvCheck[];
+  activeSessions: number;
+  totalSessions: number;
+  stationsOnline: number;
+  stationsTotal: number;
 }
 
 export default function OpsPage() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [ops, setOps] = useState<OpsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [healthRes, metricsRes] = await Promise.all([
-        fetch('/api/health'),
-        fetch('/api/metrics?format=json'),
-      ]);
-
-      if (healthRes.ok) {
-        setHealth(await healthRes.json());
+      const opsRes = await fetch('/api/admin/ops', { credentials: 'include' });
+      if (!opsRes.ok) {
+        throw new Error('Failed to load ops data');
       }
-
-      if (metricsRes.ok) {
-        setMetrics(await metricsRes.json());
+      const opsBody = await opsRes.json();
+      if (opsBody.success && opsBody.data) {
+        if (opsBody.data.health) setHealth(opsBody.data.health as SystemHealth);
+        setOps({
+          productionReady: Boolean(opsBody.data.productionReady),
+          envChecks: opsBody.data.envChecks ?? [],
+          activeSessions: Number(opsBody.data.activeSessions ?? 0),
+          totalSessions: Number(opsBody.data.totalSessions ?? 0),
+          stationsOnline: Number(opsBody.data.stationsOnline ?? 0),
+          stationsTotal: Number(opsBody.data.stationsTotal ?? 0),
+        });
       }
 
       setError(null);
@@ -130,25 +143,6 @@ export default function OpsPage() {
         {status.toUpperCase()}
       </Badge>
     );
-  };
-
-  const getMetricValue = (
-    type: 'counters' | 'gauges',
-    name: string,
-    labels?: Record<string, string>
-  ): number => {
-    if (!metrics) return 0;
-    const metricData = metrics[type]?.[name];
-    if (!metricData) return 0;
-
-    if (!labels) {
-      return metricData.reduce((sum, m) => sum + m.value, 0);
-    }
-
-    const match = metricData.find(m =>
-      Object.entries(labels).every(([k, v]) => m.labels[k] === v)
-    );
-    return match?.value || 0;
   };
 
   if (loading) {
@@ -257,10 +251,10 @@ export default function OpsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {getMetricValue('gauges', 'rental_sessions_active')}
+              {ops?.activeSessions ?? 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Ongoing rentals
+              From database ({ops?.totalSessions ?? 0} total)
             </p>
           </CardContent>
         </Card>
@@ -306,80 +300,31 @@ export default function OpsPage() {
         </CardContent>
       </Card>
 
-      {/* Metrics */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Request Metrics</CardTitle>
-            <CardDescription>HTTP request statistics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Requests</span>
-                <span className="font-medium">
-                  {getMetricValue('counters', 'http_requests_total')}
-                </span>
+      {/* Production readiness */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Production readiness</CardTitle>
+          <CardDescription>
+            {ops?.productionReady ? 'All required checks pass' : 'Some required production env vars are missing'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {(ops?.envChecks ?? []).map((check) => (
+              <div key={check.name} className="flex items-center justify-between py-2 border-b last:border-0">
+                <span className="text-sm">{check.name}</span>
+                <Badge variant={check.ok ? 'default' : check.required ? 'destructive' : 'secondary'}>
+                  {check.ok ? 'OK' : check.required ? 'Missing' : 'Optional'}
+                </Badge>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Successful (2xx)</span>
-                <span className="font-medium text-green-600">
-                  {getMetricValue('counters', 'http_requests_total', { status: '200' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Client Errors (4xx)</span>
-                <span className="font-medium text-yellow-600">
-                  {getMetricValue('counters', 'http_requests_total', { status: '400' }) +
-                   getMetricValue('counters', 'http_requests_total', { status: '401' }) +
-                   getMetricValue('counters', 'http_requests_total', { status: '404' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Server Errors (5xx)</span>
-                <span className="font-medium text-red-600">
-                  {getMetricValue('counters', 'http_requests_total', { status: '500' })}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Session Metrics</CardTitle>
-            <CardDescription>Rental session statistics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Sessions</span>
-                <span className="font-medium">
-                  {getMetricValue('counters', 'rental_sessions_total')}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Completed</span>
-                <span className="font-medium text-green-600">
-                  {getMetricValue('counters', 'rental_sessions_total', { status: 'completed' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Failed</span>
-                <span className="font-medium text-red-600">
-                  {getMetricValue('counters', 'rental_sessions_total', { status: 'failed' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Active</span>
-                <span className="font-medium text-blue-600">
-                  {getMetricValue('gauges', 'rental_sessions_active')}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            Prometheus metrics: configure <code className="text-xs">METRICS_API_KEY</code> and scrape{' '}
+            <code className="text-xs">/api/metrics</code> externally.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Connected Stations */}
       {health?.wscharge?.stations && health.wscharge.stations.length > 0 && (

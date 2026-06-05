@@ -4,6 +4,7 @@ import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository, campaignRepository } from '@/lib/db';
 import { enforceRateLimit, requireAdminSession } from '@/lib/api/route-helpers';
+import { validateBody, schemas } from '@/lib/security/validation';
 
 // GET /api/stations/[id] - Get station details (database and/or live hardware)
 export async function GET(
@@ -104,18 +105,10 @@ export async function POST(
   const { id: stationId } = await params;
 
   try {
-    const body = await request.json();
-    const { command, slotNumber } = body as { 
-      command: 'query_inventory' | 'borrow' | 'force_eject' | 'full_eject' | 'reboot' | 'query_info';
-      slotNumber?: number;
-    };
+    const validated = await validateBody(request, schemas.adminStationCommand);
+    if (!validated.success) return validated.error;
 
-    if (!command) {
-      return NextResponse.json(
-        { success: false, error: 'Command is required' },
-        { status: 400 }
-      );
-    }
+    const { command, slotNumber } = validated.data;
 
     let result: { success: boolean; data?: unknown; error?: string; commandBuffer: Buffer };
     let payload: Buffer | undefined;

@@ -6,9 +6,11 @@ import { sessionRepository } from '@/lib/db';
 import { withPublicApi } from '@/lib/api/public-route';
 import {
   authorizeSessionAccess,
+  denyUuidLookupWithoutAuth,
   extractSessionToken,
   toPublicSessionView,
 } from '@/lib/security/session-access';
+import { estimateRentalChargeEur } from '@/lib/rental/charge-estimate';
 
 export const GET = withPublicApi(async (
   request: NextRequest,
@@ -33,6 +35,9 @@ export const GET = withPublicApi(async (
     const access = await authorizeSessionAccess(request, session);
     const isFullAccess = access.authorized;
 
+    const uuidDenied = denyUuidLookupWithoutAuth(sessionId, isFullAccess);
+    if (uuidDenied) return uuidDenied;
+
     if (!isFullAccess) {
       return NextResponse.json({
         success: true,
@@ -50,8 +55,7 @@ export const GET = withPublicApi(async (
       const startedAt = new Date(session.started_at);
       const now = new Date();
       currentDurationMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
-      const hourlyCharge = (currentDurationMinutes / 60) * session.hourly_rate;
-      currentCharge = Math.min(hourlyCharge, session.daily_cap);
+      currentCharge = estimateRentalChargeEur(currentDurationMinutes);
     }
 
     const events = await sessionRepository.getEvents(session.id);
@@ -117,4 +121,4 @@ export const GET = withPublicApi(async (
       { status: 500 }
     );
   }
-});
+}, 'sessionLookup');

@@ -24,6 +24,11 @@ export function getProductionEnvChecks(): EnvCheck[] {
       required: isProd,
     },
     {
+      name: 'NEXT_PUBLIC_ADMIN_USE_MOCK_DATA is false',
+      ok: process.env.NEXT_PUBLIC_ADMIN_USE_MOCK_DATA !== 'true',
+      required: isProd,
+    },
+    {
       name: 'ALLOW_INSECURE_HARDWARE_DEV is false',
       ok: process.env.ALLOW_INSECURE_HARDWARE_DEV !== 'true',
       required: isProd,

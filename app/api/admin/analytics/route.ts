@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { analyticsRepository } from '@/lib/db'
 
+function parseDays(request: NextRequest): number {
+  const raw = request.nextUrl.searchParams.get('days')
+  const n = raw ? Number(raw) : 30
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 365) : 30
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
 
   const type = request.nextUrl.searchParams.get('type') || 'dashboard'
+  const days = parseDays(request)
 
   try {
     switch (type) {
@@ -15,7 +22,31 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, data })
       }
       case 'daily-revenue': {
-        const data = await analyticsRepository.getDailyRevenue()
+        const data = await analyticsRepository.getDailyRevenue(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'revenue': {
+        const data = await analyticsRepository.getRevenueAnalytics(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'sessions': {
+        const data = await analyticsRepository.getSessionAnalytics(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'rewards': {
+        const data = await analyticsRepository.getRewardAnalytics(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'hourly': {
+        const data = await analyticsRepository.getHourlyDistribution(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'duration': {
+        const data = await analyticsRepository.getDurationDistribution(days)
+        return NextResponse.json({ success: true, data })
+      }
+      case 'activity': {
+        const data = await analyticsRepository.getRecentActivity(10)
         return NextResponse.json({ success: true, data })
       }
       case 'funnel': {

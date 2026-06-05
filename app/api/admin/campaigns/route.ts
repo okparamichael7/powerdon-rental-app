@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { campaignRepository } from '@/lib/db'
 import { mapCampaignFromDb } from '@/lib/mappers/domain-mappers'
+import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdminSession(request)
@@ -28,18 +29,21 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return auth.response
 
   try {
-    const body = await request.json()
+    const validated = await validateBody(request, schemas.createCampaign)
+    if (!validated.success) return validated.error
+
+    const body = validated.data
     const created = await campaignRepository.create({
       name: body.name,
       eventName: body.eventName,
-      startDate: body.startDate,
-      endDate: body.endDate,
-      hourlyRate: Number(body.hourlyRate),
-      dailyCap: Number(body.dailyCap),
-      depositAmount: Number(body.depositAmount),
-      rewardThresholdMinutes: Number(body.rewardThresholdMinutes),
+      startDate: body.startDate.toISOString(),
+      endDate: body.endDate.toISOString(),
+      hourlyRate: body.hourlyRate,
+      dailyCap: body.dailyCap,
+      depositAmount: body.depositAmount,
+      rewardThresholdMinutes: body.rewardThresholdMinutes,
       rewardType: body.rewardType || 'voucher',
-      rewardValue: Number(body.rewardValue),
+      rewardValue: body.rewardValue,
       rewardDescription: body.rewardDescription,
       isActive: body.isActive ?? true,
     })

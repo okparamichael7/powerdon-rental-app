@@ -21,6 +21,7 @@ export const RATE_LIMITS = {
   admin: { windowMs: 60_000, maxRequests: 200, keyPrefix: 'admin' },
   webhook: { windowMs: 60_000, maxRequests: 120, keyPrefix: 'webhook' },
   health: { windowMs: 60_000, maxRequests: 60, keyPrefix: 'health' },
+  sessionLookup: { windowMs: 60_000, maxRequests: 30, keyPrefix: 'session' },
 }
 
 function getClientId(request: NextRequest): string {
@@ -92,4 +93,5 @@ export const rateLimiters = {
   admin: rateLimit(RATE_LIMITS.admin),
   webhook: rateLimit(RATE_LIMITS.webhook),
   health: rateLimit(RATE_LIMITS.health),
+  sessionLookup: rateLimit(RATE_LIMITS.sessionLookup),
 }

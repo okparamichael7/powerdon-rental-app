@@ -70,7 +70,7 @@ export function BillingCharts({ revenueByDay, revenueByStation }: BillingChartsP
                   tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(value) => formatCurrency(Math.round(value * 100))}
                 />
                 <Tooltip
                   content={({ active, payload, label }) => {
@@ -80,7 +80,7 @@ export function BillingCharts({ revenueByDay, revenueByStation }: BillingChartsP
                         <p className="font-medium">{label}</p>
                         {payload.map((entry, i) => (
                           <p key={i} className="text-sm" style={{ color: entry.color }}>
-                            {entry.name}: ${Number(entry.value).toFixed(2)}
+                            {entry.name}: {formatCurrency(Math.round(Number(entry.value) * 100))}
                           </p>
                         ))}
                       </div>
@@ -126,7 +126,7 @@ export function BillingCharts({ revenueByDay, revenueByStation }: BillingChartsP
                     tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value) => `$${value}`}
+                    tickFormatter={(value) => formatCurrency(Math.round(value * 100))}
                   />
                   <YAxis
                     type="category"
@@ -144,7 +144,7 @@ export function BillingCharts({ revenueByDay, revenueByStation }: BillingChartsP
                         <div className="rounded-lg border bg-background p-3 shadow-lg">
                           <p className="font-medium">{data.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            Revenue: ${data.revenue.toFixed(2)}
+                            Revenue: {formatCurrency(Math.round(data.revenue * 100))}
                           </p>
                           <p className="text-sm text-muted-foreground">
                             Transactions: {data.transactions}

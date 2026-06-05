@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/table"
 import { Search, Gift, Ticket, CheckCircle, Clock, XCircle, Download, Copy, Check } from "lucide-react"
 import { useRewards, useCampaigns } from "@/hooks/use-services"
+import { downloadCsv } from "@/lib/admin/export-csv"
+import { AdminErrorBanner } from "@/components/admin/admin-states"
 import { formatDateTime } from "@/lib/utils"
 import type { Reward } from "@/lib/types"
 
@@ -33,7 +35,7 @@ export default function RewardsPage() {
   const [campaignFilter, setCampaignFilter] = useState<string>("all")
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
-  const { data: rewards, loading: rewardsLoading, fetchRewards } = useRewards()
+  const { data: rewards, loading: rewardsLoading, error: rewardsError, fetchRewards, refetch } = useRewards()
   const { data: campaigns, loading: campaignsLoading, fetchCampaigns } = useCampaigns()
 
   // Fetch data on mount and when filters change
@@ -86,11 +88,30 @@ export default function RewardsPage() {
           <h1 className="text-xl font-semibold text-foreground">Rewards & Vouchers</h1>
           <p className="text-sm text-muted-foreground">Track issued vouchers and redemptions</p>
         </div>
-        <Button variant="outline">
+        <Button
+          variant="outline"
+          disabled={!filteredRewards.length}
+          onClick={() =>
+            downloadCsv(
+              'powerdon-rewards.csv',
+              ['code', 'email', 'status', 'value', 'campaign', 'issuedAt'],
+              filteredRewards.map((r) => [
+                r.code,
+                r.userEmail,
+                r.status,
+                r.value,
+                r.campaignName ?? '',
+                r.issuedAt ? new Date(r.issuedAt).toISOString() : '',
+              ]),
+            )
+          }
+        >
           <Download className="mr-2 h-4 w-4" />
           Export CSV
         </Button>
       </div>
+
+      {rewardsError && <AdminErrorBanner message={rewardsError} onRetry={() => refetch()} />}
 
       {/* Stats Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
