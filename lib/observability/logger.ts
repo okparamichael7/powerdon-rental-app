@@ -127,6 +127,20 @@ class Logger {
       const { name, message, stack, ...rest } = error as Error & Record<string, unknown>;
       return { name, message, stack, ...rest };
     }
+    if (typeof error === 'string') {
+      return { message: error };
+    }
+    if (error && typeof error === 'object') {
+      const record = error as Record<string, unknown>;
+      if (typeof record.message === 'string') {
+        return record;
+      }
+      try {
+        return { message: JSON.stringify(error) };
+      } catch {
+        return { message: 'Unknown error' };
+      }
+    }
     return { message: String(error) };
   }
 

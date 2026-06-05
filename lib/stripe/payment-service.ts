@@ -390,11 +390,7 @@ export async function createCheckoutSession(
       },
       line_items: [
         {
-          price_data: {
-            currency: DEFAULT_PRICING.currency, // EUR
-            product: STRIPE_PRODUCTS.RENTAL_DEPOSIT.productId,
-            unit_amount: params.depositAmountCents,
-          },
+          price_data: buildDepositPriceData(params.depositAmountCents),
           quantity: 1,
         },
       ],
@@ -682,6 +678,31 @@ export async function getDisputes(
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================
+
+/**
+ * Checkout deposit line item: use STRIPE_RENTAL_DEPOSIT_PRODUCT_ID when set (live dashboard product),
+ * otherwise inline product_data so test/live keys work without hardcoded product IDs.
+ */
+function buildDepositPriceData(
+  depositAmountCents: number,
+): Stripe.Checkout.SessionCreateParams.LineItem.PriceData {
+  const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = {
+    currency: DEFAULT_PRICING.currency,
+    unit_amount: depositAmountCents,
+  }
+
+  const envProductId = process.env.STRIPE_RENTAL_DEPOSIT_PRODUCT_ID?.trim()
+  if (envProductId) {
+    priceData.product = envProductId
+  } else {
+    priceData.product_data = {
+      name: STRIPE_PRODUCTS.RENTAL_DEPOSIT.name,
+      description: STRIPE_PRODUCTS.RENTAL_DEPOSIT.description,
+    }
+  }
+
+  return priceData
+}
 
 function handleStripeError(error: unknown): StripeServiceError {
   if (error instanceof StripeServiceError) {

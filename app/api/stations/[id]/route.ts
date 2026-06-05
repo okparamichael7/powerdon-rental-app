@@ -115,7 +115,13 @@ export async function POST(
 
     const { command, slotNumber } = validated.data;
 
-    let result: { success: boolean; data?: unknown; error?: string; commandBuffer: Buffer };
+    let result: {
+      success: boolean;
+      data?: unknown;
+      error?: string;
+      commandBuffer: Buffer;
+      proxyOnly?: boolean;
+    };
     let payload: Buffer | undefined;
 
     switch (command) {

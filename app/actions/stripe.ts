@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { userRepository, sessionRepository, stationRepository } from '@/lib/db'
 import { prepareRentalStart, loadCampaignPricing } from '@/lib/rental/start-orchestrator'
 import type { DbUser, DbRentalSession } from '@/lib/db/types'
+import { getErrorDetails, getErrorMessage } from '@/lib/errors/get-error-message'
 import { logger } from '@/lib/observability/logger'
 
 export interface StartRentalCheckoutParams {
@@ -68,7 +69,16 @@ export async function startRentalCheckout(
       })
       createdSession = prepared.session
       unlockToken = prepared.unlockToken
-    } catch {
+    } catch (prepError) {
+      const prepMessage = getErrorMessage(prepError)
+      if (prepMessage === 'SLOT_NOT_AVAILABLE' || prepMessage === 'SLOT_RESERVE_FAILED') {
+        return { success: false, error: 'No power banks available at this station' }
+      }
+      logger.error('Failed to prepare rental session', {
+        error: prepMessage,
+        stationId: params.stationId,
+        slotNumber: targetSlot,
+      })
       return { success: false, error: 'Failed to create rental session' }
     }
 
@@ -97,13 +107,15 @@ export async function startRentalCheckout(
       unlockToken,
     }
   } catch (error) {
+    const message = getErrorMessage(error)
     logger.error('Error starting rental checkout', {
-      error: error instanceof Error ? error : String(error),
-      params,
+      error: message,
+      errorDetails: getErrorDetails(error),
+      params: { ...params, email: '[REDACTED]' },
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to start checkout',
+      error: message || 'Failed to start checkout',
     }
   } finally {
     span.end()
