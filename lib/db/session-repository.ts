@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/admin';
 import {
   isSchemaGapError,
   missingColumnFromError,
+  nullIfEmptyUuid,
   normalizeRewardRow,
   normalizeRewardRows,
   SESSION_SELECT_FULL,
@@ -45,15 +46,28 @@ function generateSessionCode(): string {
   return result;
 }
 
+function sanitizeSessionInsertPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...payload };
+  for (const key of ['campaign_id', 'power_bank_id'] as const) {
+    const value = next[key];
+    if (typeof value === 'string') {
+      const normalized = nullIfEmptyUuid(value);
+      if (normalized) next[key] = normalized;
+      else delete next[key];
+    }
+  }
+  return next;
+}
+
 function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unknown>[] {
   const sessionCode = generateSessionCode();
+  const campaignId = nullIfEmptyUuid(data.campaignId);
+  const powerBankId = nullIfEmptyUuid(data.powerBankId);
   const full: Record<string, unknown> = {
     session_code: sessionCode,
     user_id: data.userId,
-    campaign_id: data.campaignId,
     pickup_station_id: data.pickupStationId,
     pickup_slot_number: data.pickupSlotNumber,
-    power_bank_id: data.powerBankId,
     status: 'pending',
     deposit_amount: data.depositAmount,
     hourly_rate: data.hourlyRate,
@@ -68,9 +82,11 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
     unlock_token_expires_at: data.unlockTokenExpiresAt?.toISOString(),
     metadata: {},
   };
+  if (campaignId) full.campaign_id = campaignId;
+  if (powerBankId) full.power_bank_id = powerBankId;
 
   // Prefer payloads without unlock_token first (common on partial DBs before migration 014).
-  return [
+  const templates = [
     omitKeys(full, ['unlock_token', 'unlock_token_expires_at']),
     full,
     omitKeys(full, [
@@ -115,6 +131,7 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
       hourly_rate: data.hourlyRate,
     },
   ];
+  return templates.map(sanitizeSessionInsertPayload);
 }
 
 export interface SessionWithRelations extends DbRentalSession {

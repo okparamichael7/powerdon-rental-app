@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { stationRepository, sessionRepository, campaignRepository } from '@/lib/db'
+import { nullIfEmptyUuid } from '@/lib/db/schema-compat'
 import type { CreateSessionData } from '@/lib/db/session-repository'
 import crypto from 'crypto'
 
@@ -44,7 +45,7 @@ export async function prepareRentalStart(
 
   const createData: CreateSessionData = {
     userId: input.userId,
-    campaignId: input.campaignId,
+    campaignId: nullIfEmptyUuid(input.campaignId),
     pickupStationId: input.stationId,
     pickupSlotNumber: input.slotNumber,
     depositAmount: input.depositAmount,
@@ -71,9 +72,12 @@ export async function loadCampaignPricing(campaignId?: string, stationCampaignId
   let hourlyRate = 2
   let dailyCap = 10
   let rewardThresholdMinutes = 60
-  let resolvedCampaignId = campaignId
 
-  const id = campaignId || stationCampaignId
+  const normalizedCampaignId = campaignId?.trim() || undefined
+  const normalizedStationCampaignId = stationCampaignId?.trim() || undefined
+  let resolvedCampaignId: string | undefined = normalizedCampaignId
+
+  const id = normalizedCampaignId || normalizedStationCampaignId
   if (id) {
     const campaign = await campaignRepository.getById(id)
     if (campaign?.is_active) {
@@ -85,5 +89,11 @@ export async function loadCampaignPricing(campaignId?: string, stationCampaignId
     }
   }
 
-  return { depositAmount, hourlyRate, dailyCap, rewardThresholdMinutes, campaignId: resolvedCampaignId }
+  return {
+    depositAmount,
+    hourlyRate,
+    dailyCap,
+    rewardThresholdMinutes,
+    campaignId: resolvedCampaignId || undefined,
+  }
 }

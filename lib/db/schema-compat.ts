@@ -1,5 +1,12 @@
 import type { DbReward } from './types'
 
+/** Treat blank strings as absent for optional UUID columns (Postgres rejects ""). */
+export function nullIfEmptyUuid(value: string | null | undefined): string | undefined {
+  if (value == null) return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 /** Parse missing column name from PostgREST / Postgres schema errors. */
 export function missingColumnFromError(message: string): string | null {
   const cache = message.match(/Could not find the '([^']+)' column/)

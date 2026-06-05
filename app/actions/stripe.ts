@@ -42,7 +42,10 @@ export async function startRentalCheckout(
     const userId = dbUser.id
 
     const station = await stationRepository.getById(params.stationId)
-    const pricing = await loadCampaignPricing(params.campaignId, station?.campaign_id ?? null)
+    const pricing = await loadCampaignPricing(
+      params.campaignId?.trim() || undefined,
+      station?.campaign_id ?? null,
+    )
     const depositAmount = Math.round(pricing.depositAmount * 100) || DEFAULT_PRICING.preAuthAmountCents
 
     let targetSlot = params.slotNumber
@@ -98,7 +101,7 @@ export async function startRentalCheckout(
       userId,
       stationId: params.stationId,
       slotNumber: targetSlot,
-      campaignId: params.campaignId,
+      campaignId: pricing.campaignId,
       depositAmountCents: depositAmount,
       successUrl: `${baseUrl}/?session=${sessionCode}`,
       cancelUrl: `${baseUrl}/?cancel=${sessionCode}`,

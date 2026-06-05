@@ -439,7 +439,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
                   email={email}
                   name={name || undefined}
                   stationId={currentStation.id}
-                  campaignId={currentStation.campaignId}
+                  campaignId={currentStation.campaignId || undefined}
                   depositAmount={Math.round(currentStation.depositAmount * 100)}
                   onSuccess={handleStripeCheckoutSuccess}
                   onCancel={() => setStep('info')}
