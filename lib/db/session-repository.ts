@@ -1,7 +1,6 @@
 // Session Repository - Database operations for rental sessions
 import { createServiceClient } from '@/lib/supabase/admin';
 import {
-  applyLegacyRentalSessionStationFields,
   isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
@@ -50,7 +49,7 @@ function generateSessionCode(): string {
 }
 
 function sanitizeSessionInsertPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  return stripEmptyUuidFields(applyLegacyRentalSessionStationFields(payload));
+  return stripEmptyUuidFields(payload);
 }
 
 function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unknown>[] {
