@@ -1,10 +1,12 @@
 // Session Repository - Database operations for rental sessions
 import { createServiceClient } from '@/lib/supabase/admin';
 import {
+  isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
   nullIfEmptyUuid,
   normalizeRewardRow,
+  stripEmptyUuidFields,
   normalizeRewardRows,
   SESSION_SELECT_FULL,
   SESSION_SELECT_MINIMAL,
@@ -47,16 +49,7 @@ function generateSessionCode(): string {
 }
 
 function sanitizeSessionInsertPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const next = { ...payload };
-  for (const key of ['campaign_id', 'power_bank_id'] as const) {
-    const value = next[key];
-    if (typeof value === 'string') {
-      const normalized = nullIfEmptyUuid(value);
-      if (normalized) next[key] = normalized;
-      else delete next[key];
-    }
-  }
-  return next;
+  return stripEmptyUuidFields(payload);
 }
 
 function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unknown>[] {
@@ -325,7 +318,7 @@ class SessionRepository {
 
     let lastError: { code?: string; message?: string } | null = null;
     for (const template of buildSessionInsertPayloads(data)) {
-      let payload: Record<string, unknown> = { ...template };
+      let payload: Record<string, unknown> = stripEmptyUuidFields({ ...template });
       let selectCols = ['id', 'session_code', 'user_id', 'status', 'created_at'];
 
       for (let attempt = 0; attempt < 24; attempt++) {
@@ -349,8 +342,18 @@ class SessionRepository {
           return row;
         }
 
-        if (!isSchemaGapError(error)) throw error;
         lastError = error;
+
+        if (isInvalidUuidInputError(error)) {
+          const stripped = stripEmptyUuidFields(payload);
+          if (JSON.stringify(stripped) !== JSON.stringify(payload)) {
+            payload = stripped;
+            continue;
+          }
+          break;
+        }
+
+        if (!isSchemaGapError(error)) throw error;
 
         const missing = missingColumnFromError(error.message ?? '');
         if (!missing) break;

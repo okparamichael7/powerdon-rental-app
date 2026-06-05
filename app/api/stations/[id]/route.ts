@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository, campaignRepository } from '@/lib/db';
+import { nullIfEmptyUuid } from '@/lib/db/schema-compat';
 import { enforceRateLimit, requireAdminSession } from '@/lib/api/route-helpers';
 import { validateBody, schemas } from '@/lib/security/validation';
 
@@ -27,8 +28,9 @@ export async function GET(
         const memoryStation = stationManager.getStation(stationId) ||
           (dbStation.external_id ? stationManager.getStation(dbStation.external_id) : undefined);
         let campaign = null;
-        if (dbStation.campaign_id) {
-          campaign = await campaignRepository.getById(dbStation.campaign_id);
+        const stationCampaignId = nullIfEmptyUuid(dbStation.campaign_id);
+        if (stationCampaignId) {
+          campaign = await campaignRepository.getById(stationCampaignId);
         }
         const availableSlots = dbStation.slots?.filter((s) => s.status === 'occupied').length ?? 0;
         return NextResponse.json({
@@ -41,7 +43,7 @@ export async function GET(
             isOnline: memoryStation?.isOnline ?? dbStation.status === 'online',
             totalSlots: dbStation.total_slots,
             availableSlots,
-            campaignId: dbStation.campaign_id,
+            campaignId: stationCampaignId ?? null,
             campaignName: campaign?.name ?? campaign?.event_name,
             hourlyRate: campaign ? Number(campaign.hourly_rate) : 2,
             dailyCap: campaign ? Number(campaign.daily_cap) : 10,

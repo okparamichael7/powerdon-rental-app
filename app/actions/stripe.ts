@@ -77,16 +77,20 @@ export async function startRentalCheckout(
       if (prepMessage === 'SLOT_NOT_AVAILABLE' || prepMessage === 'SLOT_RESERVE_FAILED') {
         return { success: false, error: 'No power banks available at this station' }
       }
+      const prepDetails = getErrorDetails(prepError)
       logger.error('Failed to prepare rental session', {
         error: prepMessage,
-        errorDetails: getErrorDetails(prepError),
+        errorDetails: prepDetails,
         stationId: params.stationId,
         slotNumber: targetSlot,
+        campaignId: pricing.campaignId ?? null,
       })
       const userMessage =
         prepMessage.includes('schema cache') || prepMessage.includes('does not exist')
           ? 'Rental system is updating. Please try again in a moment or contact support.'
-          : 'Failed to create rental session'
+          : prepMessage.includes('invalid input syntax for type uuid')
+            ? 'Rental setup failed due to invalid station data. Please contact support.'
+            : 'Failed to create rental session'
       return { success: false, error: userMessage }
     }
 

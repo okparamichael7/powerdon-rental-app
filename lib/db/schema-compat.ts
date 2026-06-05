@@ -7,6 +7,34 @@ export function nullIfEmptyUuid(value: string | null | undefined): string | unde
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+const REQUIRED_SESSION_UUID_KEYS = new Set(['user_id', 'pickup_station_id'])
+
+/** Remove blank optional *_id fields before rental_sessions insert. */
+export function stripEmptyUuidFields(payload: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...payload }
+  for (const [key, value] of Object.entries(next)) {
+    if (REQUIRED_SESSION_UUID_KEYS.has(key)) continue
+    if (!key.endsWith('_id')) continue
+    if (value == null) {
+      delete next[key]
+      continue
+    }
+    if (typeof value === 'string') {
+      const normalized = nullIfEmptyUuid(value)
+      if (normalized) next[key] = normalized
+      else delete next[key]
+    }
+  }
+  return next
+}
+
+/** Postgres rejects "" for UUID columns (22P02). */
+export function isInvalidUuidInputError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === '22P02') return true
+  return (error.message ?? '').includes('invalid input syntax for type uuid')
+}
+
 /** Parse missing column name from PostgREST / Postgres schema errors. */
 export function missingColumnFromError(message: string): string | null {
   const cache = message.match(/Could not find the '([^']+)' column/)

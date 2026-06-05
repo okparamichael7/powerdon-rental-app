@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isSchemaGapError, missingColumnFromError, normalizeRewardRow } from './schema-compat'
+import {
+  isInvalidUuidInputError,
+  isSchemaGapError,
+  missingColumnFromError,
+  normalizeRewardRow,
+  stripEmptyUuidFields,
+} from './schema-compat'
 
 describe('isSchemaGapError', () => {
   it('detects missing column errors', () => {
@@ -43,6 +49,36 @@ describe('isSchemaGapError', () => {
   it('returns false for unrelated errors', () => {
     assert.equal(isSchemaGapError({ code: '23505', message: 'duplicate key' }), false)
     assert.equal(isSchemaGapError(null), false)
+  })
+})
+
+describe('stripEmptyUuidFields', () => {
+  it('removes blank optional uuid columns', () => {
+    const payload = stripEmptyUuidFields({
+      user_id: '11111111-1111-1111-1111-111111111111',
+      pickup_station_id: '22222222-2222-2222-2222-222222222222',
+      campaign_id: '',
+      power_bank_id: '   ',
+      reward_id: null,
+    })
+
+    assert.equal(payload.user_id, '11111111-1111-1111-1111-111111111111')
+    assert.equal(payload.pickup_station_id, '22222222-2222-2222-2222-222222222222')
+    assert.equal('campaign_id' in payload, false)
+    assert.equal('power_bank_id' in payload, false)
+    assert.equal('reward_id' in payload, false)
+  })
+})
+
+describe('isInvalidUuidInputError', () => {
+  it('detects postgres uuid syntax errors', () => {
+    assert.equal(
+      isInvalidUuidInputError({
+        code: '22P02',
+        message: 'invalid input syntax for type uuid: ""',
+      }),
+      true,
+    )
   })
 })
 
