@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader, formatStationRef } from '@/components/volt/mobile-header';
@@ -176,6 +176,12 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     setFormErrors({});
     setStep('payment');
   };
+
+  const handleStripeCheckoutError = useCallback((msg: string) => {
+    setErrorMessage(msg);
+    setError('payment_failed');
+    setStep('error');
+  }, []);
 
   const handleStripeCheckoutSuccess = async (
     sessionCode: string,
@@ -443,11 +449,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
                   depositAmount={Math.round(currentStation.depositAmount * 100)}
                   onSuccess={handleStripeCheckoutSuccess}
                   onCancel={() => setStep('info')}
-                  onError={(msg) => {
-                    setErrorMessage(msg);
-                    setError('payment_failed');
-                    setStep('error');
-                  }}
+                  onError={handleStripeCheckoutError}
                 />
               </main>
             </motion.div>

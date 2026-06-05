@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import {
   EmbeddedCheckout,
   EmbeddedCheckoutProvider,
@@ -11,8 +11,8 @@ import { startRentalCheckout, getCheckoutStatus, type StartRentalCheckoutParams 
 import { getErrorMessage } from '@/lib/errors/get-error-message'
 import { Spinner } from '@/components/ui/spinner'
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null
 
 // =============================================================================
 // RENTAL CHECKOUT COMPONENT
@@ -47,12 +47,30 @@ export function RentalCheckout({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+  const initKeyRef = useRef<string | null>(null)
 
-  // Start checkout when component mounts
   useEffect(() => {
-    let mounted = true
+    if (!publishableKey) {
+      const message = 'Stripe publishable key is not configured'
+      setError(message)
+      setLoading(false)
+      onErrorRef.current?.(message)
+      return
+    }
+
+    const initKey = `${stationId}:${email}:${slotNumber ?? ''}:${campaignId ?? ''}`
+    if (initKeyRef.current === initKey) return
+    initKeyRef.current = initKey
+
+    let active = true
 
     async function initCheckout() {
+      setLoading(true)
+      setError(null)
+      setClientSecret(null)
+
       try {
         const result = await startRentalCheckout({
           email,
@@ -62,7 +80,7 @@ export function RentalCheckout({
           campaignId,
         })
 
-        if (!mounted) return
+        if (!active) return
 
         if (result.success && result.clientSecret && result.sessionCode) {
           setClientSecret(result.clientSecret)
@@ -70,25 +88,31 @@ export function RentalCheckout({
           if (result.unlockToken) setUnlockToken(result.unlockToken)
           if (result.sessionId) setSessionId(result.sessionId)
         } else {
-          setError(result.error || 'Failed to start checkout')
-          onError?.(result.error || 'Failed to start checkout')
+          const message =
+            result.error ||
+            (result.success && !result.clientSecret
+              ? 'Stripe did not return a checkout session. Check server logs.'
+              : 'Failed to start checkout')
+          setError(message)
+          onErrorRef.current?.(message)
         }
       } catch (err) {
-        if (!mounted) return
+        if (!active) return
         const errorMessage = getErrorMessage(err) || 'Failed to start checkout'
         setError(errorMessage)
-        onError?.(errorMessage)
+        onErrorRef.current?.(errorMessage)
       } finally {
-        if (mounted) setLoading(false)
+        if (active) setLoading(false)
       }
     }
 
-    initCheckout()
+    void initCheckout()
 
     return () => {
-      mounted = false
+      active = false
+      initKeyRef.current = null
     }
-  }, [email, name, stationId, slotNumber, campaignId, onError])
+  }, [email, name, stationId, slotNumber, campaignId])
 
   // Handle checkout completion
   const handleComplete = useCallback(async () => {
@@ -143,17 +167,32 @@ export function RentalCheckout({
     )
   }
 
-  if (!clientSecret) {
-    return null
+  if (!clientSecret || !stripePromise) {
+    return (
+      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
+        <p className="text-destructive font-medium">Unable to load payment form</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {error || 'Checkout session was not initialized. Please go back and try again.'}
+        </p>
+        <button
+          onClick={onCancel}
+          className="mt-4 text-sm text-primary hover:underline"
+        >
+          Go back
+        </button>
+      </div>
+    )
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full min-h-[420px]">
       <EmbeddedCheckoutProvider
         stripe={stripePromise}
         options={{ clientSecret, onComplete: handleComplete }}
       >
-        <EmbeddedCheckout />
+        <div className="min-h-[380px]">
+          <EmbeddedCheckout />
+        </div>
       </EmbeddedCheckoutProvider>
       
       <div className="mt-4 text-center">

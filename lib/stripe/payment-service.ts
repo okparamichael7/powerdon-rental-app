@@ -409,15 +409,20 @@ export async function createCheckoutSession(
       redirect_on_completion: 'never',
     })
 
+    if (!session.client_secret) {
+      throw new Error('Stripe checkout session missing client_secret (embedded ui_mode required)')
+    }
+
     logger.info('Checkout session created', {
       checkoutSessionId: session.id,
       sessionId: params.sessionId,
       amount: params.depositAmountCents,
+      hasClientSecret: true,
     })
 
     return {
       sessionId: session.id,
-      clientSecret: session.client_secret!,
+      clientSecret: session.client_secret,
       url: session.url || undefined,
     }
   } catch (error) {
