@@ -25,7 +25,7 @@ export function mapPaymentIntentSucceededUpdate(
     rentalSession: {
       payment_status: 'captured' satisfies PaymentStatus,
       payment_intent_id: paymentIntent.id,
-      total_charge: paymentIntent.amount_received / 100,
+      amount_charged: paymentIntent.amount_received / 100,
       metadata: {
         stripe_payment_intent: paymentIntent.id,
         captured_at: new Date().toISOString(),
@@ -45,12 +45,12 @@ export function mapPaymentIntentFailedUpdate(
     rentalSession: {
       payment_status: 'failed' satisfies PaymentStatus,
       status: 'failed' satisfies SessionStatus,
-      error_message: paymentIntent.last_payment_error?.message || 'Payment failed',
       metadata: {
         stripe_payment_intent: paymentIntent.id,
         failed_at: new Date().toISOString(),
         failure_code: paymentIntent.last_payment_error?.code,
         failure_message: paymentIntent.last_payment_error?.message,
+        error_message: paymentIntent.last_payment_error?.message || 'Payment failed',
       },
     },
   }
@@ -126,11 +126,12 @@ export function mapCheckoutSessionExpiredUpdate(
     shouldDispatchBorrow: false,
     rentalSession: {
       status: 'cancelled' satisfies SessionStatus,
-      payment_status: 'expired',
-      error_message: 'Checkout session expired',
+      payment_status: 'cancelled' satisfies PaymentStatus,
+      ended_at: new Date().toISOString(),
       metadata: {
         checkout_session_id: session.id,
         expired_at: new Date().toISOString(),
+        error_message: 'Checkout session expired',
       },
     },
   }

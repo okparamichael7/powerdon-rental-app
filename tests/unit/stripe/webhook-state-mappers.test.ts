@@ -48,7 +48,10 @@ describe('mapPaymentIntentFailedUpdate', () => {
     })
     assert.equal(mapped.rentalSession.status, 'failed')
     assert.equal(mapped.rentalSession.payment_status, 'failed')
-    assert.equal(mapped.rentalSession.error_message, 'Card declined')
+    assert.equal(
+      (mapped.rentalSession.metadata as { error_message?: string }).error_message,
+      'Card declined',
+    )
   })
 })
 
@@ -60,7 +63,7 @@ describe('mapPaymentIntentSucceededUpdate', () => {
       metadata: { session_id: 'AB12CD34' },
     })
     assert.equal(mapped.rentalSession.payment_status, 'captured')
-    assert.equal(mapped.rentalSession.total_charge, 5)
+    assert.equal(mapped.rentalSession.amount_charged, 5)
     assert.equal(mapped.shouldDispatchBorrow, false)
   })
 })
@@ -85,7 +88,7 @@ describe('mapCheckoutSessionExpiredUpdate', () => {
       metadata: { session_id: 'AB12CD34' },
     })
     assert.equal(mapped.rentalSession.status, 'cancelled')
-    assert.equal(mapped.rentalSession.payment_status, 'expired')
+    assert.equal(mapped.rentalSession.payment_status, 'cancelled')
   })
 })
 

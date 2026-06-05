@@ -7,7 +7,10 @@ import { alertManager } from '@/lib/ops/alerting'
 import { enforceRateLimit } from '@/lib/api/route-helpers'
 import { dispatchBorrowBySessionCode } from '@/lib/rental/dispatch-borrow'
 import {
-  isDuplicateWebhookEvent,
+  recordStripeWebhookEvent,
+  updateRentalSessionFromWebhook,
+} from '@/lib/stripe/webhook-persistence'
+import {
   mapChargeRefundedUpdate,
   mapCheckoutSessionCompletedUpdate,
   mapCheckoutSessionExpiredUpdate,
@@ -72,18 +75,12 @@ export async function POST(request: NextRequest) {
       livemode: event.livemode,
     })
 
-    const supabase = await createServiceClient()
-    const { error: insertError } = await supabase.from('stripe_webhook_events').insert({
-      event_id: event.id,
-      event_type: event.type,
-    })
-
-    if (isDuplicateWebhookEvent(insertError?.code)) {
-      return NextResponse.json({ received: true, eventId: event.id, duplicate: true })
+    const recorded = await recordStripeWebhookEvent(event.id, event.type)
+    if (!recorded.ok) {
+      return NextResponse.json({ error: recorded.error }, { status: 500 })
     }
-    if (insertError) {
-      logger.error('Webhook idempotency insert failed', { error: insertError.message })
-      return NextResponse.json({ error: 'Idempotency store error' }, { status: 500 })
+    if (recorded.duplicate) {
+      return NextResponse.json({ received: true, eventId: event.id, duplicate: true })
     }
 
     // Handle the event
@@ -184,20 +181,9 @@ async function handlePaymentIntentSucceeded(
   }
 
   try {
-    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
-    
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session payment status', {
-        error,
-        sessionId,
-        paymentIntentId: paymentIntent.id,
-      })
-      return { success: false, message: `Database error: ${error.message}` }
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      return { success: false, message: `Database error: ${updated.error}` }
     }
 
     logger.info('Payment intent succeeded - session updated', {
@@ -227,15 +213,9 @@ async function handlePaymentIntentFailed(
   }
 
   try {
-    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
-    
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session on payment failure', { error: error instanceof Error ? error : String(error), sessionId })
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      logger.error('Failed to update session on payment failure', { error: updated.error, sessionId })
     }
 
     // Send alert for payment failure
@@ -278,15 +258,9 @@ async function handlePaymentIntentCanceled(
   }
 
   try {
-    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
-    
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session on payment cancellation', { error: error instanceof Error ? error : String(error), sessionId })
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      logger.error('Failed to update session on payment cancellation', { error: updated.error, sessionId })
     }
 
     logger.info('Payment intent canceled', { sessionId, paymentIntentId: paymentIntent.id })
@@ -309,15 +283,9 @@ async function handlePaymentIntentAuthorized(
   }
 
   try {
-    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
-    
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session authorization', { error: error instanceof Error ? error : String(error), sessionId })
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      logger.error('Failed to update session authorization', { error: updated.error, sessionId })
     }
 
     const borrow = await dispatchBorrowBySessionCode(sessionId)
@@ -354,21 +322,14 @@ async function handleCheckoutSessionCompleted(
   }
 
   try {
-    const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
-    
     const paymentIntentId =
       typeof session.payment_intent === 'string'
         ? session.payment_intent
         : session.payment_intent?.id
 
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session on checkout completion', { error: error instanceof Error ? error : String(error), sessionId })
-      return { success: false, message: `Database error: ${error.message}` }
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      return { success: false, message: `Database error: ${updated.error}` }
     }
 
     const borrow = await dispatchBorrowBySessionCode(sessionId)
@@ -406,13 +367,9 @@ async function handleCheckoutSessionExpired(
       .eq('session_code', sessionId)
       .maybeSingle()
 
-    const { error } = await supabase
-      .from('rental_sessions')
-      .update(mapped.rentalSession)
-      .eq('session_code', sessionId)
-
-    if (error) {
-      logger.error('Failed to update session on checkout expiration', { error: error instanceof Error ? error : String(error), sessionId })
+    const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
+    if (!updated.ok) {
+      logger.error('Failed to update session on checkout expiration', { error: updated.error, sessionId })
     }
 
     if (rentalRow?.pickup_station_id && rentalRow.pickup_slot_number != null) {

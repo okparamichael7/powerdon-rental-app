@@ -1,5 +1,7 @@
 // Session Repository - Database operations for rental sessions
+import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/admin';
+import { stationRepository } from './station-repository';
 import {
   isInvalidUuidInputError,
   isSchemaGapError,
@@ -539,6 +541,44 @@ class SessionRepository {
   // ============================================================================
   // EXPIRATION
   // ============================================================================
+
+  /** Cancel an unpaid pending checkout and release its reserved slot. */
+  async abandonPendingCheckout(
+    session: Pick<DbRentalSession, 'id' | 'pickup_station_id' | 'pickup_slot_number'>,
+    reason = 'checkout_abandoned',
+  ): Promise<void> {
+    await this.cancelSession(session.id, reason);
+    if (session.pickup_station_id && session.pickup_slot_number != null) {
+      try {
+        await stationRepository.updateSlot(session.pickup_station_id, session.pickup_slot_number, {
+          status: 'occupied',
+        });
+      } catch {
+        // Slot may already be occupied or released
+      }
+    }
+  }
+
+  /** Return existing unlock token or persist a new one for post-payment cabinet unlock. */
+  async ensureUnlockToken(sessionId: string): Promise<string> {
+    const session = await this.getById(sessionId);
+    if (session?.unlock_token) return session.unlock_token;
+
+    const unlockToken = crypto.randomBytes(16).toString('hex');
+    const unlockTokenExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const updates: Record<string, unknown> = {
+      unlock_token: unlockToken,
+      unlock_token_expires_at: unlockTokenExpiresAt,
+    };
+
+    try {
+      await this.update(sessionId, updates as Database['public']['Tables']['rental_sessions']['Update']);
+    } catch (error) {
+      if (!isSchemaGapError(error as { code?: string; message?: string })) throw error;
+    }
+
+    return unlockToken;
+  }
 
   async expirePendingSessions(timeoutMinutes = 15): Promise<number> {
     const supabase = await createServiceClient();

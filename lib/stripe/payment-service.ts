@@ -378,7 +378,7 @@ export async function createCheckoutSession(
   
   try {
     const session = await stripe.checkout.sessions.create({
-      ui_mode: 'embedded' as Stripe.Checkout.SessionCreateParams['ui_mode'],
+      ui_mode: 'embedded_page' as Stripe.Checkout.SessionCreateParams['ui_mode'],
       mode: 'payment',
       customer: params.customerId,
       customer_email: params.customerId ? undefined : params.customerEmail,
@@ -410,7 +410,7 @@ export async function createCheckoutSession(
     })
 
     if (!session.client_secret) {
-      throw new Error('Stripe checkout session missing client_secret (embedded ui_mode required)')
+      throw new Error('Stripe checkout session missing client_secret (embedded_page ui_mode required)')
     }
 
     logger.info('Checkout session created', {

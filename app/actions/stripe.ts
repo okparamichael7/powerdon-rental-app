@@ -49,6 +49,35 @@ export async function startRentalCheckout(
     const depositAmount = Math.round(pricing.depositAmount * 100) || DEFAULT_PRICING.preAuthAmountCents
 
     let targetSlot = params.slotNumber
+    let createdSession: DbRentalSession | null = null
+    let unlockToken: string | null = null
+
+    const existing = await sessionRepository.getActiveByUserId(userId)
+    if (existing?.status === 'active') {
+      return {
+        success: false,
+        error: 'You already have an active rental. Return your power bank or view your rental status.',
+      }
+    }
+
+    if (existing?.status === 'pending') {
+      if (existing.payment_status === 'authorized' || existing.payment_status === 'captured') {
+        return {
+          success: false,
+          error: 'Payment already completed for this rental. Refresh the page to continue.',
+        }
+      }
+
+      const sameStation = existing.pickup_station_id === params.stationId
+      if (sameStation && existing.session_code) {
+        createdSession = existing as DbRentalSession
+        targetSlot = existing.pickup_slot_number ?? targetSlot
+        unlockToken = await sessionRepository.ensureUnlockToken(existing.id)
+      } else {
+        await sessionRepository.abandonPendingCheckout(existing)
+      }
+    }
+
     if (!targetSlot) {
       const availableSlot = await stationRepository.getAvailableSlot(params.stationId)
       if (!availableSlot) {
@@ -57,43 +86,50 @@ export async function startRentalCheckout(
       targetSlot = availableSlot.slot_number
     }
 
-    let createdSession: DbRentalSession
-    let unlockToken: string
-    try {
-      const prepared = await prepareRentalStart({
-        userId,
-        stationId: params.stationId,
-        slotNumber: targetSlot,
-        campaignId: pricing.campaignId,
-        depositAmount: pricing.depositAmount,
-        hourlyRate: pricing.hourlyRate,
-        dailyCap: pricing.dailyCap,
-        rewardThresholdMinutes: pricing.rewardThresholdMinutes,
-      })
-      createdSession = prepared.session
-      unlockToken = prepared.unlockToken
-    } catch (prepError) {
-      const prepMessage = getErrorMessage(prepError)
-      if (prepMessage === 'SLOT_NOT_AVAILABLE' || prepMessage === 'SLOT_RESERVE_FAILED') {
-        return { success: false, error: 'No power banks available at this station' }
+    if (!createdSession || !unlockToken) {
+      try {
+        const prepared = await prepareRentalStart({
+          userId,
+          stationId: params.stationId,
+          slotNumber: targetSlot,
+          campaignId: pricing.campaignId,
+          depositAmount: pricing.depositAmount,
+          hourlyRate: pricing.hourlyRate,
+          dailyCap: pricing.dailyCap,
+          rewardThresholdMinutes: pricing.rewardThresholdMinutes,
+        })
+        createdSession = prepared.session
+        unlockToken = prepared.unlockToken
+      } catch (prepError) {
+        const prepMessage = getErrorMessage(prepError)
+        if (prepMessage === 'SLOT_NOT_AVAILABLE' || prepMessage === 'SLOT_RESERVE_FAILED') {
+          return { success: false, error: 'No power banks available at this station' }
+        }
+        const prepDetails = getErrorDetails(prepError)
+        logger.error('Failed to prepare rental session', {
+          error: prepMessage,
+          errorDetails: prepDetails,
+          stationId: params.stationId,
+          slotNumber: targetSlot,
+          campaignId: pricing.campaignId ?? null,
+        })
+        const userMessage =
+          prepMessage.includes('schema cache') || prepMessage.includes('does not exist')
+            ? 'Rental system is updating. Please try again in a moment or contact support.'
+            : prepMessage.includes('invalid input syntax for type uuid')
+              ? 'Rental setup failed due to invalid station data. Please contact support.'
+              : prepMessage.includes('violates not-null constraint')
+                ? 'Rental database schema is out of date. Run migration 017 in Supabase, then retry.'
+                : prepMessage.includes('idx_sessions_one_open_per_user') ||
+                    prepDetails.code === '23505'
+                  ? 'You already have an open checkout. Refresh the page and try again.'
+                  : 'Failed to create rental session'
+        return { success: false, error: userMessage }
       }
-      const prepDetails = getErrorDetails(prepError)
-      logger.error('Failed to prepare rental session', {
-        error: prepMessage,
-        errorDetails: prepDetails,
-        stationId: params.stationId,
-        slotNumber: targetSlot,
-        campaignId: pricing.campaignId ?? null,
-      })
-      const userMessage =
-        prepMessage.includes('schema cache') || prepMessage.includes('does not exist')
-          ? 'Rental system is updating. Please try again in a moment or contact support.'
-          : prepMessage.includes('invalid input syntax for type uuid')
-            ? 'Rental setup failed due to invalid station data. Please contact support.'
-            : prepMessage.includes('violates not-null constraint')
-              ? 'Rental database schema is out of date. Run migration 017 in Supabase, then retry.'
-              : 'Failed to create rental session'
-      return { success: false, error: userMessage }
+    }
+
+    if (!createdSession || !unlockToken) {
+      return { success: false, error: 'Failed to create rental session' }
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
