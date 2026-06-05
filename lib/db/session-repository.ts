@@ -19,6 +19,13 @@ import type {
   EventType 
 } from './types';
 
+function stripUserMarketingFields(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const { marketing_consent: _mc, marketing_consent_at: _mca, ...rest } = payload;
+  return rest;
+}
+
 export interface SessionWithRelations extends DbRentalSession {
   user?: DbUser;
   pickup_station?: { id: string; name: string; location: string | null };
@@ -519,41 +526,63 @@ class UserRepository {
     stripeCustomerId?: string;
   }): Promise<DbUser> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('users')
-      .insert({
-        email: user.email.toLowerCase(),
-        name: user.name,
-        phone: user.phone,
-        auth_user_id: user.authUserId,
+
+    const basePayload: Record<string, unknown> = {
+      email: user.email.toLowerCase(),
+      name: user.name,
+      phone: user.phone,
+      auth_user_id: user.authUserId,
+      stripe_customer_id: user.stripeCustomerId,
+      total_rentals: 0,
+      total_spent: 0,
+      total_rewards_earned: 0,
+      metadata: {},
+    };
+
+    const payloads: Record<string, unknown>[] = [
+      {
+        ...basePayload,
         marketing_consent: user.marketingConsent || false,
         marketing_consent_at: user.marketingConsent ? new Date().toISOString() : null,
-        stripe_customer_id: user.stripeCustomerId,
-        total_rentals: 0,
-        total_spent: 0,
-        total_rewards_earned: 0,
-        metadata: {},
-      })
-      .select()
-      .single();
+      },
+      basePayload,
+      { email: user.email.toLowerCase(), name: user.name, phone: user.phone },
+    ];
 
-    if (error) throw error;
-    return data;
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const payload of payloads) {
+      const { data, error } = await supabase.from('users').insert(payload).select().single();
+      if (!error) return data as DbUser;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to create user');
   }
 
   async update(id: string, updates: Database['public']['Tables']['users']['Update']): Promise<DbUser> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('users')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
 
-    if (error) throw error;
-    return data;
+    const payloads: Record<string, unknown>[] = [
+      updates as Record<string, unknown>,
+      stripUserMarketingFields(updates as Record<string, unknown>),
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const payload of payloads) {
+      if (Object.keys(payload).length === 0) continue;
+      const { data, error } = await supabase
+        .from('users')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (!error) return data as DbUser;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to update user');
   }
 
   async getOrCreate(email: string, data?: {
@@ -564,16 +593,17 @@ class UserRepository {
     const existing = await this.getByEmail(email);
     
     if (existing) {
-      // Update if new data provided
-      if (data?.name || data?.phone || data?.marketingConsent !== undefined) {
-        return this.update(existing.id, {
-          name: data.name || existing.name,
-          phone: data.phone || existing.phone,
-          marketing_consent: data.marketingConsent ?? existing.marketing_consent,
-          marketing_consent_at: data.marketingConsent && !existing.marketing_consent 
-            ? new Date().toISOString() 
-            : existing.marketing_consent_at,
-        });
+      const updates: Database['public']['Tables']['users']['Update'] = {};
+      if (data?.name) updates.name = data.name;
+      if (data?.phone) updates.phone = data.phone;
+      if (data?.marketingConsent !== undefined) {
+        updates.marketing_consent = data.marketingConsent;
+        if (data.marketingConsent && !existing.marketing_consent) {
+          updates.marketing_consent_at = new Date().toISOString();
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        return this.update(existing.id, updates);
       }
       return existing;
     }

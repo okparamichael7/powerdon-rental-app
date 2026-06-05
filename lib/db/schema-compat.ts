@@ -5,7 +5,12 @@ export function isSchemaGapError(error: { code?: string; message?: string } | nu
   if (!error) return false
   if (error.code === 'PGRST200' || error.code === '42703') return true
   const msg = error.message ?? ''
-  return msg.includes('does not exist') || msg.includes('Could not find a relationship')
+  return (
+    msg.includes('does not exist') ||
+    msg.includes('Could not find a relationship') ||
+    msg.includes('Could not find') ||
+    msg.includes('schema cache')
+  )
 }
 
 export const SESSION_SELECT_FULL = `

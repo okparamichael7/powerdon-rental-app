@@ -23,6 +23,16 @@ describe('isSchemaGapError', () => {
     )
   })
 
+  it('detects PostgREST schema cache column errors', () => {
+    assert.equal(
+      isSchemaGapError({
+        code: 'PGRST204',
+        message: "Could not find the 'marketing_consent_at' column of 'users' in the schema cache",
+      }),
+      true,
+    )
+  })
+
   it('returns false for unrelated errors', () => {
     assert.equal(isSchemaGapError({ code: '23505', message: 'duplicate key' }), false)
     assert.equal(isSchemaGapError(null), false)
