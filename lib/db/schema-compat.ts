@@ -3,7 +3,7 @@ import type { DbReward } from './types'
 /** Detect PostgREST / Postgres errors from an incomplete rental_sessions schema. */
 export function isSchemaGapError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false
-  if (error.code === 'PGRST200' || error.code === '42703') return true
+  if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.code === '42703') return true
   const msg = error.message ?? ''
   return (
     msg.includes('does not exist') ||

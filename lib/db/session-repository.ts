@@ -26,6 +26,78 @@ function stripUserMarketingFields(
   return rest;
 }
 
+function omitKeys(
+  payload: Record<string, unknown>,
+  keys: string[],
+): Record<string, unknown> {
+  const next = { ...payload };
+  for (const key of keys) delete next[key];
+  return next;
+}
+
+function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unknown>[] {
+  const full: Record<string, unknown> = {
+    user_id: data.userId,
+    campaign_id: data.campaignId,
+    pickup_station_id: data.pickupStationId,
+    pickup_slot_number: data.pickupSlotNumber,
+    power_bank_id: data.powerBankId,
+    status: 'pending',
+    deposit_amount: data.depositAmount,
+    hourly_rate: data.hourlyRate,
+    daily_cap: data.dailyCap,
+    reward_threshold_minutes: data.rewardThresholdMinutes,
+    payment_method: data.paymentMethod,
+    payment_intent_id: data.paymentIntentId,
+    payment_authorization_id: data.paymentAuthorizationId,
+    payment_status: 'pending',
+    reward_status: 'pending',
+    unlock_token: data.unlockToken,
+    unlock_token_expires_at: data.unlockTokenExpiresAt?.toISOString(),
+    metadata: {},
+  };
+
+  return [
+    full,
+    omitKeys(full, ['unlock_token', 'unlock_token_expires_at']),
+    omitKeys(full, [
+      'unlock_token',
+      'unlock_token_expires_at',
+      'reward_status',
+      'reward_threshold_minutes',
+      'reward_qualified',
+      'payment_authorization_id',
+    ]),
+    omitKeys(full, [
+      'unlock_token',
+      'unlock_token_expires_at',
+      'reward_status',
+      'reward_threshold_minutes',
+      'reward_qualified',
+      'payment_authorization_id',
+      'daily_cap',
+      'campaign_id',
+    ]),
+    {
+      user_id: data.userId,
+      pickup_station_id: data.pickupStationId,
+      pickup_slot_number: data.pickupSlotNumber,
+      status: 'pending',
+      deposit_amount: data.depositAmount,
+      hourly_rate: data.hourlyRate,
+      payment_status: 'pending',
+      metadata: {},
+    },
+    {
+      user_id: data.userId,
+      status: 'pending',
+      deposit_amount: data.depositAmount,
+      hourly_rate: data.hourlyRate,
+      payment_status: 'pending',
+    },
+  ];
+}
+
 export interface SessionWithRelations extends DbRentalSession {
   user?: DbUser;
   pickup_station?: { id: string; name: string; location: string | null };
@@ -214,34 +286,21 @@ class SessionRepository {
 
   async create(data: CreateSessionData): Promise<DbRentalSession> {
     const supabase = await createServiceClient();
-    
-    const { data: session, error } = await supabase
-      .from('rental_sessions')
-      .insert({
-        user_id: data.userId,
-        campaign_id: data.campaignId,
-        pickup_station_id: data.pickupStationId,
-        pickup_slot_number: data.pickupSlotNumber,
-        power_bank_id: data.powerBankId,
-        status: 'pending',
-        deposit_amount: data.depositAmount,
-        hourly_rate: data.hourlyRate,
-        daily_cap: data.dailyCap,
-        reward_threshold_minutes: data.rewardThresholdMinutes,
-        payment_method: data.paymentMethod,
-        payment_intent_id: data.paymentIntentId,
-        payment_authorization_id: data.paymentAuthorizationId,
-        payment_status: 'pending',
-        reward_status: 'pending',
-        unlock_token: data.unlockToken,
-        unlock_token_expires_at: data.unlockTokenExpiresAt?.toISOString(),
-        metadata: {},
-      })
-      .select()
-      .single();
 
-    if (error) throw error;
-    return session;
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const payload of buildSessionInsertPayloads(data)) {
+      const { data: session, error } = await supabase
+        .from('rental_sessions')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error) return session as DbRentalSession;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to create rental session');
   }
 
   async update(id: string, updates: Database['public']['Tables']['rental_sessions']['Update']): Promise<DbRentalSession> {

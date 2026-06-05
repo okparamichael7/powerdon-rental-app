@@ -76,10 +76,15 @@ export async function startRentalCheckout(
       }
       logger.error('Failed to prepare rental session', {
         error: prepMessage,
+        errorDetails: getErrorDetails(prepError),
         stationId: params.stationId,
         slotNumber: targetSlot,
       })
-      return { success: false, error: 'Failed to create rental session' }
+      const userMessage =
+        prepMessage.includes('schema cache') || prepMessage.includes('does not exist')
+          ? 'Rental system is updating. Please try again in a moment or contact support.'
+          : 'Failed to create rental session'
+      return { success: false, error: userMessage }
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

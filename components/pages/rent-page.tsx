@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MobileHeader } from '@/components/volt/mobile-header';
+import { MobileHeader, formatStationRef } from '@/components/volt/mobile-header';
 import {
   PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
   XCircleIcon, RefreshIcon, CheckCircleIcon, ArrowLeftIcon
@@ -322,7 +322,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-screen bg-background pb-20">
-        <MobileHeader subtitle="Loading..." />
+        <MobileHeader statusBadge="Loading" />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
             <Spinner className="w-8 h-8 mx-auto text-primary" />
@@ -564,7 +564,10 @@ function LandingStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle={`${station.campaignName.toUpperCase()} • STATION ${station.id}`} />
+      <MobileHeader
+        stationContext={{ eventName: station.campaignName, stationId: station.id }}
+        showSecure
+      />
 
       <main className="flex-1 flex flex-col">
         <motion.div
@@ -911,7 +914,11 @@ function UnlockingStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="UNLOCKING" />
+      <MobileHeader
+        stationContext={{ eventName: 'Rental', stationId: station.id }}
+        statusBadge="Unlocking"
+        statusBadgeVariant="active"
+      />
 
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -942,7 +949,9 @@ function UnlockingStep({
           <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Station</span>
-              <span className="font-mono text-foreground">{station.id}</span>
+              <span className="font-mono text-foreground" title={station.id}>
+                {formatStationRef(station.id)}
+              </span>
             </div>
             <div className="flex items-center justify-between text-sm mt-2">
               <span className="text-muted-foreground">Slot</span>
@@ -976,7 +985,11 @@ function SuccessStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="CONFIRMED" />
+      <MobileHeader
+        stationContext={{ eventName: station.campaignName, stationId: station.id }}
+        statusBadge="Confirmed"
+        statusBadgeVariant="success"
+      />
 
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
@@ -991,7 +1004,7 @@ function SuccessStep({
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-foreground mb-2">You&apos;re all set!</h1>
           <p className="text-muted-foreground">
-            Your power bank is ready. Pick it up from slot {assignedSlot} at station {station.id}.
+            Your power bank is ready. Pick it up from slot {assignedSlot} at station {formatStationRef(station.id)}.
           </p>
         </div>
 
@@ -1008,7 +1021,9 @@ function SuccessStep({
           </div>
           <div className="p-5 text-center">
             <p className="text-5xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
-            <p className="text-sm text-muted-foreground mt-2">Station {station.id} • {station.campaignName}</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Station {formatStationRef(station.id)} · {station.campaignName}
+            </p>
           </div>
         </div>
 
@@ -1101,7 +1116,7 @@ function ErrorStep({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="ERROR" />
+      <MobileHeader statusBadge="Error" statusBadgeVariant="error" />
 
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div

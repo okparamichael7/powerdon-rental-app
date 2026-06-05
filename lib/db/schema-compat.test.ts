@@ -31,6 +31,13 @@ describe('isSchemaGapError', () => {
       }),
       true,
     )
+    assert.equal(
+      isSchemaGapError({
+        code: 'PGRST204',
+        message: "Could not find the 'unlock_token' column of 'rental_sessions' in the schema cache",
+      }),
+      true,
+    )
   })
 
   it('returns false for unrelated errors', () => {

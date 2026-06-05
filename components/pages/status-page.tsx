@@ -194,7 +194,7 @@ function NoSessionView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="STATUS" />
+      <MobileHeader statusBadge="Status" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
@@ -284,7 +284,11 @@ function ActiveSessionView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle={`${session.campaignName.toUpperCase()} • ACTIVE`} />
+      <MobileHeader
+        stationContext={{ eventName: session.campaignName, stationId: session.stationId }}
+        statusBadge="Active"
+        statusBadgeVariant="active"
+      />
       
       <main className="flex-1 px-6 py-8 space-y-8">
         {/* Connection Status Banner */}
@@ -472,7 +476,7 @@ function ReturningView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="RETURNING" />
+      <MobileHeader statusBadge="Returning" statusBadgeVariant="active" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <motion.div
@@ -548,7 +552,7 @@ function CompletedView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="COMPLETED" />
+      <MobileHeader statusBadge="Completed" statusBadgeVariant="success" />
       
       <main className="flex-1 px-5 py-6 space-y-6">
         {/* Success Animation */}
@@ -690,7 +694,7 @@ function ErrorView({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-screen"
     >
-      <MobileHeader subtitle="ERROR" />
+      <MobileHeader statusBadge="Error" statusBadgeVariant="error" />
       
       <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
         <motion.div
