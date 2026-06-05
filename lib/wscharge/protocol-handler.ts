@@ -587,7 +587,7 @@ async function processReturn(
         campaignId: session.campaign_id,
         rewardType: 'voucher',
         value: 10,
-        description: 'Thank you for using PowerDon!',
+        description: 'Thank you for using Powerdon!',
         expiresAt,
       })
       await sessionRepository.update(session.id, {

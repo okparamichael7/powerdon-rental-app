@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Terms of Service | PowerDon',
+  title: 'Terms of Service | Powerdon',
 }
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <main className="flex-1 overflow-y-auto px-4 py-5 text-sm leading-relaxed text-muted-foreground">
         <p className="text-xs text-muted-foreground/80">Last updated: June 4, 2026</p>
         <p className="mt-4 text-foreground">
-          By using PowerDon rental services you agree to pay applicable rental fees, return
+          By using Powerdon rental services you agree to pay applicable rental fees, return
           equipment to an authorized station, and accept liability for unreturned devices per
           the deposit terms shown at checkout.
         </p>

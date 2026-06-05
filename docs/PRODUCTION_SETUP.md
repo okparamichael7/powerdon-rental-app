@@ -1,6 +1,6 @@
 # Production Setup
 
-End-to-end guide to run PowerDon in production: **Vercel** (Next.js app), **Hetzner VPS** (always-on TCP proxy for WsCharge cabinets), **Supabase** (database + auth), and **Stripe** (rentals).
+End-to-end guide to run Powerdon in production: **Vercel** (Next.js app), **Hetzner VPS** (always-on TCP proxy for WsCharge cabinets), **Supabase** (database + auth), and **Stripe** (rentals).
 
 For local development, see [LOCAL_SETUP_AND_TESTING.md](./LOCAL_SETUP_AND_TESTING.md).
 

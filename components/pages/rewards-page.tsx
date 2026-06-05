@@ -13,7 +13,7 @@ import {
   PwaListRow,
 } from '@/components/pwa/pwa-screen';
 import {
-  PowerDonLogo,
+  PowerdonLogo,
   GiftIcon,
   CheckCircleIcon,
   XCircleIcon,
@@ -191,7 +191,7 @@ function NoRewardsView({
       </PwaCenteredState>
       <PwaActionBar>
         <Button onClick={onStartRental} className="h-12 w-full text-sm font-medium">
-          <PowerDonLogo size={18} />
+          <PowerdonLogo size={18} />
           Start Rental
         </Button>
         <Button
@@ -601,7 +601,7 @@ function RedeemedDetailView({
 
       <PwaActionBar>
         <Button onClick={onStartRental} className="h-12 w-full text-sm font-medium">
-          <PowerDonLogo size={18} />
+          <PowerdonLogo size={18} />
           Start New Rental
         </Button>
       </PwaActionBar>

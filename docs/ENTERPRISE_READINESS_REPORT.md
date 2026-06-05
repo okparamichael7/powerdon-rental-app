@@ -1,4 +1,4 @@
-# PowerDon Enterprise Readiness Report
+# Powerdon Enterprise Readiness Report
 
 **Date:** June 4, 2026  
 **Scope:** Full-stack audit and remediation pass (PWA, Admin, API, Supabase, WsCharge, Stripe)  
@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary
 
-PowerDon is a Next.js 16 rental platform with a customer PWA, Supabase-backed data layer, Stripe payments, and WsCharge hardware integration via a TCP proxy. This pass treated the codebase as launch-critical: security gaps on public APIs were closed, payment finalization was wired to hardware returns, production headers and env validation were added, and operational hooks (cron, webhook idempotency, DB constraints) were introduced.
+Powerdon is a Next.js 16 rental platform with a customer PWA, Supabase-backed data layer, Stripe payments, and WsCharge hardware integration via a TCP proxy. This pass treated the codebase as launch-critical: security gaps on public APIs were closed, payment finalization was wired to hardware returns, production headers and env validation were added, and operational hooks (cron, webhook idempotency, DB constraints) were introduced.
 
 The platform is **substantially closer to production launch** but not every GTM item (legal pages, SMS, distributed rate limiting, full E2E suite) is complete. Operators can run the business through the admin dashboard without direct DB access for core flows.
 

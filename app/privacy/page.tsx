@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Privacy Policy | PowerDon',
+  title: 'Privacy Policy | Powerdon',
 }
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
       <main className="flex-1 overflow-y-auto px-4 py-5 text-sm leading-relaxed text-muted-foreground">
         <p className="text-xs text-muted-foreground/80">Last updated: June 4, 2026</p>
         <p className="mt-4 text-foreground">
-          PowerDon processes personal data to provide power bank rental services, including
+          Powerdon processes personal data to provide power bank rental services, including
           email, payment information handled by Stripe, and session history. We do not sell
           personal data to third parties.
         </p>

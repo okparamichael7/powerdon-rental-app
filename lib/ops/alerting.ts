@@ -74,7 +74,7 @@ export class SlackChannel implements AlertChannel {
             { title: 'Source', value: alert.source, short: true },
             { title: 'Time', value: alert.timestamp.toISOString(), short: true },
           ],
-          footer: 'PowerDon Alerting',
+          footer: 'Powerdon Alerting',
           ts: Math.floor(alert.timestamp.getTime() / 1000),
         },
       ],

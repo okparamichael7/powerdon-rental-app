@@ -1,4 +1,4 @@
-# Docker Compose for PowerDon infrastructure
+# Docker Compose for Powerdon infrastructure
 version: '3.8'
 
 services:

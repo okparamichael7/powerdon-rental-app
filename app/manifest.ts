@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'PowerDon Rental',
-    short_name: 'PowerDon',
+    name: 'Powerdon Rental',
+    short_name: 'Powerdon',
     description: 'Rent a high-capacity power bank at events and festivals.',
     start_url: '/',
     display: 'standalone',

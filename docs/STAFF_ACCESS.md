@@ -1,6 +1,6 @@
 # Staff Access (Enterprise)
 
-PowerDon separates **rental customers** from **dashboard staff**:
+Powerdon separates **rental customers** from **dashboard staff**:
 
 | Store | Table / system | Who |
 |-------|----------------|-----|

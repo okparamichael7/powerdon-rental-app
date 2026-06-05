@@ -93,7 +93,7 @@ export const mockPaymentProvider: IPaymentProvider = {
 };
 
 // ============================================================
-// HARDWARE/VENDOR INTEGRATION (PowerDon Station API)
+// HARDWARE/VENDOR INTEGRATION (Powerdon Station API)
 // ============================================================
 
 export interface IHardwareProvider {
@@ -243,8 +243,8 @@ export const mockEmailProvider: IEmailProvider = {
   
   async getTemplates() {
     return [
-      { id: EmailTemplates.RENTAL_STARTED, name: 'Rental Started', subject: 'Your PowerDon rental has started', type: 'transactional' },
-      { id: EmailTemplates.RENTAL_COMPLETED, name: 'Rental Completed', subject: 'Your PowerDon rental is complete', type: 'transactional' },
+      { id: EmailTemplates.RENTAL_STARTED, name: 'Rental Started', subject: 'Your Powerdon rental has started', type: 'transactional' },
+      { id: EmailTemplates.RENTAL_COMPLETED, name: 'Rental Completed', subject: 'Your Powerdon rental is complete', type: 'transactional' },
       { id: EmailTemplates.REWARD_ISSUED, name: 'Reward Issued', subject: 'You earned a reward!', type: 'transactional' },
       { id: EmailTemplates.DEPOSIT_REFUNDED, name: 'Deposit Refunded', subject: 'Your deposit has been refunded', type: 'transactional' },
     ];

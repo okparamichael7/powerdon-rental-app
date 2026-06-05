@@ -14,7 +14,7 @@ export function getStripe(): Stripe {
     _stripe = new Stripe(apiKey, {
       apiVersion: '2026-05-27.dahlia',
       appInfo: {
-        name: 'PowerDon Rental Platform',
+        name: 'Powerdon Rental Platform',
         version: '1.0.0',
       },
       typescript: true,

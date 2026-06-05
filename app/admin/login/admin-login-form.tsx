@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PowerDonLogo } from '@/components/volt/icons'
+import { PowerdonLogo } from '@/components/volt/icons'
 import { Spinner } from '@/components/ui/spinner'
 
 export function AdminLoginForm() {
@@ -64,10 +64,10 @@ export function AdminLoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex flex-col items-center gap-3">
-          <PowerDonLogo size={28} />
+          <PowerdonLogo size={28} />
           <h1 className="text-lg font-medium">Admin sign in</h1>
           <p className="text-sm text-muted-foreground text-center">
-            Sign in with your PowerDon staff account.
+            Sign in with your Powerdon staff account.
           </p>
         </div>
 

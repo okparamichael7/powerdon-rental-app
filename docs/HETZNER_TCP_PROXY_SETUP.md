@@ -1,6 +1,6 @@
 # Hetzner TCP Proxy Setup (Beginner Guide)
 
-Step-by-step guide to run the **PowerDon WsCharge TCP proxy** on a cheap Hetzner VPS so cabinets can stay connected 24/7. Your **Next.js app stays on Vercel**; only the proxy runs on Hetzner.
+Step-by-step guide to run the **Powerdon WsCharge TCP proxy** on a cheap Hetzner VPS so cabinets can stay connected 24/7. Your **Next.js app stays on Vercel**; only the proxy runs on Hetzner.
 
 **Time:** about 30–45 minutes the first time.
 
@@ -30,7 +30,7 @@ Vercel (health & commands)  --HTTP 8089-->  Hetzner VPS
 
 ## Before you start (checklist)
 
-- [ ] PowerDon app deployed on **Vercel** (you have `https://something.vercel.app`)
+- [ ] Powerdon app deployed on **Vercel** (you have `https://something.vercel.app`)
 - [ ] Supabase migrations applied (`005`–`008`)
 - [ ] A **shared secret** for the proxy (you will generate one below)
 - [ ] Hetzner account (credit card or PayPal)
@@ -48,7 +48,7 @@ Vercel (health & commands)  --HTTP 8089-->  Hetzner VPS
 
 ### 2. Create a project
 
-1. Click **New Project** (e.g. name it `powerdon`).
+1. Click **New Project** (e.g. name it `Powerdon`).
 2. Stay inside that project for all steps below.
 
 ### 3. Add an SSH key (recommended)
@@ -58,7 +58,7 @@ Using a key is safer than only a password.
 **On your PC (PowerShell):**
 
 ```powershell
-ssh-keygen -t ed25519 -C "powerdon-hetzner" -f "$env:USERPROFILE\.ssh\powerdon_hetzner"
+ssh-keygen -t ed25519 -C "Powerdon-hetzner" -f "$env:USERPROFILE\.ssh\Powerdon_hetzner"
 ```
 
 Press Enter for no passphrase (or set one if you prefer).
@@ -66,7 +66,7 @@ Press Enter for no passphrase (or set one if you prefer).
 Copy the **public** key:
 
 ```powershell
-Get-Content "$env:USERPROFILE\.ssh\powerdon_hetzner.pub"
+Get-Content "$env:USERPROFILE\.ssh\Powerdon_hetzner.pub"
 ```
 
 In Hetzner: **Security → SSH keys → Add SSH key** → paste → save.
@@ -79,7 +79,7 @@ In Hetzner: **Security → SSH keys → Add SSH key** → paste → save.
 4. **Type:** **CX22** or **CAX11** (shared vCPU, ~2 GB RAM) — enough for the proxy.
 5. **Networking:** IPv4 **enabled** (you need a public IP for cabinets).
 6. **SSH keys:** select the key you added.
-7. **Name:** `powerdon-tcp-proxy`
+7. **Name:** `Powerdon-tcp-proxy`
 8. Click **Create & Buy now**
 
 ### 5. Note your server IP
@@ -93,7 +93,7 @@ On the server list, copy the **IPv4** address (example: `95.217.xxx.xxx`). Call 
 ### 6. Hetzner Cloud Firewall (console)
 
 1. **Firewalls → Create Firewall**
-2. Name: `powerdon-proxy`
+2. Name: `Powerdon-proxy`
 3. **Inbound rules** (add these):
 
 | Source | Port | Protocol | Description |
@@ -103,14 +103,14 @@ On the server list, copy the **IPv4** address (example: `95.217.xxx.xxx`). Call 
 | `0.0.0.0/0` | `8089` | TCP | Vercel → proxy health/commands |
 
 4. **Outbound:** allow all (default).
-5. **Apply to:** attach to server `powerdon-tcp-proxy`.
+5. **Apply to:** attach to server `Powerdon-tcp-proxy`.
 
 ### 7. First login with SSH
 
 **Windows PowerShell:**
 
 ```powershell
-ssh -i "$env:USERPROFILE\.ssh\powerdon_hetzner" root@VPS_IP
+ssh -i "$env:USERPROFILE\.ssh\Powerdon_hetzner" root@VPS_IP
 ```
 
 Replace `VPS_IP` with your real IP. Type `yes` if asked about host key.
@@ -147,14 +147,14 @@ npm install -g pm2
 
 ---
 
-## Part 4 — Deploy the PowerDon proxy code
+## Part 4 — Deploy the Powerdon proxy code
 
 ### 11. Clone your repository
 
 ```bash
 cd /opt
-git clone https://github.com/okparamichael7/powerdon-rental-app.git
-cd powerdon-rental-app
+git clone https://github.com/okparamichael7/Powerdon-rental-app.git
+cd Powerdon-rental-app
 ```
 
 If the repo is private, use a deploy key or copy files with `scp` instead.
@@ -190,7 +190,7 @@ a1b2c3d4e5f6...
 ### 14. Create the proxy env file
 
 ```bash
-nano /opt/powerdon-rental-app/.env.proxy
+nano /opt/Powerdon-rental-app/.env.proxy
 ```
 
 Paste (edit the values in ALL CAPS):
@@ -224,9 +224,9 @@ Save: `Ctrl+O`, Enter, `Ctrl+X`.
 ### 15. Start the process
 
 ```bash
-cd /opt/powerdon-rental-app
+cd /opt/Powerdon-rental-app
 set -a && source .env.proxy && set +a
-pm2 start npm --name powerdon-tcp-proxy -- run tcp-proxy
+pm2 start npm --name Powerdon-tcp-proxy -- run tcp-proxy
 pm2 save
 pm2 startup
 ```
@@ -237,7 +237,7 @@ pm2 startup
 
 ```bash
 pm2 status
-pm2 logs powerdon-tcp-proxy --lines 30
+pm2 logs Powerdon-tcp-proxy --lines 30
 ```
 
 You should see logs like TCP listening on **8088** and HTTP on **8089**.
@@ -302,7 +302,7 @@ Not your Vercel URL. Not port 3000.
 After power-on, check:
 
 ```bash
-pm2 logs powerdon-tcp-proxy --lines 50
+pm2 logs Powerdon-tcp-proxy --lines 50
 ```
 
 You should see a new TCP connection and login traffic.
@@ -315,10 +315,10 @@ In **Admin → Hardware** on Vercel app, station should show **online**.
 
 | Item | Value |
 |------|--------|
-| SSH | `ssh -i ~/.ssh/powerdon_hetzner root@VPS_IP` |
-| Proxy logs | `pm2 logs powerdon-tcp-proxy` |
-| Restart proxy | `pm2 restart powerdon-tcp-proxy` |
-| Proxy env file | `/opt/powerdon-rental-app/.env.proxy` |
+| SSH | `ssh -i ~/.ssh/Powerdon_hetzner root@VPS_IP` |
+| Proxy logs | `pm2 logs Powerdon-tcp-proxy` |
+| Restart proxy | `pm2 restart Powerdon-tcp-proxy` |
+| Proxy env file | `/opt/Powerdon-rental-app/.env.proxy` |
 | Health URL | `http://VPS_IP:8089/health` |
 | Cabinet target | `VPS_IP:8088` |
 
@@ -347,7 +347,7 @@ In **Admin → Hardware** on Vercel app, station should show **online**.
 ### Cabinets connect but login fails (401)
 
 - Token mismatch between Hetzner `STATION_PROXY_TOKEN` and Vercel.
-- Restart proxy after env change: `pm2 restart powerdon-tcp-proxy`
+- Restart proxy after env change: `pm2 restart Powerdon-tcp-proxy`
 
 ### Station offline in admin
 
@@ -358,9 +358,9 @@ In **Admin → Hardware** on Vercel app, station should show **online**.
 ### After changing `.env.proxy`
 
 ```bash
-cd /opt/powerdon-rental-app
+cd /opt/Powerdon-rental-app
 set -a && source .env.proxy && set +a
-pm2 restart powerdon-tcp-proxy
+pm2 restart Powerdon-tcp-proxy
 ```
 
 ---
@@ -368,7 +368,7 @@ pm2 restart powerdon-tcp-proxy
 ## Optional next steps
 
 - **DNS:** Point `proxy.yourdomain.com` A-record to `VPS_IP`, use `TCP_PROXY_URL=https://proxy.yourdomain.com` with nginx + TLS (advanced).
-- **Updates:** `cd /opt/powerdon-rental-app && git pull && npm ci && pm2 restart powerdon-tcp-proxy`
+- **Updates:** `cd /opt/Powerdon-rental-app && git pull && npm ci && pm2 restart Powerdon-tcp-proxy`
 - **Monitoring:** Hetzner alerts + `pm2 monit`
 
 ---

@@ -1,4 +1,4 @@
--- PowerDon Rental Platform Database Schema
+-- Powerdon Rental Platform Database Schema
 -- Enterprise-grade schema with full audit trail, RLS, and hardware integration
 
 -- Enable required extensions

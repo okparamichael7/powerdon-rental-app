@@ -43,7 +43,7 @@ export const faqs: FAQ[] = [
     id: 'faq-1',
     category: 'rental',
     question: 'How do I start a rental?',
-    answer: 'Scan the QR code on any PowerDon charging station to begin. You will need to provide your email and authorize a refundable security deposit. Once authorized, your designated slot will unlock automatically.',
+    answer: 'Scan the QR code on any Powerdon charging station to begin. You will need to provide your email and authorize a refundable security deposit. Once authorized, your designated slot will unlock automatically.',
     relatedActions: [
       { label: 'Find a Station', action: 'find-station' },
     ],
@@ -52,7 +52,7 @@ export const faqs: FAQ[] = [
     id: 'faq-2',
     category: 'rental',
     question: 'How do I return the power bank?',
-    answer: 'Return your power bank to any available slot at any PowerDon station. Simply insert the power bank into an empty slot and wait for the confirmation beep. Your deposit will be refunded automatically within minutes.',
+    answer: 'Return your power bank to any available slot at any Powerdon station. Simply insert the power bank into an empty slot and wait for the confirmation beep. Your deposit will be refunded automatically within minutes.',
     relatedActions: [
       { label: 'View Active Rental', action: 'view-rental' },
     ],

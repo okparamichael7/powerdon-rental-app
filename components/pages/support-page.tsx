@@ -13,7 +13,7 @@ import {
   PwaListRow,
 } from '@/components/pwa/pwa-screen';
 import {
-  PowerDonLogo, HeadphonesIcon, ChevronDownIcon,
+  PowerdonLogo, HeadphonesIcon, ChevronDownIcon,
   PowerBankIcon, WalletIcon, GiftIcon, MapPinIcon,
   CheckCircleIcon, ClockIcon, XCircleIcon, ArrowRightIcon
 } from '@/components/volt/icons';
@@ -40,7 +40,7 @@ interface FAQItem {
 const faqItems: FAQItem[] = [
   {
     question: 'How do I return my power bank?',
-    answer: 'Find any PowerDon station at the venue, insert your power bank into an available slot, and wait for confirmation. The station will automatically detect your return and process your deposit refund.',
+    answer: 'Find any Powerdon station at the venue, insert your power bank into an available slot, and wait for confirmation. The station will automatically detect your return and process your deposit refund.',
   },
   {
     question: 'When will I get my deposit back?',
@@ -48,7 +48,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: 'What if the station is full?',
-    answer: 'If a station is full, try another PowerDon station at the venue (look for QR codes on cabinets). Your rental continues until you successfully return.',
+    answer: 'If a station is full, try another Powerdon station at the venue (look for QR codes on cabinets). Your rental continues until you successfully return.',
   },
   {
     question: 'How do I earn rewards?',
@@ -69,7 +69,7 @@ const issueCategories: { id: IssueCategory; label: string; icon: typeof PowerBan
   { id: 'return', label: 'Return Issues', icon: MapPinIcon, description: 'Unable to return power bank' },
   { id: 'payment', label: 'Payment & Deposits', icon: WalletIcon, description: 'Charges, refunds, or billing' },
   { id: 'reward', label: 'Rewards & Vouchers', icon: GiftIcon, description: 'Missing or expired rewards' },
-  { id: 'station', label: 'Station Problems', icon: PowerDonLogo, description: 'Station offline or malfunctioning' },
+  { id: 'station', label: 'Station Problems', icon: PowerdonLogo, description: 'Station offline or malfunctioning' },
   { id: 'other', label: 'Other', icon: HeadphonesIcon, description: 'General questions or feedback' },
 ];
 

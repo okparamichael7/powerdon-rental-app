@@ -1,6 +1,6 @@
 'use client';
 
-import { PowerDonLogo, ArrowLeftIcon, HelpCircleIcon, ShieldCheckIcon } from './icons';
+import { PowerdonLogo, ArrowLeftIcon, HelpCircleIcon, ShieldCheckIcon } from './icons';
 import { cn } from '@/lib/utils';
 
 export interface StationContextProps {
@@ -113,8 +113,8 @@ export function MobileHeader({
             </button>
           ) : (
             <div className="flex shrink-0 items-center gap-2">
-              <PowerDonLogo size={22} className="text-foreground" />
-              <span className="text-[15px] font-semibold tracking-tight text-foreground">PowerDon</span>
+              <PowerdonLogo size={22} className="text-foreground" />
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">Powerdon</span>
             </div>
           )}
           {title && (

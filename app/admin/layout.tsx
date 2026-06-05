@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { PowerDonLogo } from '@/components/volt/icons';
+import { PowerdonLogo } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
@@ -150,8 +150,8 @@ export default function AdminLayout({
         >
           <div className="flex h-14 shrink-0 items-center justify-between px-5">
             <Link href="/admin" className="flex items-center gap-2">
-              <PowerDonLogo size={20} className="text-foreground" />
-              <span className="text-sm font-medium text-foreground">POWERDON</span>
+              <PowerdonLogo size={20} className="text-foreground" />
+              <span className="text-sm font-medium text-foreground">Powerdon</span>
             </Link>
             <button
               type="button"

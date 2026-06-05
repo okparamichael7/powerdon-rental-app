@@ -7,7 +7,7 @@ interface IconProps {
   size?: number;
 }
 
-export function PowerDonLogo({ className, size = 24 }: IconProps) {
+export function PowerdonLogo({ className, size = 24 }: IconProps) {
   return (
     <svg
       width={size}

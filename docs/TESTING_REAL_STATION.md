@@ -1,6 +1,6 @@
 # Testing Against a Real WsCharge Station
 
-Use this guide to connect a physical charging cabinet to your local (or deployed) PowerDon stack and verify the WsCharge v5.8P integration end-to-end.
+Use this guide to connect a physical charging cabinet to your local (or deployed) Powerdon stack and verify the WsCharge v5.8P integration end-to-end.
 
 **Related docs:** [LOCAL_SETUP_AND_TESTING.md](./LOCAL_SETUP_AND_TESTING.md), [wscharge/RUNBOOK.md](./wscharge/RUNBOOK.md)
 

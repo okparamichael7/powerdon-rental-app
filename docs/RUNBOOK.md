@@ -1,8 +1,8 @@
-# PowerDon Operations Runbook
+# Powerdon Operations Runbook
 
 ## System Overview
 
-PowerDon is a power bank rental system consisting of:
+Powerdon is a power bank rental system consisting of:
 1. **Next.js Web App** - Customer-facing app and admin dashboard (Vercel)
 2. **TCP Proxy Server** - Bridges station hardware to the API (Docker/VPS)
 3. **Supabase** - Database and authentication
@@ -38,7 +38,7 @@ PowerDon is a power bank rental system consisting of:
 **Investigation:**
 ```bash
 # Check TCP proxy logs
-docker logs powerdon-tcp-proxy --tail 100
+docker logs Powerdon-tcp-proxy --tail 100
 
 # Check station events in database
 SELECT * FROM station_events 
@@ -130,13 +130,13 @@ ORDER BY count DESC;
 docker ps -a | grep tcp-proxy
 
 # Check logs
-docker logs powerdon-tcp-proxy --tail 200
+docker logs Powerdon-tcp-proxy --tail 200
 ```
 
 **Resolution:**
 ```bash
 # Restart container
-docker restart powerdon-tcp-proxy
+docker restart Powerdon-tcp-proxy
 
 # If persistent, recreate
 docker-compose down
@@ -159,18 +159,18 @@ docker-compose up -d
 cd server
 
 # Build new image
-docker build -t powerdon-tcp-proxy:v1.x.x .
+docker build -t Powerdon-tcp-proxy:v1.x.x .
 
 # Stop old container
-docker stop powerdon-tcp-proxy
+docker stop Powerdon-tcp-proxy
 
 # Start new container
 docker run -d \
-  --name powerdon-tcp-proxy \
+  --name Powerdon-tcp-proxy \
   -p 8765:8765 \
   --env-file .env \
   --restart unless-stopped \
-  powerdon-tcp-proxy:v1.x.x
+  Powerdon-tcp-proxy:v1.x.x
 ```
 
 ### Database Migrations
@@ -194,12 +194,12 @@ supabase db push
 
 ```bash
 # TCP Proxy
-docker restart powerdon-tcp-proxy
+docker restart Powerdon-tcp-proxy
 
 # To force reconnect all stations
-docker stop powerdon-tcp-proxy
+docker stop Powerdon-tcp-proxy
 sleep 10
-docker start powerdon-tcp-proxy
+docker start Powerdon-tcp-proxy
 ```
 
 ### Backup Procedures

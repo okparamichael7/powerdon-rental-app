@@ -1,6 +1,6 @@
 # WsCharge Integration
 
-PowerDon uses **WsCharge Communication Protocol v5.8P** over TCP for cabinet connectivity.
+Powerdon uses **WsCharge Communication Protocol v5.8P** over TCP for cabinet connectivity.
 
 ## Quick start
 

@@ -3,7 +3,7 @@ import type { SendEmailRequest } from '@/lib/api/types'
 import { logger } from '@/lib/observability/logger'
 
 function renderTemplateBody(request: SendEmailRequest): { subject: string; html: string } {
-  const subject = `PowerDon — ${request.templateId.replace(/_/g, ' ')}`
+  const subject = `Powerdon — ${request.templateId.replace(/_/g, ' ')}`
   const html = `<p>Hello,</p><p>Notification: ${request.templateId}</p><pre>${JSON.stringify(request.data, null, 2)}</pre>`
   return { subject, html }
 }
@@ -14,7 +14,7 @@ function renderTemplateBody(request: SendEmailRequest): { subject: string; html:
 export const productionEmailProvider: IEmailProvider = {
   async sendEmail(request: SendEmailRequest) {
     const apiKey = process.env.RESEND_API_KEY
-    const from = process.env.EMAIL_FROM || 'PowerDon <noreply@powerdon.com>'
+    const from = process.env.EMAIL_FROM || 'Powerdon <noreply@powerdon.com>'
 
     if (!apiKey) {
       logger.warn('RESEND_API_KEY not configured; email not sent', {

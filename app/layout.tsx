@@ -7,14 +7,14 @@ const _geist = Geist({ subsets: ['latin'] })
 const _geistMono = Geist_Mono({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'PowerDon - Power Bank Rental',
+  title: 'Powerdon - Power Bank Rental',
   description:
     'Rent a high-capacity power bank in seconds. QR-based rental and rewards platform for events and festivals.',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'PowerDon',
+    title: 'Powerdon',
   },
   icons: {
     icon: [

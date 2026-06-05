@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { MobileHeader, formatStationRef } from '@/components/volt/mobile-header';
 import {
-  PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
+  PowerdonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
   XCircleIcon, RefreshIcon, CheckCircleIcon,
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
@@ -491,7 +491,7 @@ function ActiveWarningStep({
     <PwaScreen>
       <MobileHeader />
       <PwaCenteredState
-        icon={<PowerDonLogo size={28} className="text-foreground" />}
+        icon={<PowerdonLogo size={28} className="text-foreground" />}
         title="Active Rental"
         description="You have an active rental. View its status or continue browsing."
       >
@@ -524,7 +524,7 @@ function LandingStep({
       <PwaBody className="justify-between py-3">
         <div className="flex flex-col items-center gap-3">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
-            <PowerDonLogo size={28} className="text-foreground" />
+            <PowerdonLogo size={28} className="text-foreground" />
           </div>
 
           <div className="text-center">

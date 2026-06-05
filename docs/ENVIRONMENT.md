@@ -1,4 +1,4 @@
-# PowerDon Environment Variables
+# Powerdon Environment Variables
 
 This document describes all environment variables required for production deployment.
 
@@ -70,7 +70,7 @@ METRICS_API_KEY=metrics_read_key_here
 LOG_LEVEL=info
 
 # Application identification
-SERVICE_NAME=powerdon-api
+SERVICE_NAME=Powerdon-api
 APP_VERSION=1.0.0
 ```
 
@@ -104,7 +104,7 @@ The TCP proxy server runs separately from the Next.js app. Deploy using Docker:
 ```bash
 # Build
 cd server
-docker build -t powerdon-tcp-proxy .
+docker build -t Powerdon-tcp-proxy .
 
 # Run
 docker run -d \
@@ -112,7 +112,7 @@ docker run -d \
   -e API_BASE_URL=https://your-app.vercel.app \
   -e API_KEY=tcp_proxy_secret_key_here \
   -e TCP_SERVER_PORT=8765 \
-  powerdon-tcp-proxy
+  Powerdon-tcp-proxy
 ```
 
 Or use docker-compose:

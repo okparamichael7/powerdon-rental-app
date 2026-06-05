@@ -1,6 +1,6 @@
 # Local Setup and Testing Guide
 
-Use this guide after applying Supabase migrations (`002`, `003`, `004`) to verify the PowerDon rental app and WsCharge v5.8P integration.
+Use this guide after applying Supabase migrations (`002`, `003`, `004`) to verify the Powerdon rental app and WsCharge v5.8P integration.
 
 **Production deploy:** see [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md).
 

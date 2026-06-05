@@ -1,4 +1,4 @@
-# PowerDon TCP Proxy Server
+# Powerdon TCP Proxy Server
 # Multi-stage build for optimal image size
 
 FROM node:20-alpine AS builder

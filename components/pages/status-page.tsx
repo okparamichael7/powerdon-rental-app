@@ -14,7 +14,7 @@ import {
   PWA_BTN_CLASS,
 } from '@/components/pwa/pwa-screen';
 import {
-  PowerDonLogo,
+  PowerdonLogo,
   GiftIcon,
   PowerBankIcon,
   CheckCircleIcon,
@@ -284,7 +284,7 @@ function ActiveSessionView({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-medium uppercase tracking-wider text-background/60">
-                PowerDon Pro
+                Powerdon Pro
               </p>
               <p className="mt-0.5 truncate text-sm font-medium">{session.stationName}</p>
               <p className="text-xs text-background/70">Slot {session.slotNumber}</p>
@@ -414,7 +414,7 @@ function CompletedView({
           </div>
           <h1 className="text-lg font-semibold text-foreground">Return Complete!</h1>
           <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
-            Thank you for using PowerDon. Your rental has been successfully completed.
+            Thank you for using Powerdon. Your rental has been successfully completed.
           </p>
         </div>
 
@@ -472,7 +472,7 @@ function CompletedView({
           </>
         ) : (
           <Button onClick={onStartNew} className="h-12 w-full text-sm font-medium">
-            <PowerDonLogo size={18} />
+            <PowerdonLogo size={18} />
             Start New Rental
           </Button>
         )}

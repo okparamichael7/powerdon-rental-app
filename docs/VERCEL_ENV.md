@@ -1,6 +1,6 @@
 # Vercel Environment Variables
 
-PowerDon on **Vercel** runs **Next.js only**. The **TCP proxy** (cabinet connections on port **8088**) must run on a separate host (VPS, Railway, etc.). This guide lists what to configure in **Vercel → Project → Settings → Environment Variables**.
+Powerdon on **Vercel** runs **Next.js only**. The **TCP proxy** (cabinet connections on port **8088**) must run on a separate host (VPS, Railway, etc.). This guide lists what to configure in **Vercel → Project → Settings → Environment Variables**.
 
 **Related:** [.env.example](../.env.example), [LOCAL_SETUP_AND_TESTING.md](./LOCAL_SETUP_AND_TESTING.md), [TESTING_REAL_STATION.md](./TESTING_REAL_STATION.md)
 
@@ -65,7 +65,7 @@ After deploy, check `https://your-app.vercel.app/api/health` → `productionRead
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Transactional email |
-| `EMAIL_FROM` | e.g. `PowerDon <noreply@yourdomain.com>` |
+| `EMAIL_FROM` | e.g. `Powerdon <noreply@yourdomain.com>` |
 | `SLACK_WEBHOOK_URL` | Alerting |
 | `ALERT_WEBHOOK_URL` | Alerting |
 | `PAGERDUTY_ROUTING_KEY` | Alerting |
