@@ -90,7 +90,9 @@ export async function startRentalCheckout(
           ? 'Rental system is updating. Please try again in a moment or contact support.'
           : prepMessage.includes('invalid input syntax for type uuid')
             ? 'Rental setup failed due to invalid station data. Please contact support.'
-            : 'Failed to create rental session'
+            : prepMessage.includes('start_station_id')
+              ? 'Rental database schema mismatch. Run migration 017 in Supabase, then retry.'
+              : 'Failed to create rental session'
       return { success: false, error: userMessage }
     }
 

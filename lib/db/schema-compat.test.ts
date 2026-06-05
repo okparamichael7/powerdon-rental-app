@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  applyLegacyRentalSessionStationFields,
   isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
@@ -49,6 +50,18 @@ describe('isSchemaGapError', () => {
   it('returns false for unrelated errors', () => {
     assert.equal(isSchemaGapError({ code: '23505', message: 'duplicate key' }), false)
     assert.equal(isSchemaGapError(null), false)
+  })
+})
+
+describe('applyLegacyRentalSessionStationFields', () => {
+  it('mirrors pickup station fields to legacy start_* columns', () => {
+    const payload = applyLegacyRentalSessionStationFields({
+      pickup_station_id: '60f55779-1b62-4b79-b6fc-178d9086a8ab',
+      pickup_slot_number: 1,
+    })
+
+    assert.equal(payload.start_station_id, '60f55779-1b62-4b79-b6fc-178d9086a8ab')
+    assert.equal(payload.start_slot_number, 1)
   })
 })
 

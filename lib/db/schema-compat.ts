@@ -7,7 +7,27 @@ export function nullIfEmptyUuid(value: string | null | undefined): string | unde
   return trimmed.length > 0 ? trimmed : undefined
 }
 
-const REQUIRED_SESSION_UUID_KEYS = new Set(['user_id', 'pickup_station_id'])
+const REQUIRED_SESSION_UUID_KEYS = new Set(['user_id', 'pickup_station_id', 'start_station_id'])
+
+/**
+ * Some production DBs use legacy start_station_id / start_slot_number (NOT NULL)
+ * instead of or alongside pickup_station_id / pickup_slot_number (009).
+ */
+export function applyLegacyRentalSessionStationFields(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...payload }
+  const pickupStationId = next.pickup_station_id
+  const pickupSlotNumber = next.pickup_slot_number
+
+  if (typeof pickupStationId === 'string' && pickupStationId.length > 0) {
+    if (!next.start_station_id) next.start_station_id = pickupStationId
+  }
+  if (pickupSlotNumber != null && next.start_slot_number == null) {
+    next.start_slot_number = pickupSlotNumber
+  }
+  return next
+}
 
 /** Remove blank optional *_id fields before rental_sessions insert. */
 export function stripEmptyUuidFields(payload: Record<string, unknown>): Record<string, unknown> {
