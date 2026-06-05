@@ -113,12 +113,10 @@ class StationRepository {
         slots:station_slots(*)
       `)
       .eq('external_id', externalId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
+    if (error) throw error;
+    if (!data) return null;
 
     return {
       ...data,
@@ -240,11 +238,12 @@ class StationRepository {
       });
     }
 
-    // Create new station
+    // Create new station (device_id: legacy v0 NOT NULL column on partial DBs — same as ProductSn)
     const { data: newStation, error } = await supabase
       .from('stations')
       .insert({
         external_id: externalId,
+        device_id: externalId,
         name: `Station ${externalId.slice(-6)}`,
         status: 'online',
         total_slots: data.totalSlots || 12,
