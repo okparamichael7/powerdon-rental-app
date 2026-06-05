@@ -18,7 +18,7 @@ export async function loadStationFromApi(stationId: string): Promise<{ success: 
         status: s.isOnline ? 'online' : 'offline',
         availableSlots: Number(s.availableSlots ?? 0),
         totalSlots: Number(s.totalSlots ?? 12),
-        campaignId: s.campaignId ? String(s.campaignId) : '',
+        campaignId: s.campaignId ? String(s.campaignId) : undefined,
         campaignName: String(s.campaignName ?? 'Event'),
         hourlyRate: Number(s.hourlyRate ?? 2),
         dailyCap: Number(s.dailyCap ?? 10),

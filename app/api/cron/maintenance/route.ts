@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sessionRepository, rewardRepository } from '@/lib/db'
+import { sessionRepository, rewardRepository, stationRepository } from '@/lib/db'
 import { logger } from '@/lib/observability/logger'
 
 export async function POST(request: NextRequest) {
@@ -18,13 +18,15 @@ export async function POST(request: NextRequest) {
   try {
     const expiredSessions = await sessionRepository.expirePendingSessions(15)
     const expiredRewards = await rewardRepository.expireOldRewards()
+    const releasedSlots = await stationRepository.releaseStuckReservedSlots(30)
 
-    logger.info('Maintenance cron completed', { expiredSessions, expiredRewards })
+    logger.info('Maintenance cron completed', { expiredSessions, expiredRewards, releasedSlots })
 
     return NextResponse.json({
       success: true,
       expiredSessions,
       expiredRewards,
+      releasedSlots,
     })
   } catch (error) {
     logger.error('Maintenance cron failed', {

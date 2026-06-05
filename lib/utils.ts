@@ -20,7 +20,14 @@ export function formatDate(date: Date): string {
 }
 
 export function formatDateTime(date: Date): string {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
   return `${formatDate(date)} ${formatTime(date)}`;
+}
+
+/** Parse ISO timestamps safely for admin/UI display. */
+export function formatDateTimeFromIso(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  return formatDateTime(new Date(iso));
 }
 
 // Number formatting helper (using fixed locale to avoid hydration mismatches)

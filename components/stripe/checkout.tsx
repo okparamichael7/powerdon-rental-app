@@ -8,6 +8,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js'
 
 import { startRentalCheckout, getCheckoutStatus, type StartRentalCheckoutParams } from '@/app/actions/stripe'
+import { getErrorMessage } from '@/lib/errors/get-error-message'
 import { Spinner } from '@/components/ui/spinner'
 
 // Initialize Stripe
@@ -74,7 +75,7 @@ export function RentalCheckout({
         }
       } catch (err) {
         if (!mounted) return
-        const errorMessage = err instanceof Error ? err.message : 'Failed to start checkout'
+        const errorMessage = getErrorMessage(err) || 'Failed to start checkout'
         setError(errorMessage)
         onError?.(errorMessage)
       } finally {

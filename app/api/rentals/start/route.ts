@@ -2,11 +2,13 @@
 // POST /api/rentals/start
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sessionRepository, userRepository, stationRepository, campaignRepository } from '@/lib/db';
+import { sessionRepository, userRepository, stationRepository } from '@/lib/db';
 import { enforceRateLimit } from '@/lib/api/route-helpers';
 import { validateBody, schemas } from '@/lib/security/validation';
 import { dispatchBorrowForSession } from '@/lib/rental/dispatch-borrow';
-import crypto from 'crypto';
+import { prepareRentalStart, loadCampaignPricing } from '@/lib/rental/start-orchestrator';
+import { nullIfEmptyUuid } from '@/lib/db/schema-compat';
+import { getErrorMessage } from '@/lib/errors/get-error-message';
 
 export async function POST(request: NextRequest) {
   const rateLimited = await enforceRateLimit(request, 'rentalStart');
@@ -18,9 +20,8 @@ export async function POST(request: NextRequest) {
 
     const body = validated.data;
     const { stationId, slotNumber, userEmail, userName, phone, marketingConsent } = body;
-    let { campaignId } = body;
+    const campaignId = nullIfEmptyUuid(body.campaignId);
 
-    // Get station from database
     const station = await stationRepository.getById(stationId);
     if (!station) {
       return NextResponse.json(
@@ -29,7 +30,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check station is online
     if (station.status !== 'online') {
       return NextResponse.json(
         { success: false, error: 'Station is not available', stationStatus: station.status },
@@ -37,19 +37,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get or create user
     const user = await userRepository.getOrCreate(userEmail, {
       name: userName,
       phone,
       marketingConsent,
     });
 
-    // Check if user already has an active session
     const existingSession = await sessionRepository.getActiveByUserId(user.id);
     if (existingSession) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'You already have an active rental session',
           existingSessionId: existingSession.id,
           existingSessionCode: existingSession.session_code,
@@ -58,10 +56,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find available slot
     let targetSlot: number;
     if (slotNumber) {
-      // User requested specific slot
       const slot = await stationRepository.getSlot(stationId, slotNumber);
       if (!slot || slot.status !== 'occupied') {
         return NextResponse.json(
@@ -71,7 +67,6 @@ export async function POST(request: NextRequest) {
       }
       targetSlot = slotNumber;
     } else {
-      // Find best available slot (highest battery)
       const availableSlot = await stationRepository.getAvailableSlot(stationId);
       if (!availableSlot) {
         return NextResponse.json(
@@ -82,63 +77,38 @@ export async function POST(request: NextRequest) {
       targetSlot = availableSlot.slot_number;
     }
 
-    // Reserve the slot
-    const reserved = await stationRepository.reserveSlot(stationId, targetSlot);
-    if (!reserved) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to reserve slot, please try again' },
-        { status: 400 }
-      );
+    const pricing = await loadCampaignPricing(campaignId, station.campaign_id ?? null);
+
+    let prepared;
+    try {
+      prepared = await prepareRentalStart({
+        userId: user.id,
+        stationId,
+        slotNumber: targetSlot,
+        campaignId: pricing.campaignId,
+        depositAmount: pricing.depositAmount,
+        hourlyRate: pricing.hourlyRate,
+        dailyCap: pricing.dailyCap,
+        rewardThresholdMinutes: pricing.rewardThresholdMinutes,
+      });
+    } catch (prepError) {
+      const prepMessage = getErrorMessage(prepError);
+      if (prepMessage === 'SLOT_NOT_AVAILABLE' || prepMessage === 'SLOT_RESERVE_FAILED') {
+        return NextResponse.json(
+          { success: false, error: 'No power banks available at this station' },
+          { status: 400 }
+        );
+      }
+      throw prepError;
     }
 
-    let depositAmount = 25.00;
-    let hourlyRate = 2.00;
-    let dailyCap = 10.00;
-    let rewardThresholdMinutes = 60;
+    const session = prepared.session;
 
-    if (campaignId) {
-      const campaign = await campaignRepository.getById(campaignId);
-      if (campaign?.is_active) {
-        depositAmount = Number(campaign.deposit_amount);
-        hourlyRate = Number(campaign.hourly_rate);
-        dailyCap = Number(campaign.daily_cap);
-        rewardThresholdMinutes = campaign.reward_threshold_minutes;
-      }
-    } else if (station.campaign_id) {
-      const campaign = await campaignRepository.getById(station.campaign_id);
-      if (campaign?.is_active) {
-        depositAmount = Number(campaign.deposit_amount);
-        hourlyRate = Number(campaign.hourly_rate);
-        dailyCap = Number(campaign.daily_cap);
-        rewardThresholdMinutes = campaign.reward_threshold_minutes;
-        campaignId = campaign.id;
-      }
-    }
-
-    // Generate unlock token
-    const unlockToken = crypto.randomBytes(16).toString('hex');
-    const unlockTokenExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Create session in database
-    const session = await sessionRepository.create({
-      userId: user.id,
-      campaignId,
-      pickupStationId: stationId,
-      pickupSlotNumber: targetSlot,
-      depositAmount,
-      hourlyRate,
-      dailyCap,
-      rewardThresholdMinutes,
-      unlockToken,
-      unlockTokenExpiresAt,
-    });
-
-    // Add initial timeline event
     await sessionRepository.addEvent(session.id, {
       type: 'scan',
       description: `Rental initiated at ${station.name}`,
-      metadata: { 
-        stationId, 
+      metadata: {
+        stationId,
         slotNumber: targetSlot,
         userEmail,
       },
@@ -146,9 +116,6 @@ export async function POST(request: NextRequest) {
 
     const borrowResult = await dispatchBorrowForSession(session.id);
     const hardwareCommandSent = borrowResult.success && !borrowResult.skipped;
-
-    // If hardware command wasn't sent (station not connected), session stays pending
-    // The TCP proxy will handle the response when it comes
 
     return NextResponse.json({
       success: true,
@@ -162,20 +129,19 @@ export async function POST(request: NextRequest) {
         depositAmount: session.deposit_amount,
         hourlyRate: session.hourly_rate,
         dailyCap: session.daily_cap,
-        unlockToken: session.unlock_token,
+        unlockToken: prepared.unlockToken,
         unlockExpiresAt: session.unlock_token_expires_at,
         paymentAuthorizationId: session.payment_authorization_id ?? session.payment_intent_id ?? '',
       },
       hardwareCommandSent,
-      message: hardwareCommandSent 
+      message: hardwareCommandSent
         ? 'Rental session created. Please pick up your power bank from the indicated slot.'
         : 'Rental session created. Waiting for station connection.',
     });
-
   } catch (error) {
     console.error('[API] Error starting rental:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to start rental' },
+      { success: false, error: getErrorMessage(error) || 'Failed to start rental' },
       { status: 500 }
     );
   }

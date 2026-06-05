@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository } from '@/lib/db';
+import { nullIfEmptyUuid } from '@/lib/db/schema-compat';
 import { withPublicApi } from '@/lib/api/public-route';
 
 export const GET = withPublicApi(async (request: NextRequest) => {
@@ -52,7 +53,7 @@ export const GET = withPublicApi(async (request: NextRequest) => {
         latitude: dbStation.latitude,
         longitude: dbStation.longitude,
         totalSlots: dbStation.total_slots,
-        campaignId: dbStation.campaign_id,
+        campaignId: nullIfEmptyUuid(dbStation.campaign_id) ?? null,
         firmwareVersion: dbStation.firmware_version,
         hardwareVersion: dbStation.hardware_version,
         isEnabled: dbStation.is_enabled,

@@ -72,4 +72,8 @@ CREATE TRIGGER tr_session_code
   FOR EACH ROW
   EXECUTE FUNCTION set_session_code();
 
+-- Indexes from 009 (safe if already present)
+CREATE INDEX IF NOT EXISTS idx_sessions_pickup_station ON rental_sessions(pickup_station_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_return_station ON rental_sessions(return_station_id);
+
 NOTIFY pgrst, 'reload schema';

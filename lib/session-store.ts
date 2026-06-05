@@ -37,7 +37,7 @@ export interface ActiveSession {
   rewardThreshold: number;
   rewardDescription: string;
   rewardValue: number;
-  campaignId: string;
+  campaignId?: string;
   campaignName: string;
   status: RentalState;
   lastSyncTime: Date;
@@ -68,7 +68,7 @@ export interface StationInfo {
   status: 'online' | 'offline' | 'maintenance' | 'busy';
   availableSlots: number;
   totalSlots: number;
-  campaignId: string;
+  campaignId?: string;
   campaignName: string;
   hourlyRate: number;
   dailyCap: number;

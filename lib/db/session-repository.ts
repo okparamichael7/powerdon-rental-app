@@ -820,10 +820,15 @@ class RewardRepository {
   }): Promise<DbReward> {
     const supabase = await createServiceClient();
     const now = new Date().toISOString();
+    const campaignId = nullIfEmptyUuid(reward.campaignId);
+    if (!campaignId) {
+      throw new Error('REWARD_CAMPAIGN_REQUIRED');
+    }
+
     const base = {
       session_id: reward.sessionId,
       user_id: reward.userId,
-      campaign_id: reward.campaignId,
+      campaign_id: campaignId,
       reward_type: reward.rewardType,
       description: reward.description,
       status: 'qualified' as const,

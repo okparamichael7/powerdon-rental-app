@@ -414,6 +414,40 @@ class StationRepository {
     return false;
   }
 
+  /** Release slots stuck in reserved (e.g. abandoned checkouts). Mirrors migration 016. */
+  async releaseStuckReservedSlots(maxAgeMinutes = 30): Promise<number> {
+    const supabase = await createServiceClient();
+    const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+
+    const patches: Record<string, unknown>[] = [
+      { status: 'occupied', last_status_change: new Date().toISOString() },
+      { status: 'occupied' },
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const patch of patches) {
+      for (const useTimeFilter of [true, false]) {
+        let query = supabase
+          .from('station_slots')
+          .update(patch)
+          .eq('status', 'reserved')
+          .select('id');
+
+        if (useTimeFilter) {
+          query = query.lt('last_status_change', cutoff);
+        }
+
+        const { data, error } = await query;
+        if (!error) return data?.length ?? 0;
+        if (!isSchemaGapError(error)) throw error;
+        lastError = error;
+      }
+    }
+
+    if (lastError) throw lastError;
+    return 0;
+  }
+
   async releaseSlot(stationId: string, slotNumber: number): Promise<void> {
     const supabase = await createServiceClient();
     

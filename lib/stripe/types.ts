@@ -1,12 +1,13 @@
 import type { Stripe } from 'stripe'
 
 // =============================================================================
-// STRIPE PRODUCT IDS - Created in Stripe Dashboard/API
+// STRIPE PRODUCT NAMES — checkout uses inline product_data unless
+// STRIPE_RENTAL_DEPOSIT_PRODUCT_ID is set (see payment-service buildDepositPriceData).
 // =============================================================================
 
 export const STRIPE_PRODUCTS = {
   RENTAL_DEPOSIT: {
-    productId: 'prod_UcU1phsdl2ANSE',
+    productId: 'prod_UcU1phsdl2ANSE', // legacy test id; not used by default checkout path
     priceId: 'price_1TdFOdDPW7Z1YWdIO8ieL7E0', // EUR price
     name: 'Power Bank Rental Deposit',
     description: 'Security deposit for power bank rental - refundable upon return',

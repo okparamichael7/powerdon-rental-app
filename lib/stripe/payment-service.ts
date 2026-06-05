@@ -21,6 +21,12 @@ import {
   generateIdempotencyKey,
 } from './types'
 import { logger } from '@/lib/observability/logger'
+import { nullIfEmptyUuid } from '@/lib/db/schema-compat'
+
+function stripeCampaignMetadata(campaignId?: string): Record<string, string> {
+  const normalized = nullIfEmptyUuid(campaignId)
+  return normalized ? { campaign_id: normalized } : {}
+}
 
 // =============================================================================
 // CUSTOMER MANAGEMENT
@@ -167,7 +173,7 @@ export async function createPaymentIntentWithHold(
           user_id: params.metadata.userId,
           station_id: params.metadata.stationId,
           slot_number: params.metadata.slotNumber,
-          campaign_id: params.metadata.campaignId || '',
+          ...stripeCampaignMetadata(params.metadata.campaignId),
           type: params.metadata.type,
           created_at: new Date().toISOString(),
         },
@@ -383,7 +389,7 @@ export async function createCheckoutSession(
           user_id: params.userId,
           station_id: params.stationId,
           slot_number: String(params.slotNumber),
-          campaign_id: params.campaignId || '',
+          ...stripeCampaignMetadata(params.campaignId),
           type: 'rental_deposit',
         },
         statement_descriptor_suffix: 'POWERDON',
