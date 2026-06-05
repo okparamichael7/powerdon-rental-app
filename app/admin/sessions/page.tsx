@@ -1,23 +1,44 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/volt/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+  AdminDrawer,
+  AdminDrawerHeader,
+  AdminDrawerBody,
+  AdminDrawerFooter,
+  AdminDrawerSection,
+  AdminDrawerFieldList,
+  AdminDrawerField,
+  AdminDrawerPanel,
+} from '@/components/admin/admin-drawer';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { AdminFilterBar, AdminFilterToggleGroup } from '@/components/admin/admin-filter-bar';
+import {
+  AdminDataTableCard,
+  AdminDataTable,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+  AdminDataTableEmpty,
+  AdminMobileCardList,
+  AdminMobileCard,
+  AdminDesktopOnly,
+} from '@/components/admin/admin-data-table';
+import { AdminPaginationBar } from '@/components/admin/admin-pagination-bar';
+import { AdminTableSkeleton, AdminCardListSkeleton } from '@/components/admin/admin-skeletons';
 import { useSessions } from '@/hooks/use-services';
 import { rentalService } from '@/lib/services';
 import { downloadCsv } from '@/lib/admin/export-csv';
-import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states';
+import { AdminErrorBanner } from '@/components/admin/admin-states';
+import { toast } from '@/components/admin/admin-providers';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useAdminPagination } from '@/hooks/use-admin-pagination';
+import { useTableSort } from '@/hooks/use-table-sort';
 import {
   Dialog,
   DialogContent,
@@ -30,8 +51,6 @@ import { isSuccessResponse } from '@/lib/api/client';
 import type { RentalSession, TimelineEvent } from '@/lib/types';
 import { formatDateTime, formatTime } from '@/lib/utils';
 import { 
-  Search, 
-  Filter, 
   Download,
   Clock,
   CreditCard,
@@ -43,6 +62,14 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { TableBody } from '@/components/ui/table';
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+];
 
 const timelineIconMap: Record<string, typeof Zap> = {
   scan: Zap,
@@ -62,25 +89,28 @@ export default function SessionsPage() {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
-  const { data: sessions, loading, error, fetchSessions, refetch } = useSessions();
-  const [cancelTarget, setCancelTarget] = useState<RentalSession | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  // Fetch sessions with filters
+  const [cancelTarget, setCancelTarget] = useState<RentalSession | null>(null);
+  const debouncedSearch = useDebouncedValue(searchQuery);
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = useAdminPagination();
+
+  const { data: sessions, loading, error, total, fetchSessions, refetch } = useSessions();
+
   useEffect(() => {
-    const filters: Parameters<typeof fetchSessions>[0] = {};
-    
-    if (searchQuery) {
-      filters.search = searchQuery;
-    }
-    
+    resetPage();
+  }, [debouncedSearch, statusFilter, resetPage]);
+
+  useEffect(() => {
+    const filters: Parameters<typeof fetchSessions>[0] = {
+      ...paginationParams,
+    };
+    if (debouncedSearch) filters.search = debouncedSearch;
     if (statusFilter !== 'all') {
       filters.status = [statusFilter as RentalSession['status']];
     }
-
     fetchSessions(filters);
-  }, [searchQuery, statusFilter, fetchSessions]);
+  }, [debouncedSearch, statusFilter, paginationParams, fetchSessions]);
 
   // Load timeline when session is selected
   useEffect(() => {
@@ -101,6 +131,11 @@ export default function SessionsPage() {
   }, [selectedSession?.id]);
 
   const filteredSessions = sessions || [];
+  const { sorted: sortedSessions, sortOrder, toggleSort, isSorted } = useTableSort(
+    filteredSessions,
+    'startTime',
+    'desc',
+  );
 
   const handleExport = () => {
     downloadCsv(
@@ -120,412 +155,326 @@ export default function SessionsPage() {
   const handleCancelSession = async () => {
     if (!cancelTarget) return;
     setActionLoading(true);
-    setActionMessage(null);
     try {
       const result = await rentalService.cancelSession(cancelTarget.id);
       if (result.success) {
-        setActionMessage('Session cancelled');
+        toast.success('Session cancelled');
         setCancelTarget(null);
         setSelectedSession(null);
         refetch();
       } else {
-        setActionMessage(result.error?.message ?? 'Cancel failed');
+        toast.error(result.error?.message ?? 'Cancel failed');
       }
     } finally {
       setActionLoading(false);
     }
   };
 
+  const activeFilters =
+    statusFilter !== 'all'
+      ? [{ key: 'status', label: `Status: ${statusFilter}`, onRemove: () => setStatusFilter('all') }]
+      : [];
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+  };
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Sessions</h1>
-          <p className="text-muted-foreground">
-            Monitor and manage all rental sessions
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={!filteredSessions.length}>
-            <Download size={16} className="mr-2" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw size={16} className="mr-2" />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Sessions"
+        description="Monitor and manage all rental sessions"
+        meta={
+          total > 0 ? (
+            <p className="text-xs text-muted-foreground">{total} total sessions</p>
+          ) : null
+        }
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={!filteredSessions.length}>
+              <Download className="mr-2 size-4" aria-hidden />
+              Export
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="mr-2 size-4" aria-hidden />
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
       {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by session code, email, or name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={statusFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('all')}
-              >
-                All
-              </Button>
-              <Button
-                variant={statusFilter === 'active' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('active')}
-              >
-                Active
-              </Button>
-              <Button
-                variant={statusFilter === 'completed' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('completed')}
-              >
-                Completed
-              </Button>
-              <Button
-                variant={statusFilter === 'expired' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('expired')}
-              >
-                Expired
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <AdminFilterBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by session code, email, or name…"
+        activeFilters={activeFilters}
+        onClearFilters={searchQuery || statusFilter !== 'all' ? clearFilters : undefined}
+      >
+        <AdminFilterToggleGroup
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={STATUS_FILTER_OPTIONS}
+        />
+      </AdminFilterBar>
 
-      {/* Sessions Table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Spinner className="h-8 w-8" />
-            </div>
-          ) : filteredSessions.length === 0 ? (
-            <AdminEmptyState title="No sessions match your filters" />
-          ) : (
-            <>
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Session
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        User
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Station
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Duration
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Payment
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Reward
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredSessions.map((session) => (
-                      <tr
-                        key={session.id}
-                        className="hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => setSelectedSession(session)}
-                      >
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="font-medium text-foreground font-mono text-sm">
-                              {session.sessionCode}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDateTime(new Date(session.startTime))}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm text-foreground">{session.userName || 'Anonymous'}</p>
-                            <p className="text-xs text-muted-foreground">{session.userEmail}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm text-foreground">{session.stationName}</p>
-                            <p className="text-xs text-muted-foreground">Slot {session.slotNumber}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm text-foreground">
-                            {session.durationMinutes
-                              ? `${Math.floor(session.durationMinutes / 60)}h ${session.durationMinutes % 60}m`
-                              : 'In progress'}
+      <AdminDataTableCard>
+        {loading ? (
+          <>
+            <AdminDesktopOnly>
+              <AdminTableSkeleton rows={pageSize} columns={8} />
+            </AdminDesktopOnly>
+            <AdminCardListSkeleton count={5} />
+          </>
+        ) : filteredSessions.length === 0 ? (
+          <AdminDataTableEmpty title="No sessions match your filters" />
+        ) : (
+          <>
+            <AdminDesktopOnly>
+              <AdminDataTable>
+                <AdminDataTableHeader>
+                  <AdminDataTableRow>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted('startTime') ? sortOrder : false}
+                      onSort={() => toggleSort('startTime')}
+                    >
+                      Session
+                    </AdminDataTableHead>
+                    <AdminDataTableHead>User</AdminDataTableHead>
+                    <AdminDataTableHead>Station</AdminDataTableHead>
+                    <AdminDataTableHead>Duration</AdminDataTableHead>
+                    <AdminDataTableHead>Status</AdminDataTableHead>
+                    <AdminDataTableHead>Payment</AdminDataTableHead>
+                    <AdminDataTableHead>Reward</AdminDataTableHead>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted('amountCharged') ? sortOrder : false}
+                      onSort={() => toggleSort('amountCharged')}
+                      className="text-right"
+                    >
+                      Amount
+                    </AdminDataTableHead>
+                  </AdminDataTableRow>
+                </AdminDataTableHeader>
+                <TableBody>
+                  {sortedSessions.map((session) => (
+                    <AdminDataTableRow key={session.id} onClick={() => setSelectedSession(session)}>
+                      <AdminDataTableCell>
+                        <div>
+                          <p className="font-mono text-sm font-medium">{session.sessionCode}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(new Date(session.startTime))}
                           </p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <StatusBadge status={session.status} size="sm" />
-                        </td>
-                        <td className="px-6 py-4">
-                          <StatusBadge status={session.paymentStatus} size="sm" />
-                        </td>
-                        <td className="px-6 py-4">
-                          <StatusBadge status={session.rewardStatus} size="sm" />
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <p className="font-semibold text-foreground">
-                            €{session.amountCharged.toFixed(2)}
-                          </p>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <div>
+                          <p>{session.userName || 'Anonymous'}</p>
+                          <p className="text-xs text-muted-foreground">{session.userEmail}</p>
+                        </div>
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <div>
+                          <p>{session.stationName}</p>
+                          <p className="text-xs text-muted-foreground">Slot {session.slotNumber}</p>
+                        </div>
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        {session.durationMinutes
+                          ? `${Math.floor(session.durationMinutes / 60)}h ${session.durationMinutes % 60}m`
+                          : 'In progress'}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <StatusBadge status={session.status} size="sm" />
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <StatusBadge status={session.paymentStatus} size="sm" />
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <StatusBadge status={session.rewardStatus} size="sm" />
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="text-right font-semibold tabular-nums">
+                        €{session.amountCharged.toFixed(2)}
+                      </AdminDataTableCell>
+                    </AdminDataTableRow>
+                  ))}
+                </TableBody>
+              </AdminDataTable>
+            </AdminDesktopOnly>
 
-              {/* Mobile Cards */}
-              <div className="lg:hidden divide-y divide-border">
-                {filteredSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="p-4 space-y-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => setSelectedSession(session)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-mono text-sm font-semibold text-foreground">
-                          {session.sessionCode}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateTime(new Date(session.startTime))}
-                        </p>
-                      </div>
-                      <StatusBadge status={session.status} size="sm" />
+            <AdminMobileCardList>
+              {sortedSessions.map((session) => (
+                <AdminMobileCard key={session.id} onClick={() => setSelectedSession(session)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono text-sm font-semibold">{session.sessionCode}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDateTime(new Date(session.startTime))}
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm text-foreground">{session.userName || session.userEmail}</p>
-                        <p className="text-xs text-muted-foreground">{session.stationName}</p>
-                      </div>
-                      <p className="text-lg font-bold text-foreground">€{session.amountCharged.toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={session.paymentStatus} size="sm" />
-                      <StatusBadge status={session.rewardStatus} size="sm" />
-                    </div>
+                    <StatusBadge status={session.status} size="sm" />
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm">{session.userName || session.userEmail}</p>
+                      <p className="text-xs text-muted-foreground">{session.stationName}</p>
+                    </div>
+                    <p className="text-lg font-semibold tabular-nums">
+                      €{session.amountCharged.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge status={session.paymentStatus} size="sm" />
+                    <StatusBadge status={session.rewardStatus} size="sm" />
+                  </div>
+                </AdminMobileCard>
+              ))}
+            </AdminMobileCardList>
+
+            <AdminPaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </AdminDataTableCard>
 
       {/* Session Detail Drawer */}
-      <Sheet open={!!selectedSession} onOpenChange={() => setSelectedSession(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selectedSession && (
-            <>
-              <SheetHeader>
-                <SheetTitle className="font-mono">{selectedSession.sessionCode}</SheetTitle>
-                <SheetDescription>
-                  Session started {formatDateTime(new Date(selectedSession.startTime))}
-                </SheetDescription>
-              </SheetHeader>
+      <AdminDrawer
+        open={!!selectedSession}
+        onOpenChange={(open) => !open && setSelectedSession(null)}
+        size="wide"
+      >
+        {selectedSession && (
+          <>
+            <AdminDrawerHeader
+              title={<span className="font-mono">{selectedSession.sessionCode}</span>}
+              description={`Session started ${formatDateTime(new Date(selectedSession.startTime))}`}
+            >
+              <StatusBadge status={selectedSession.status} />
+              <StatusBadge status={selectedSession.paymentStatus} />
+              <StatusBadge status={selectedSession.rewardStatus} />
+            </AdminDrawerHeader>
 
-              <div className="mt-6 space-y-6">
-                {/* Status Overview */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <StatusBadge status={selectedSession.status} />
-                  <StatusBadge status={selectedSession.paymentStatus} />
-                  <StatusBadge status={selectedSession.rewardStatus} />
-                </div>
+            <AdminDrawerBody>
+              <AdminDrawerSection title="User Details" icon={User}>
+                <AdminDrawerFieldList>
+                  <AdminDrawerField
+                    label="Name"
+                    value={selectedSession.userName || 'Not provided'}
+                  />
+                  <AdminDrawerField label="Email" value={selectedSession.userEmail} />
+                </AdminDrawerFieldList>
+              </AdminDrawerSection>
 
-                {/* User Info */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <User size={16} />
-                      User Details
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Name</span>
-                      <span className="text-sm font-medium">{selectedSession.userName || 'Not provided'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Email</span>
-                      <span className="text-sm font-medium">{selectedSession.userEmail}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+              <AdminDrawerSection title="Session Details" icon={Clock}>
+                <AdminDrawerFieldList>
+                  <AdminDrawerField label="Station" value={selectedSession.stationName} />
+                  <AdminDrawerField label="Slot" value={selectedSession.slotNumber} />
+                  <AdminDrawerField
+                    label="Duration"
+                    value={
+                      selectedSession.durationMinutes
+                        ? `${Math.floor(selectedSession.durationMinutes / 60)}h ${selectedSession.durationMinutes % 60}m`
+                        : 'In progress'
+                    }
+                  />
+                  <AdminDrawerField label="Campaign" value={selectedSession.campaignName} />
+                </AdminDrawerFieldList>
+              </AdminDrawerSection>
 
-                {/* Session Info */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <Clock size={16} />
-                      Session Details
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Station</span>
-                      <span className="text-sm font-medium">{selectedSession.stationName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Slot</span>
-                      <span className="text-sm font-medium">{selectedSession.slotNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Duration</span>
-                      <span className="text-sm font-medium">
-                        {selectedSession.durationMinutes
-                          ? `${Math.floor(selectedSession.durationMinutes / 60)}h ${selectedSession.durationMinutes % 60}m`
-                          : 'In progress'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Campaign</span>
-                      <span className="text-sm font-medium">{selectedSession.campaignName}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+              <AdminDrawerSection title="Payment Details" icon={CreditCard}>
+                <AdminDrawerFieldList>
+                  <AdminDrawerField label="Method" value={selectedSession.paymentMethod} />
+                  <AdminDrawerField
+                    label="Deposit"
+                    value={`€${selectedSession.depositAmount.toFixed(2)}`}
+                  />
+                  <AdminDrawerField
+                    label="Charged"
+                    value={`€${selectedSession.amountCharged.toFixed(2)}`}
+                  />
+                  <AdminDrawerField
+                    label="Refunded"
+                    value={`€${selectedSession.amountRefunded.toFixed(2)}`}
+                    valueClassName="text-emerald-600"
+                  />
+                </AdminDrawerFieldList>
+              </AdminDrawerSection>
 
-                {/* Payment Info */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <CreditCard size={16} />
-                      Payment Details
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Method</span>
-                      <span className="text-sm font-medium">{selectedSession.paymentMethod}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Deposit</span>
-                      <span className="text-sm font-medium">€{selectedSession.depositAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Charged</span>
-                      <span className="text-sm font-medium text-foreground">€{selectedSession.amountCharged.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Refunded</span>
-                      <span className="text-sm font-medium text-emerald-600">€{selectedSession.amountRefunded.toFixed(2)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+              {selectedSession.rewardCode && (
+                <AdminDrawerSection title="Reward" icon={Gift}>
+                  <AdminDrawerPanel className="font-mono text-sm font-semibold text-foreground">
+                    {selectedSession.rewardCode}
+                  </AdminDrawerPanel>
+                </AdminDrawerSection>
+              )}
 
-                {/* Reward Info */}
-                {selectedSession.rewardCode && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Gift size={16} />
-                        Reward
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="p-3 bg-muted rounded-lg">
-                        <p className="font-mono font-semibold text-foreground">{selectedSession.rewardCode}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Timeline */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Session Timeline</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {timelineLoading ? (
-                      <div className="flex items-center justify-center h-32">
-                        <Spinner />
-                      </div>
-                    ) : timelineEvents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-6">No timeline events recorded</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {timelineEvents.map((event, index) => {
-                          const Icon = timelineIconMap[event.type] || CheckCircle;
-                          return (
-                            <div key={event.id} className="flex gap-3">
-                              <div className="relative">
-                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                                  <Icon size={14} className="text-muted-foreground" />
-                                </div>
-                                {index < timelineEvents.length - 1 && (
-                                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-6 bg-border" />
-                                )}
-                              </div>
-                              <div className="flex-1 pb-4">
-                                <p className="text-sm font-medium text-foreground">{event.description}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatTime(new Date(event.timestamp))}
-                                </p>
-                              </div>
+              <AdminDrawerSection title="Session Timeline">
+                {timelineLoading ? (
+                  <div className="flex h-32 items-center justify-center">
+                    <Spinner />
+                  </div>
+                ) : timelineEvents.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No timeline events recorded
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {timelineEvents.map((event, index) => {
+                      const Icon = timelineIconMap[event.type] || CheckCircle;
+                      return (
+                        <div key={event.id} className="flex gap-3 rounded-lg px-1 py-2">
+                          <div className="relative shrink-0">
+                            <div className="flex size-8 items-center justify-center rounded-full bg-muted">
+                              <Icon size={14} className="text-muted-foreground" aria-hidden />
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {actionMessage && (
-                  <p className="text-sm text-muted-foreground" role="status">{actionMessage}</p>
+                            {index < timelineEvents.length - 1 && (
+                              <div className="absolute left-1/2 top-8 h-6 w-px -translate-x-1/2 bg-border" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1 pb-3">
+                            <p className="text-sm font-medium text-foreground">{event.description}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {formatTime(new Date(event.timestamp))}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {selectedSession.userEmail && (
-                    <Button variant="outline" className="flex-1" asChild>
-                      <a href={`mailto:${selectedSession.userEmail}`}>Contact User</a>
-                    </Button>
-                  )}
-                  <Button variant="outline" className="flex-1" asChild>
-                    <a href="/admin/billing">View in Billing</a>
-                  </Button>
-                  {['pending', 'active'].includes(selectedSession.status) && (
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => setCancelTarget(selectedSession)}
-                    >
-                      Cancel Session
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+              </AdminDrawerSection>
+            </AdminDrawerBody>
+
+            <AdminDrawerFooter align="stretch">
+              {selectedSession.userEmail && (
+                <Button variant="outline" className="flex-1 sm:flex-none" asChild>
+                  <a href={`mailto:${selectedSession.userEmail}`}>Contact User</a>
+                </Button>
+              )}
+              <Button variant="outline" className="flex-1 sm:flex-none" asChild>
+                <Link href="/admin/billing">View in Billing</Link>
+              </Button>
+              {['pending', 'active'].includes(selectedSession.status) && (
+                <Button
+                  variant="destructive"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setCancelTarget(selectedSession)}
+                >
+                  Cancel Session
+                </Button>
+              )}
+            </AdminDrawerFooter>
+          </>
+        )}
+      </AdminDrawer>
 
       <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
         <DialogContent>

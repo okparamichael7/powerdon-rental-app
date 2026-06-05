@@ -1,6 +1,7 @@
 'use client'
 
 import { AlertCircle, Inbox, RefreshCw } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 
 export function AdminErrorBanner({
@@ -32,15 +33,20 @@ export function AdminErrorBanner({
 export function AdminEmptyState({
   title,
   description,
+  action,
 }: {
   title: string
   description?: string
+  action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
       <Inbox className="h-10 w-10 text-muted-foreground/50" aria-hidden />
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      {description && <p className="text-xs text-muted-foreground max-w-sm">{description}</p>}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        {description && <p className="text-xs text-muted-foreground max-w-sm">{description}</p>}
+      </div>
+      {action}
     </div>
   )
 }

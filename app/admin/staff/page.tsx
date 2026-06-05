@@ -12,7 +12,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states'
+import { toast } from '@/components/admin/admin-providers'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type StaffRow = {
   id: string
@@ -39,6 +57,9 @@ export default function AdminStaffPage() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'admin' | 'operator'>('operator')
   const [submitting, setSubmitting] = useState(false)
+  const [revokeTarget, setRevokeTarget] = useState<StaffRow | null>(null)
+  const [revoking, setRevoking] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -76,50 +97,66 @@ export default function AdminStaffPage() {
       const body = await res.json()
       if (!res.ok) {
         setError(body.error || 'Failed to grant access')
+        toast.error(body.error || 'Failed to grant access')
         return
       }
       setEmail('')
+      toast.success(`Access granted to ${email}`)
       await load()
     } catch {
       setError('Network error')
+      toast.error('Network error')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleRevoke = async (authUserId: string) => {
-    if (!confirm('Revoke staff access for this user?')) return
+  const handleRevoke = async () => {
+    if (!revokeTarget) return
+    setRevoking(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/staff/${encodeURIComponent(authUserId)}`, {
+      const res = await fetch(`/api/admin/staff/${encodeURIComponent(revokeTarget.authUserId)}`, {
         method: 'DELETE',
       })
       const body = await res.json()
       if (!res.ok) {
         setError(body.error || 'Failed to revoke')
+        toast.error(body.error || 'Failed to revoke access')
         return
       }
+      toast.success(`Access revoked for ${revokeTarget.email}`)
+      setRevokeTarget(null)
       await load()
     } catch {
       setError('Network error')
+      toast.error('Network error')
+    } finally {
+      setRevoking(false)
     }
   }
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Staff access</h1>
-        <p className="text-muted-foreground">
-          Manage dashboard roles in <code className="text-xs">staff_roles</code> (linked to Supabase Auth).
-          Rental customers stay in the <code className="text-xs">users</code> table.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Staff access"
+        description="Grant dashboard roles to team members"
+        meta={
+          staff.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {staff.length} active staff member{staff.length === 1 ? '' : 's'}
+            </p>
+          ) : null
+        }
+      />
+
+      {error && <AdminErrorBanner message={error} onRetry={load} />}
 
       <Card>
         <CardHeader>
           <CardTitle>Grant access</CardTitle>
           <CardDescription>
-            User must already exist under Supabase Authentication → Users.
+            The user must already exist in your authentication provider.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,16 +191,15 @@ export default function AdminStaffPage() {
           <CardTitle>Active staff</CardTitle>
         </CardHeader>
         <CardContent>
-          {error && <p className="text-sm text-destructive mb-4">{error}</p>}
           {loading ? (
             <div className="flex justify-center py-8">
               <Spinner />
             </div>
           ) : staff.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No staff roles yet. Run migration <code className="text-xs">007_staff_roles</code>, set{' '}
-              <code className="text-xs">BOOTSTRAP_ADMIN_EMAIL</code> for first login, or grant manually above.
-            </p>
+            <AdminEmptyState
+              title="No staff members yet"
+              description="Grant access above to add your first team member."
+            />
           ) : (
             <ul className="divide-y">
               {staff.map((row) => (
@@ -177,7 +213,7 @@ export default function AdminStaffPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleRevoke(row.authUserId)}
+                      onClick={() => setRevokeTarget(row)}
                     >
                       Revoke
                     </Button>
@@ -196,7 +232,7 @@ export default function AdminStaffPage() {
         </CardHeader>
         <CardContent>
           {audit.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No audit entries yet.</p>
+            <AdminEmptyState title="No audit entries yet" />
           ) : (
             <ul className="divide-y text-sm">
               {audit.map((row) => (
@@ -214,6 +250,65 @@ export default function AdminStaffPage() {
           )}
         </CardContent>
       </Card>
+
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <Card className="border-dashed bg-muted/20 shadow-none">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-6 py-4 text-left"
+            >
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Advanced</p>
+                <p className="text-xs text-muted-foreground/80">
+                  Database setup and bootstrap instructions
+                </p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  'size-4 text-muted-foreground transition-transform',
+                  advancedOpen && 'rotate-180',
+                )}
+                aria-hidden
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-2 border-t border-border/60 pt-4 text-sm text-muted-foreground">
+              <p>
+                Roles are stored in <code className="text-xs">staff_roles</code> (linked to Supabase Auth).
+                Rental customers stay in the <code className="text-xs">users</code> table.
+              </p>
+              <p>
+                First-time setup: run migration <code className="text-xs">007_staff_roles</code>, set{' '}
+                <code className="text-xs">BOOTSTRAP_ADMIN_EMAIL</code> for first login, or grant manually above.
+              </p>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Dialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revoke staff access</DialogTitle>
+            <DialogDescription>
+              {revokeTarget
+                ? `Remove dashboard access for ${revokeTarget.email}? They will no longer be able to sign in to the admin panel.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeTarget(null)} disabled={revoking}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRevoke} disabled={revoking}>
+              {revoking ? <Spinner className="mr-2 size-4" /> : null}
+              Revoke access
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

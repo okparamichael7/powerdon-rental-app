@@ -1,105 +1,185 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { useEffect } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
-import { Search, Download, Users } from 'lucide-react'
+import { Download, Users } from 'lucide-react'
+import { TableBody } from '@/components/ui/table'
 import { useUsers } from '@/hooks/use-services'
 import { downloadCsv } from '@/lib/admin/export-csv'
-import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states'
+import { AdminErrorBanner } from '@/components/admin/admin-states'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { AdminFilterBar } from '@/components/admin/admin-filter-bar'
+import {
+  AdminDataTableCard,
+  AdminDataTable,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+  AdminDataTableEmpty,
+  AdminMobileCardList,
+  AdminMobileCard,
+  AdminDesktopOnly,
+} from '@/components/admin/admin-data-table'
+import { AdminPaginationBar } from '@/components/admin/admin-pagination-bar'
+import { AdminTableSkeleton, AdminCardListSkeleton } from '@/components/admin/admin-skeletons'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { useAdminPagination } from '@/hooks/use-admin-pagination'
+import { useTableSort } from '@/hooks/use-table-sort'
 import { formatDateTime } from '@/lib/utils'
+import { useState } from 'react'
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('')
-  const { data: users, loading, error, fetchUsers, refetch } = useUsers()
+  const debouncedSearch = useDebouncedValue(searchQuery)
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = useAdminPagination()
+  const { data: users, loading, error, total, fetchUsers, refetch } = useUsers()
 
   useEffect(() => {
-    fetchUsers(searchQuery ? { search: searchQuery } : undefined)
-  }, [searchQuery, fetchUsers])
+    resetPage()
+  }, [debouncedSearch, resetPage])
+
+  useEffect(() => {
+    fetchUsers({
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...paginationParams,
+    })
+  }, [debouncedSearch, paginationParams, fetchUsers])
 
   const rows = users ?? []
+  const { sorted: sortedRows, sortOrder, toggleSort, isSorted } = useTableSort(rows, 'createdAt', 'desc')
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Customers</h1>
-          <p className="text-sm text-muted-foreground">Registered renters from Supabase</p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={!rows.length}
-          onClick={() =>
-            downloadCsv(
-              'powerdon-users.csv',
-              ['email', 'name', 'totalRentals', 'marketingConsent', 'createdAt'],
-              rows.map((u) => [
-                u.email,
-                u.name ?? '',
-                u.totalRentals,
-                u.marketingConsent,
-                new Date(u.createdAt).toISOString(),
-              ]),
-            )
-          }
-        >
-          <Download className="mr-2 h-4 w-4" />
-          Export
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Customers"
+        description="Registered renters and account profiles"
+        meta={
+          total > 0 ? (
+            <p className="text-xs text-muted-foreground">{total} customers</p>
+          ) : null
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!rows.length}
+            onClick={() =>
+              downloadCsv(
+                'powerdon-users.csv',
+                ['email', 'name', 'totalRentals', 'marketingConsent', 'createdAt'],
+                rows.map((u) => [
+                  u.email,
+                  u.name ?? '',
+                  u.totalRentals,
+                  u.marketingConsent,
+                  new Date(u.createdAt).toISOString(),
+                ]),
+              )
+            }
+          >
+            <Download className="mr-2 size-4" aria-hidden />
+            Export
+          </Button>
+        }
+      />
 
       {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search by email or name…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <AdminFilterBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by email or name…"
+        onClearFilters={searchQuery ? () => setSearchQuery('') : undefined}
+        activeFilters={
+          searchQuery
+            ? [{ key: 'search', label: `Search: ${searchQuery}`, onRemove: () => setSearchQuery('') }]
+            : []
+        }
+      />
 
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex h-48 items-center justify-center">
-              <Spinner />
-            </div>
-          ) : rows.length === 0 ? (
-            <AdminEmptyState title="No customers yet" description="Users are created when someone rents a power bank." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Rentals</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((user) => (
-                    <tr key={user.id} className="border-b border-border/50">
-                      <td className="px-4 py-3">{user.email}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{user.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{user.totalRentals}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDateTime(new Date(user.createdAt))}</td>
-                    </tr>
+      <AdminDataTableCard>
+        {loading ? (
+          <>
+            <AdminDesktopOnly>
+              <AdminTableSkeleton columns={4} />
+            </AdminDesktopOnly>
+            <AdminCardListSkeleton />
+          </>
+        ) : rows.length === 0 ? (
+          <AdminDataTableEmpty
+            title="No customers yet"
+            description="Users are created when someone rents a power bank."
+          />
+        ) : (
+          <>
+            <AdminDesktopOnly>
+              <AdminDataTable>
+                <AdminDataTableHeader>
+                  <AdminDataTableRow>
+                    <AdminDataTableHead>Email</AdminDataTableHead>
+                    <AdminDataTableHead>Name</AdminDataTableHead>
+                    <AdminDataTableHead className="text-right">Rentals</AdminDataTableHead>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted('createdAt') ? sortOrder : false}
+                      onSort={() => toggleSort('createdAt')}
+                    >
+                      Joined
+                    </AdminDataTableHead>
+                  </AdminDataTableRow>
+                </AdminDataTableHeader>
+                <TableBody>
+                  {sortedRows.map((user) => (
+                    <AdminDataTableRow key={user.id}>
+                      <AdminDataTableCell>{user.email}</AdminDataTableCell>
+                      <AdminDataTableCell className="text-muted-foreground">
+                        {user.name ?? '—'}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="text-right tabular-nums">
+                        {user.totalRentals}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="text-muted-foreground">
+                        {formatDateTime(new Date(user.createdAt))}
+                      </AdminDataTableCell>
+                    </AdminDataTableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </TableBody>
+              </AdminDataTable>
+            </AdminDesktopOnly>
 
-      <p className="text-xs text-muted-foreground flex items-center gap-2">
-        <Users className="h-3 w-3" />
-        {rows.length} customer{rows.length === 1 ? '' : 's'} loaded from database
+            <AdminMobileCardList>
+              {rows.map((user) => (
+                <AdminMobileCard key={user.id}>
+                  <p className="text-sm font-medium">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">{user.name ?? 'No name'}</p>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{user.totalRentals} rentals</span>
+                    <span>{formatDateTime(new Date(user.createdAt))}</span>
+                  </div>
+                </AdminMobileCard>
+              ))}
+            </AdminMobileCardList>
+
+            <AdminPaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </AdminDataTableCard>
+
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Users className="size-3" aria-hidden />
+        View lead profiles and marketing consent on the{' '}
+        <Link href="/admin/leads" className="font-medium text-foreground underline-offset-4 hover:underline">
+          Leads
+        </Link>{' '}
+        page.
       </p>
     </div>
   )

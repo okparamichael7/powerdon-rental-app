@@ -1,10 +1,26 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
-import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states'
+import { TableBody } from '@/components/ui/table'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import {
+  AdminDataTableCard,
+  AdminDataTable,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+  AdminDataTableEmpty,
+  AdminMobileCardList,
+  AdminMobileCard,
+  AdminDesktopOnly,
+} from '@/components/admin/admin-data-table'
+import { AdminPaginationBar } from '@/components/admin/admin-pagination-bar'
+import { AdminTableSkeleton, AdminCardListSkeleton } from '@/components/admin/admin-skeletons'
+import { AdminErrorBanner } from '@/components/admin/admin-states'
+import { useAdminPagination } from '@/hooks/use-admin-pagination'
+import { useTableSort } from '@/hooks/use-table-sort'
 import { formatDateTime } from '@/lib/utils'
 import { RefreshCw } from 'lucide-react'
 
@@ -22,6 +38,8 @@ export default function AdminAuditPage() {
   const [rows, setRows] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const { page, pageSize, setPage, setPageSize } = useAdminPagination()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -45,70 +63,129 @@ export default function AdminAuditPage() {
     load()
   }, [load])
 
+  const total = rows.length
+  const { sorted: sortedRows, sortOrder, toggleSort, isSorted } = useTableSort(
+    rows,
+    'createdAt',
+    'desc',
+  )
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return sortedRows.slice(start, start + pageSize)
+  }, [sortedRows, page, pageSize])
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Staff Audit Log</h1>
-          <p className="text-sm text-muted-foreground">
-            Grant, revoke, and role changes recorded in <code className="text-xs">staff_audit_log</code>
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Staff Audit Log"
+        description="Grant, revoke, and role changes recorded in staff_audit_log"
+        meta={
+          total > 0 ? (
+            <p className="text-xs text-muted-foreground">{total} entries loaded</p>
+          ) : null
+        }
+        actions={
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`mr-2 size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+            Refresh
+          </Button>
+        }
+      />
 
       {error && <AdminErrorBanner message={error} onRetry={load} />}
 
-      <Card>
-        <CardContent className="p-0">
-          {loading && !rows.length ? (
-            <div className="flex h-48 items-center justify-center">
-              <Spinner />
-            </div>
-          ) : rows.length === 0 ? (
-            <AdminEmptyState title="No audit entries" description="Staff role changes will appear here." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">When</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Target</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-b border-border/50">
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+      <AdminDataTableCard>
+        {loading ? (
+          <>
+            <AdminDesktopOnly>
+              <AdminTableSkeleton rows={pageSize} columns={5} />
+            </AdminDesktopOnly>
+            <AdminCardListSkeleton count={5} />
+          </>
+        ) : rows.length === 0 ? (
+          <AdminDataTableEmpty
+            title="No audit entries"
+            description="Staff role changes will appear here."
+          />
+        ) : (
+          <>
+            <AdminDesktopOnly>
+              <AdminDataTable>
+                <AdminDataTableHeader>
+                  <AdminDataTableRow>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted('createdAt') ? sortOrder : false}
+                      onSort={() => toggleSort('createdAt')}
+                    >
+                      When
+                    </AdminDataTableHead>
+                    <AdminDataTableHead>Action</AdminDataTableHead>
+                    <AdminDataTableHead>Role</AdminDataTableHead>
+                    <AdminDataTableHead>Target</AdminDataTableHead>
+                    <AdminDataTableHead>Actor</AdminDataTableHead>
+                  </AdminDataTableRow>
+                </AdminDataTableHeader>
+                <TableBody>
+                  {paginatedRows.map((row) => (
+                    <AdminDataTableRow key={row.id}>
+                      <AdminDataTableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(new Date(row.createdAt))}
-                      </td>
-                      <td className="px-4 py-3 capitalize">{row.action.replace('_', ' ')}</td>
-                      <td className="px-4 py-3">{row.role ?? '—'}</td>
-                      <td className="px-4 py-3 font-mono text-xs truncate max-w-[140px]">
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="capitalize">
+                        {row.action.replace('_', ' ')}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>{row.role ?? '—'}</AdminDataTableCell>
+                      <AdminDataTableCell className="max-w-[140px] truncate font-mono text-xs">
                         {String(row.details?.email ?? row.targetAuthUserId)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs truncate max-w-[140px]">
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="max-w-[140px] truncate font-mono text-xs">
                         {row.actorAuthUserId ?? '—'}
-                      </td>
-                    </tr>
+                      </AdminDataTableCell>
+                    </AdminDataTableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </TableBody>
+              </AdminDataTable>
+            </AdminDesktopOnly>
 
-      <p className="text-xs text-muted-foreground">
-        {rows.length} entr{rows.length === 1 ? 'y' : 'ies'}. Cross-domain admin actions (sessions, campaigns) are not
-        logged yet.
-      </p>
+            <AdminMobileCardList>
+              {paginatedRows.map((row) => (
+                <AdminMobileCard key={row.id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium capitalize">{row.action.replace('_', ' ')}</p>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {formatDateTime(new Date(row.createdAt))}
+                    </p>
+                  </div>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      <span className="text-foreground">Role:</span> {row.role ?? '—'}
+                    </p>
+                    <p className="truncate font-mono">
+                      <span className="font-sans text-foreground">Target:</span>{' '}
+                      {String(row.details?.email ?? row.targetAuthUserId)}
+                    </p>
+                    <p className="truncate font-mono">
+                      <span className="font-sans text-foreground">Actor:</span>{' '}
+                      {row.actorAuthUserId ?? '—'}
+                    </p>
+                  </div>
+                </AdminMobileCard>
+              ))}
+            </AdminMobileCardList>
+
+            <AdminPaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </AdminDataTableCard>
+
+      <p className="text-xs text-muted-foreground/70">Staff role grants and revokes only.</p>
     </div>
   )
 }

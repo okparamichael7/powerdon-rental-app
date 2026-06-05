@@ -1,12 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Spinner } from "@/components/ui/spinner"
 import {
   Select,
   SelectContent,
@@ -14,18 +9,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Search, Gift, Ticket, CheckCircle, Clock, XCircle, Download, Copy, Check } from "lucide-react"
+import { TableBody } from "@/components/ui/table"
+import { Gift, Ticket, CheckCircle, Clock, Download, Copy, Check } from "lucide-react"
 import { useRewards, useCampaigns } from "@/hooks/use-services"
 import { downloadCsv } from "@/lib/admin/export-csv"
 import { AdminErrorBanner } from "@/components/admin/admin-states"
+import { AdminPageHeader } from "@/components/admin/admin-page-header"
+import { AdminFilterBar } from "@/components/admin/admin-filter-bar"
+import { AdminStatCard, AdminStatGrid } from "@/components/admin/admin-stat-card"
+import {
+  AdminDataTableCard,
+  AdminDataTable,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+  AdminDataTableEmpty,
+  AdminMobileCardList,
+  AdminMobileCard,
+  AdminDesktopOnly,
+} from "@/components/admin/admin-data-table"
+import { AdminPaginationBar } from "@/components/admin/admin-pagination-bar"
+import { AdminTableSkeleton, AdminCardListSkeleton } from "@/components/admin/admin-skeletons"
+import { StatusBadge } from "@/components/volt/status-badge"
+import { toast } from "@/components/admin/admin-providers"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
+import { useAdminPagination } from "@/hooks/use-admin-pagination"
+import { useTableSort } from "@/hooks/use-table-sort"
 import { formatDateTime } from "@/lib/utils"
 import type { Reward } from "@/lib/types"
 
@@ -35,151 +45,148 @@ export default function RewardsPage() {
   const [campaignFilter, setCampaignFilter] = useState<string>("all")
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
-  const { data: rewards, loading: rewardsLoading, error: rewardsError, fetchRewards, refetch } = useRewards()
+  const debouncedSearch = useDebouncedValue(searchQuery)
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = useAdminPagination()
+  const { data: rewards, loading: rewardsLoading, error: rewardsError, total, fetchRewards, refetch } = useRewards()
   const { data: campaigns, loading: campaignsLoading, fetchCampaigns } = useCampaigns()
 
-  // Fetch data on mount and when filters change
   useEffect(() => {
     fetchCampaigns()
   }, [fetchCampaigns])
 
   useEffect(() => {
-    const filters: Parameters<typeof fetchRewards>[0] = {}
-    if (searchQuery) filters.search = searchQuery
+    resetPage()
+  }, [debouncedSearch, statusFilter, campaignFilter, resetPage])
+
+  useEffect(() => {
+    const filters: Parameters<typeof fetchRewards>[0] = {
+      ...paginationParams,
+    }
+    if (debouncedSearch) filters.search = debouncedSearch
     if (statusFilter !== "all") filters.status = [statusFilter as Reward["status"]]
     if (campaignFilter !== "all") filters.campaignId = campaignFilter
     fetchRewards(filters)
-  }, [searchQuery, statusFilter, campaignFilter, fetchRewards])
+  }, [debouncedSearch, statusFilter, campaignFilter, paginationParams, fetchRewards])
 
   const filteredRewards = rewards || []
+  const { sorted: sortedRewards, sortOrder, toggleSort, isSorted } = useTableSort(
+    filteredRewards,
+    "issuedAt",
+    "desc",
+  )
   const loading = rewardsLoading || campaignsLoading
 
-  const getStatusBadge = (status: Reward["status"]) => {
-    switch (status) {
-      case "issued": return <Badge variant="secondary" className="bg-blue-100 text-blue-700">Issued</Badge>
-      case "redeemed": return <Badge variant="secondary" className="bg-green-100 text-green-700">Redeemed</Badge>
-      case "expired": return <Badge variant="secondary" className="bg-gray-100 text-gray-600">Expired</Badge>
-      case "pending": return <Badge variant="secondary" className="bg-amber-100 text-amber-700">Pending</Badge>
-      case "qualified": return <Badge variant="secondary" className="bg-primary/10 text-primary">Qualified</Badge>
-      default: return null
-    }
-  }
-
   const stats = {
-    total: filteredRewards.length,
-    issued: filteredRewards.filter(r => r.status === "issued").length,
-    redeemed: filteredRewards.filter(r => r.status === "redeemed").length,
-    expired: filteredRewards.filter(r => r.status === "expired").length,
+    total: total,
+    issued: filteredRewards.filter((r) => r.status === "issued").length,
+    redeemed: filteredRewards.filter((r) => r.status === "redeemed").length,
+    expired: filteredRewards.filter((r) => r.status === "expired").length,
     totalValue: filteredRewards.reduce((sum, r) => sum + r.value, 0),
-    redeemedValue: filteredRewards.filter(r => r.status === "redeemed").reduce((sum, r) => sum + r.value, 0),
+    redeemedValue: filteredRewards
+      .filter((r) => r.status === "redeemed")
+      .reduce((sum, r) => sum + r.value, 0),
   }
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code)
     setCopiedCode(code)
+    toast.success("Code copied to clipboard")
     setTimeout(() => setCopiedCode(null), 2000)
+  }
+
+  const activeFilters = [
+    ...(statusFilter !== "all"
+      ? [
+          {
+            key: "status",
+            label: `Status: ${statusFilter}`,
+            onRemove: () => setStatusFilter("all"),
+          },
+        ]
+      : []),
+    ...(campaignFilter !== "all"
+      ? [
+          {
+            key: "campaign",
+            label: `Campaign: ${campaigns?.find((c) => c.id === campaignFilter)?.name ?? campaignFilter}`,
+            onRemove: () => setCampaignFilter("all"),
+          },
+        ]
+      : []),
+  ]
+
+  const clearFilters = () => {
+    setSearchQuery("")
+    setStatusFilter("all")
+    setCampaignFilter("all")
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Rewards & Vouchers</h1>
-          <p className="text-sm text-muted-foreground">Track issued vouchers and redemptions</p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={!filteredRewards.length}
-          onClick={() =>
-            downloadCsv(
-              'powerdon-rewards.csv',
-              ['code', 'email', 'status', 'value', 'campaign', 'issuedAt'],
-              filteredRewards.map((r) => [
-                r.code,
-                r.userEmail,
-                r.status,
-                r.value,
-                r.campaignName ?? '',
-                r.issuedAt ? new Date(r.issuedAt).toISOString() : '',
-              ]),
-            )
-          }
-        >
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Rewards & Vouchers"
+        description="Track issued vouchers and redemptions"
+        meta={
+          total > 0 ? (
+            <p className="text-xs text-muted-foreground">{total} rewards</p>
+          ) : null
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!filteredRewards.length}
+            onClick={() =>
+              downloadCsv(
+                "powerdon-rewards.csv",
+                ["code", "email", "status", "value", "campaign", "issuedAt"],
+                filteredRewards.map((r) => [
+                  r.code,
+                  r.userEmail,
+                  r.status,
+                  r.value,
+                  r.campaignName ?? "",
+                  r.issuedAt ? new Date(r.issuedAt).toISOString() : "",
+                ]),
+              )
+            }
+          >
+            <Download className="mr-2 size-4" aria-hidden />
+            Export CSV
+          </Button>
+        }
+      />
 
       {rewardsError && <AdminErrorBanner message={rewardsError} onRetry={() => refetch()} />}
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Gift className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total Issued</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.redeemed}</p>
-                <p className="text-xs text-muted-foreground">Redeemed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                <Clock className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground tabular-nums">{stats.issued}</p>
-                <p className="text-xs text-muted-foreground">Pending</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                <Ticket className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-foreground tabular-nums">€{stats.redeemedValue}</p>
-                <p className="text-xs text-muted-foreground">Value Redeemed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AdminStatGrid>
+        <AdminStatCard label="Total Issued" value={stats.total} icon={Gift} />
+        <AdminStatCard
+          label="Redeemed"
+          value={stats.redeemed}
+          icon={CheckCircle}
+          trend="positive"
+        />
+        <AdminStatCard label="Pending" value={stats.issued} icon={Clock} />
+        <AdminStatCard
+          label="Value Redeemed"
+          value={`€${stats.redeemedValue}`}
+          icon={Ticket}
+          trend="warning"
+        />
+      </AdminStatGrid>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by code or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+      <AdminFilterBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by code or email…"
+        activeFilters={activeFilters}
+        onClearFilters={
+          searchQuery || statusFilter !== "all" || campaignFilter !== "all"
+            ? clearFilters
+            : undefined
+        }
+      >
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Status" />
@@ -197,139 +204,160 @@ export default function RewardsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Campaigns</SelectItem>
-            {(campaigns || []).map(campaign => (
-              <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+            {(campaigns || []).map((campaign) => (
+              <SelectItem key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </AdminFilterBar>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Spinner className="h-8 w-8" />
-        </div>
-      ) : (
-        <>
-          {/* Desktop Table */}
-          <Card className="hidden lg:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Value</TableHead>
-                  <TableHead>Issued</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRewards.map((reward) => {
-                  const campaign = campaigns?.find(c => c.id === reward.campaignId)
-                  return (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <code className="rounded bg-muted px-2 py-1 text-sm font-mono">{reward.code}</code>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{reward.userEmail}</TableCell>
-                      <TableCell>{campaign?.name || reward.campaignName}</TableCell>
-                      <TableCell className="font-medium">€{reward.value}</TableCell>
-                      <TableCell className="text-muted-foreground">{formatDateTime(new Date(reward.issuedAt))}</TableCell>
-                      <TableCell className="text-muted-foreground">{formatDateTime(new Date(reward.expiresAt))}</TableCell>
-                      <TableCell>{getStatusBadge(reward.status)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleCopyCode(reward.code)}
-                        >
-                          {copiedCode === reward.code ? (
-                            <Check className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+      <AdminDataTableCard>
+        {loading ? (
+          <>
+            <AdminDesktopOnly>
+              <AdminTableSkeleton rows={pageSize} columns={8} />
+            </AdminDesktopOnly>
+            <AdminCardListSkeleton count={5} />
+          </>
+        ) : filteredRewards.length === 0 ? (
+          <AdminDataTableEmpty title="No rewards found" />
+        ) : (
+          <>
+            <AdminDesktopOnly>
+              <AdminDataTable>
+                <AdminDataTableHeader>
+                  <AdminDataTableRow>
+                    <AdminDataTableHead>Code</AdminDataTableHead>
+                    <AdminDataTableHead>User</AdminDataTableHead>
+                    <AdminDataTableHead>Campaign</AdminDataTableHead>
+                    <AdminDataTableHead>Value</AdminDataTableHead>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted("issuedAt") ? sortOrder : false}
+                      onSort={() => toggleSort("issuedAt")}
+                    >
+                      Issued
+                    </AdminDataTableHead>
+                    <AdminDataTableHead>Expires</AdminDataTableHead>
+                    <AdminDataTableHead>Status</AdminDataTableHead>
+                    <AdminDataTableHead className="w-[50px]">
+                      <span className="sr-only">Copy</span>
+                    </AdminDataTableHead>
+                  </AdminDataTableRow>
+                </AdminDataTableHeader>
+                <TableBody>
+                  {sortedRewards.map((reward) => {
+                    const campaign = campaigns?.find((c) => c.id === reward.campaignId)
+                    return (
+                      <AdminDataTableRow key={reward.id}>
+                        <AdminDataTableCell>
+                          <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
+                            {reward.code}
+                          </code>
+                        </AdminDataTableCell>
+                        <AdminDataTableCell className="text-muted-foreground">
+                          {reward.userEmail}
+                        </AdminDataTableCell>
+                        <AdminDataTableCell>
+                          {campaign?.name || reward.campaignName}
+                        </AdminDataTableCell>
+                        <AdminDataTableCell className="font-medium">
+                          €{reward.value}
+                        </AdminDataTableCell>
+                        <AdminDataTableCell className="text-muted-foreground">
+                          {formatDateTime(new Date(reward.issuedAt))}
+                        </AdminDataTableCell>
+                        <AdminDataTableCell className="text-muted-foreground">
+                          {formatDateTime(new Date(reward.expiresAt))}
+                        </AdminDataTableCell>
+                        <AdminDataTableCell>
+                          <StatusBadge status={reward.status} size="sm" />
+                        </AdminDataTableCell>
+                        <AdminDataTableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => handleCopyCode(reward.code)}
+                          >
+                            {copiedCode === reward.code ? (
+                              <Check className="size-4 text-emerald-600" />
+                            ) : (
+                              <Copy className="size-4" />
+                            )}
+                          </Button>
+                        </AdminDataTableCell>
+                      </AdminDataTableRow>
+                    )
+                  })}
+                </TableBody>
+              </AdminDataTable>
+            </AdminDesktopOnly>
 
-          {/* Mobile Cards */}
-          <div className="space-y-3 lg:hidden">
-            {filteredRewards.map((reward, index) => {
-              const campaign = campaigns?.find(c => c.id === reward.campaignId)
-              return (
-                <motion.div
-                  key={reward.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <code className="rounded bg-muted px-2 py-1 text-sm font-mono">{reward.code}</code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleCopyCode(reward.code)}
-                            >
-                              {copiedCode === reward.code ? (
-                                <Check className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                            </Button>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{reward.userEmail}</p>
+            <AdminMobileCardList>
+              {sortedRewards.map((reward) => {
+                const campaign = campaigns?.find((c) => c.id === reward.campaignId)
+                return (
+                  <AdminMobileCard key={reward.id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="mb-1 flex items-center gap-2">
+                          <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
+                            {reward.code}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6"
+                            onClick={() => handleCopyCode(reward.code)}
+                          >
+                            {copiedCode === reward.code ? (
+                              <Check className="size-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="size-3" />
+                            )}
+                          </Button>
                         </div>
-                        {getStatusBadge(reward.status)}
+                        <p className="text-sm text-muted-foreground">{reward.userEmail}</p>
                       </div>
+                      <StatusBadge status={reward.status} size="sm" />
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Value</p>
-                          <p className="font-medium">€{reward.value}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Campaign</p>
-                          <p className="font-medium">{campaign?.name || reward.campaignName}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Issued</p>
-                          <p>{formatDateTime(new Date(reward.issuedAt))}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Expires</p>
-                          <p>{formatDateTime(new Date(reward.expiresAt))}</p>
-                        </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Value</p>
+                        <p className="font-medium">€{reward.value}</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )
-            })}
-          </div>
-        </>
-      )}
+                      <div>
+                        <p className="text-muted-foreground">Campaign</p>
+                        <p className="font-medium">{campaign?.name || reward.campaignName}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Issued</p>
+                        <p>{formatDateTime(new Date(reward.issuedAt))}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Expires</p>
+                        <p>{formatDateTime(new Date(reward.expiresAt))}</p>
+                      </div>
+                    </div>
+                  </AdminMobileCard>
+                )
+              })}
+            </AdminMobileCardList>
 
-      {filteredRewards.length === 0 && !loading && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Gift className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">No rewards found</p>
-          </CardContent>
-        </Card>
-      )}
+            <AdminPaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </AdminDataTableCard>
     </div>
   )
 }

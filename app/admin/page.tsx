@@ -1,18 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
 import { formatTime, formatNumber, formatDateTime } from '@/lib/utils';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { AdminStatCard, AdminStatGrid } from '@/components/admin/admin-stat-card';
 import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states';
+import {
+  AdminChartSkeleton,
+  AdminStatGridSkeleton,
+  AdminTableSkeleton,
+} from '@/components/admin/admin-skeletons';
 import { StatusBadge } from '@/components/volt/status-badge';
-import { Spinner } from '@/components/ui/spinner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDashboardStats, useSessions, useStations } from '@/hooks/use-services';
 import { analyticsService } from '@/lib/services';
 import { isSuccessResponse } from '@/lib/api/client';
-import { 
-  Zap, 
-  Euro, 
-  Gift, 
-  Radio, 
+import {
+  Zap,
+  Euro,
+  Gift,
+  Radio,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -28,11 +37,10 @@ import {
 import type { FunnelAnalytics } from '@/lib/api/types';
 
 export default function AdminOverviewPage() {
-  // Fetch data via service hooks
   const { data: dashboardStats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
   const { data: sessions, loading: sessionsLoading, error: sessionsError, fetchSessions } = useSessions();
   const { data: stations, loading: stationsLoading, error: stationsError, fetchStations } = useStations();
-  
+
   const [revenueData, setRevenueData] = useState<{ date: string; revenue: number; sessions: number }[]>([]);
   const [funnelData, setFunnelData] = useState<FunnelAnalytics['stages']>([]);
   const [activityFeed, setActivityFeed] = useState<
@@ -41,14 +49,13 @@ export default function AdminOverviewPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [, setTick] = useState(0);
 
-  // Fetch sessions and stations on mount
   useEffect(() => {
     fetchSessions({ limit: 5 });
     fetchStations({ limit: 4 });
   }, [fetchSessions, fetchStations]);
 
-  // Fetch analytics data
   const loadAnalytics = async () => {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
@@ -77,233 +84,218 @@ export default function AdminOverviewPage() {
     loadAnalytics();
   }, []);
 
-  const isLoading = statsLoading || sessionsLoading || stationsLoading || analyticsLoading;
-
-  // Build stats cards from dashboard data
-  const stats = dashboardStats ? [
-    {
-      name: 'Active Sessions',
-      value: dashboardStats.activeSessions,
-      change: null,
-      changeType: 'neutral' as const,
-      icon: Zap,
-    },
-    {
-      name: 'Total Revenue',
-      value: `€${formatNumber(dashboardStats.totalRevenue)}`,
-      change: null,
-      changeType: 'neutral' as const,
-      icon: Euro,
-    },
-    {
-      name: 'Rewards Issued',
-      value: dashboardStats.totalRewardsIssued,
-      change: null,
-      changeType: 'neutral' as const,
-      icon: Gift,
-    },
-    {
-      name: 'Stations Online',
-      value: `${dashboardStats.stationsOnline}/${dashboardStats.stationsTotal}`,
-      change: null,
-      changeType: 'neutral' as const,
-      icon: Radio,
-    },
-  ] : [];
+  useEffect(() => {
+    if (!lastUpdated) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   const recentSessions = sessions?.slice(0, 5) || [];
   const stationHealth = stations?.slice(0, 4) || [];
 
-  // Transform funnel data for chart
-  const chartFunnelData = funnelData.map(s => ({
+  const chartFunnelData = funnelData.map((s) => ({
     stage: s.stage,
     count: s.count,
     percentage: Math.round(s.conversionRate),
   }));
 
-  if (isLoading && !dashboardStats) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Spinner className="h-8 w-8" />
-      </div>
-    );
-  }
+  const handleRetry = () => {
+    refetchStats();
+    fetchSessions({ limit: 5 });
+    fetchStations({ limit: 4 });
+    loadAnalytics();
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-lg font-medium text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Monitor rental operations
+    <div className="space-y-6">
+      <AdminPageHeader
+        title="Overview"
+        description="Monitor rental operations, revenue, and station health at a glance"
+        meta={
+          <p className="text-xs text-muted-foreground">
+            {lastUpdated
+              ? `Updated ${formatDistanceToNow(lastUpdated, { addSuffix: true })}`
+              : statsLoading || analyticsLoading
+                ? 'Loading…'
+                : null}
           </p>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2 md:mt-0">
-          {lastUpdated ? `Updated ${formatTime(lastUpdated)}` : 'Loading…'}
-        </p>
-      </div>
+        }
+      />
 
       {(statsError || sessionsError || stationsError || analyticsError) && (
         <AdminErrorBanner
           message={statsError || sessionsError || stationsError || analyticsError || 'Data load error'}
-          onRetry={() => {
-            refetchStats();
-            fetchSessions({ limit: 5 });
-            fetchStations({ limit: 4 });
-            loadAnalytics();
-          }}
+          onRetry={handleRetry}
         />
       )}
 
-      {/* Alerts Banner */}
       {dashboardStats && dashboardStats.stationsOnline < dashboardStats.stationsTotal && (
-        <div className="flex items-center justify-between py-3 px-4 bg-muted rounded-md">
+        <div className="flex items-center justify-between rounded-md bg-muted px-4 py-3">
           <div className="flex items-center gap-3">
             <Radio size={16} className="text-muted-foreground" />
             <p className="text-sm text-foreground">
               {dashboardStats.stationsTotal - dashboardStats.stationsOnline} station(s) offline
             </p>
           </div>
-          <a href="/admin/stations" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link href="/admin/stations" className="text-sm text-muted-foreground hover:text-foreground">
             View
-          </a>
+          </Link>
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-        {stats.map((stat) => (
-          <div key={stat.name} className="space-y-1">
-            <p className="text-xs text-muted-foreground">{stat.name}</p>
-            <p className="text-2xl font-medium text-foreground tabular-nums">{stat.value}</p>
-            <p className="text-xs text-muted-foreground">
-              {stat.change ? `${stat.change} vs last week` : 'Live from database'}
-            </p>
-          </div>
-        ))}
+      {statsLoading && !dashboardStats ? (
+        <AdminStatGridSkeleton />
+      ) : dashboardStats ? (
+        <AdminStatGrid columns={4}>
+          <AdminStatCard
+            label="Active Sessions"
+            value={dashboardStats.activeSessions}
+            icon={Zap}
+          />
+          <AdminStatCard
+            label="Total Revenue"
+            value={`€${formatNumber(dashboardStats.totalRevenue)}`}
+            icon={Euro}
+          />
+          <AdminStatCard
+            label="Rewards Issued"
+            value={dashboardStats.totalRewardsIssued}
+            icon={Gift}
+          />
+          <AdminStatCard
+            label="Stations Online"
+            value={`${dashboardStats.stationsOnline}/${dashboardStats.stationsTotal}`}
+            icon={Radio}
+          />
+        </AdminStatGrid>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {analyticsLoading ? (
+          <>
+            <AdminChartSkeleton />
+            <AdminChartSkeleton />
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-baseline justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+                <CardDescription>Last 14 days</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  {revenueData.length === 0 ? (
+                    <AdminEmptyState title="No revenue data yet" description="Completed rentals will appear here." />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={revenueData}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis
+                          dataKey="date"
+                          axisLine={false}
+                          tickLine={false}
+                          className="fill-muted-foreground text-xs"
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          className="fill-muted-foreground text-xs"
+                          tickFormatter={(value) => `€${value}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="revenue"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#colorRevenue)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-baseline justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Conversion Funnel</CardTitle>
+                <CardDescription>All time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  {funnelData.length === 0 ? (
+                    <AdminEmptyState title="No funnel data yet" description="Conversion stages will appear as users interact with stations." />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartFunnelData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          axisLine={false}
+                          tickLine={false}
+                          className="fill-muted-foreground text-xs"
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="stage"
+                          axisLine={false}
+                          tickLine={false}
+                          className="fill-muted-foreground text-xs"
+                          width={100}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                          formatter={(value: number) => [
+                            `${Number(value).toLocaleString()}`,
+                            'Count',
+                          ]}
+                        />
+                        <Bar
+                          dataKey="count"
+                          fill="hsl(var(--primary))"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Revenue Chart */}
-        <div>
-          <div className="flex items-baseline justify-between mb-6">
-            <h2 className="text-sm font-medium text-foreground">Revenue</h2>
-            <span className="text-xs text-muted-foreground">This week</span>
-          </div>
-          <div>
-            <div className="h-64">
-              {revenueData.length === 0 && !analyticsLoading ? (
-                <AdminEmptyState title="No revenue data yet" description="Completed rentals will appear here." />
-              ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    className="text-xs fill-muted-foreground"
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    className="text-xs fill-muted-foreground"
-                    tickFormatter={(value) => `€${value}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Funnel Chart */}
-        <div>
-          <div className="flex items-baseline justify-between mb-6">
-            <h2 className="text-sm font-medium text-foreground">Conversion Funnel</h2>
-            <span className="text-xs text-muted-foreground">All time</span>
-          </div>
-          <div>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartFunnelData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
-                  <XAxis 
-                    type="number" 
-                    axisLine={false}
-                    tickLine={false}
-                    className="text-xs fill-muted-foreground"
-                  />
-                  <YAxis 
-                    type="category" 
-                    dataKey="stage" 
-                    axisLine={false}
-                    tickLine={false}
-                    className="text-xs fill-muted-foreground"
-                    width={100}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number) => [
-                      `${Number(value).toLocaleString()}`,
-                      'Count',
-                    ]}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="hsl(var(--primary))" 
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* Recent Sessions */}
-        <div className="lg:col-span-2">
-          <div className="flex items-baseline justify-between mb-6">
-            <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
-            <a href="/admin/sessions" className="text-xs text-muted-foreground hover:text-foreground">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-baseline justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recent Sessions</CardTitle>
+            <Link href="/admin/sessions" className="text-xs text-muted-foreground hover:text-foreground">
               View all
-            </a>
-          </div>
-          <div>
+            </Link>
+          </CardHeader>
+          <CardContent>
             {sessionsLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <Spinner />
-              </div>
+              <AdminTableSkeleton rows={5} columns={5} />
             ) : recentSessions.length === 0 ? (
               <AdminEmptyState title="No sessions yet" description="Rental sessions will appear here as customers rent." />
             ) : (
@@ -312,19 +304,19 @@ export default function AdminOverviewPage() {
                   <table className="w-full">
                     <thead>
                       <tr>
-                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Session
                         </th>
-                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           User
                         </th>
-                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Station
                         </th>
-                        <th className="pb-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Status
                         </th>
-                        <th className="pb-3 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Amount
                         </th>
                       </tr>
@@ -333,16 +325,16 @@ export default function AdminOverviewPage() {
                       {recentSessions.map((session) => (
                         <tr key={session.id} className="border-t border-border/50">
                           <td className="py-3">
-                            <p className="text-sm text-foreground font-mono">
+                            <p className="font-mono text-sm text-foreground">
                               {session.sessionCode}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="mt-0.5 text-xs text-muted-foreground">
                               {formatTime(new Date(session.startTime))}
                             </p>
                           </td>
                           <td className="py-3">
                             <p className="text-sm text-foreground">{session.userName || 'Anonymous'}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{session.userEmail}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{session.userEmail}</p>
                           </td>
                           <td className="py-3 text-sm text-foreground">
                             {session.stationName}
@@ -351,7 +343,7 @@ export default function AdminOverviewPage() {
                             <StatusBadge status={session.status} size="sm" />
                           </td>
                           <td className="py-3 text-right">
-                            <p className="text-sm text-foreground tabular-nums">
+                            <p className="text-sm tabular-nums text-foreground">
                               €{session.amountCharged.toFixed(2)}
                             </p>
                           </td>
@@ -361,8 +353,7 @@ export default function AdminOverviewPage() {
                   </table>
                 </div>
 
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                   {recentSessions.map((session) => (
                     <div key={session.id} className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -373,99 +364,104 @@ export default function AdminOverviewPage() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">{session.userName || session.userEmail}</span>
-                        <span className="text-foreground tabular-nums">€{session.amountCharged.toFixed(2)}</span>
+                        <span className="tabular-nums text-foreground">€{session.amountCharged.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Station Health */}
-        <div>
-          <div className="flex items-baseline justify-between mb-6">
-            <h2 className="text-sm font-medium text-foreground">Station Health</h2>
-            <a href="/admin/stations" className="text-xs text-muted-foreground hover:text-foreground">
+        <Card>
+          <CardHeader className="flex flex-row items-baseline justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Station Health</CardTitle>
+            <Link href="/admin/stations" className="text-xs text-muted-foreground hover:text-foreground">
               View all
-            </a>
-          </div>
-          <div className="space-y-3">
-            {stationsLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <Spinner />
-              </div>
-            ) : stationHealth.length === 0 ? (
-              <AdminEmptyState title="No stations" description="Stations register when hardware connects." />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stationsLoading ? (
+                <AdminTableSkeleton rows={4} columns={2} />
+              ) : stationHealth.length === 0 ? (
+                <AdminEmptyState title="No stations" description="Stations register when hardware connects." />
+              ) : (
+                stationHealth.map((station) => (
+                  <div
+                    key={station.id}
+                    className="flex items-center justify-between border-b border-border/50 py-3 last:border-0"
+                  >
+                    <div className="space-y-0.5">
+                      <p className="text-sm text-foreground">{station.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {station.availableSlots}/{station.totalSlots} slots
+                      </p>
+                    </div>
+                    <StatusBadge status={station.status} size="sm" />
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {dashboardStats && (
+        <AdminStatGrid columns={4}>
+          <AdminStatCard
+            label="Conversion Rate"
+            value={`${dashboardStats.conversionRate}%`}
+            variant="secondary"
+          />
+          <AdminStatCard
+            label="Avg Duration"
+            value={`${dashboardStats.averageSessionDuration}m`}
+            variant="secondary"
+          />
+          <AdminStatCard
+            label="Deposits Held"
+            value={`€${dashboardStats.totalDepositsHeld}`}
+            variant="secondary"
+          />
+          <AdminStatCard
+            label="Rewards Redeemed"
+            value={dashboardStats.totalRewardsRedeemed}
+            variant="secondary"
+          />
+        </AdminStatGrid>
+      )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-baseline justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Live Activity</CardTitle>
+          <CardDescription>Real-time</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-0">
+            {analyticsLoading ? (
+              <AdminTableSkeleton rows={4} columns={2} />
+            ) : activityFeed.length === 0 ? (
+              <AdminEmptyState title="No recent activity" />
             ) : (
-              stationHealth.map((station) => (
-                <div
-                  key={station.id}
-                  className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
-                >
-                  <div className="space-y-0.5">
-                    <p className="text-sm text-foreground">{station.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {station.availableSlots}/{station.totalSlots} slots
+              activityFeed.map((activity, index) => (
+                <div key={`${activity.time}-${index}`} className="flex items-center justify-between border-b border-border/50 py-3 last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-foreground">{activity.label}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {activity.user}{activity.station !== '—' && ` · ${activity.station}`}
                     </p>
                   </div>
-                  <StatusBadge status={station.status} size="sm" />
+                  <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                    {formatDateTime(new Date(activity.time))}
+                  </span>
                 </div>
               ))
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Quick Stats Row */}
-      {dashboardStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-6 border-t border-border">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Conversion Rate</p>
-            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.conversionRate}%</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Avg Duration</p>
-            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.averageSessionDuration}m</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Deposits Held</p>
-            <p className="text-xl font-medium text-foreground tabular-nums">€{dashboardStats.totalDepositsHeld}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Rewards Redeemed</p>
-            <p className="text-xl font-medium text-foreground tabular-nums">{dashboardStats.totalRewardsRedeemed}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Real-time Activity Feed */}
-      <div>
-        <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-sm font-medium text-foreground">Live Activity</h2>
-          <span className="text-xs text-muted-foreground">Real-time</span>
-        </div>
-        <div className="space-y-0">
-          {activityFeed.length === 0 ? (
-            <AdminEmptyState title="No recent activity" />
-          ) : (
-            activityFeed.map((activity, index) => (
-              <div key={`${activity.time}-${index}`} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground">{activity.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {activity.user}{activity.station !== '—' && ` · ${activity.station}`}
-                  </p>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                  {formatDateTime(new Date(activity.time))}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

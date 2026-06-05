@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { getBillingOverview } from '@/app/actions/billing'
 import { formatCurrency } from '@/lib/stripe/types'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { BillingCharts } from './billing-charts'
@@ -17,12 +18,10 @@ export const dynamic = 'force-dynamic'
 export default async function BillingDashboardPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Billing & Payments</h1>
-        <p className="text-muted-foreground">
-          Monitor revenue, transactions, and payment health
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Billing & Payments"
+        description="Monitor revenue, transactions, and payment health"
+      />
 
       <Suspense fallback={<BillingDashboardSkeleton />}>
         <BillingDashboardContent />
@@ -37,12 +36,10 @@ async function BillingDashboardContent() {
 
   return (
     <>
-      {/* Disputes Alert */}
       {report.disputes.length > 0 && (
         <DisputesAlert disputes={report.disputes} />
       )}
 
-      {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Net Revenue"
@@ -70,7 +67,6 @@ async function BillingDashboardContent() {
         />
       </div>
 
-      {/* Secondary Metrics */}
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
           title="Total Revenue"
@@ -95,13 +91,11 @@ async function BillingDashboardContent() {
         />
       </div>
 
-      {/* Charts */}
       <BillingCharts
         revenueByDay={report.revenueByDay}
         revenueByStation={report.revenueByStation}
       />
 
-      {/* Recent Transactions */}
       <Card>
         <CardHeader>
           <CardTitle>Recent Transactions</CardTitle>
@@ -116,10 +110,6 @@ async function BillingDashboardContent() {
     </>
   )
 }
-
-// =============================================================================
-// METRIC CARD COMPONENT
-// =============================================================================
 
 interface MetricCardProps {
   title: string
@@ -167,14 +157,9 @@ function MetricCard({ title, value, description, trend, variant = 'primary' }: M
   )
 }
 
-// =============================================================================
-// LOADING SKELETON
-// =============================================================================
-
 function BillingDashboardSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Metrics skeleton */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
           <Card key={i}>
@@ -189,7 +174,6 @@ function BillingDashboardSkeleton() {
         ))}
       </div>
 
-      {/* Chart skeleton */}
       <Card>
         <CardHeader>
           <div className="h-5 w-32 bg-muted rounded animate-pulse" />
@@ -199,7 +183,6 @@ function BillingDashboardSkeleton() {
         </CardContent>
       </Card>
 
-      {/* Table skeleton */}
       <Card>
         <CardHeader>
           <div className="h-5 w-40 bg-muted rounded animate-pulse" />

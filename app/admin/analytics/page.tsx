@@ -26,11 +26,14 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
-import { Download, Clock, Zap, Euro, Gift, RefreshCw, AlertCircle } from "lucide-react"
+import { Download, Clock, Zap, Euro, Gift, RefreshCw } from "lucide-react"
 import { formatNumber } from '@/lib/utils';
 import { daysFromRange } from '@/lib/admin/date-range';
 import { downloadCsv } from '@/lib/admin/export-csv';
-import { AdminEmptyState } from '@/components/admin/admin-states';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { AdminStatCard, AdminStatGrid } from '@/components/admin/admin-stat-card';
+import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states';
+import { AdminChartSkeleton, AdminStatGridSkeleton } from '@/components/admin/admin-skeletons';
 import { analyticsService } from '@/lib/services';
 import { isSuccessResponse } from '@/lib/api/client';
 import type { 
@@ -45,7 +48,6 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Analytics data
   const [revenueData, setRevenueData] = useState<RevenueAnalytics | null>(null);
   const [sessionData, setSessionData] = useState<SessionAnalytics | null>(null);
   const [rewardData, setRewardData] = useState<RewardAnalytics | null>(null);
@@ -88,288 +90,267 @@ export default function AnalyticsPage() {
     fetchAnalytics();
   }, [fetchAnalytics, timeRange]);
 
-  // Loading state
-  if (loading && !revenueData) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Spinner className="w-8 h-8 mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading analytics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && !revenueData) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-6 h-6 text-destructive" />
-              </div>
-              <h3 className="font-semibold text-foreground mb-2">Failed to Load Analytics</h3>
-              <p className="text-sm text-muted-foreground mb-4">{error}</p>
-              <Button onClick={fetchAnalytics}>
-                <RefreshCw size={16} className="mr-2" />
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Format duration from minutes
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
+  const hasRevenueChartData = (revenueData?.revenueByPeriod?.length ?? 0) > 0;
+  const hasHourlyData = hourlyData.some((d) => d.count > 0);
+  const hasDurationData = durationDistribution.some((d) => d.count > 0);
+  const hasStationData = (sessionData?.sessionsByStation?.length ?? 0) > 0;
+
+  if (loading && !revenueData) {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          title="Analytics"
+          description="Revenue, rentals, and reward performance"
+        />
+        <AdminStatGridSkeleton />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <AdminChartSkeleton />
+          <AdminChartSkeleton />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <AdminChartSkeleton />
+          <AdminChartSkeleton className="lg:col-span-2" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
-          <p className="text-sm text-muted-foreground">Deep dive into platform performance</p>
-        </div>
-        <div className="flex gap-2">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Time range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={fetchAnalytics} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!revenueData}
-            onClick={() => {
-              if (!revenueData) return;
-              downloadCsv(
-                `powerdon-analytics-${timeRange}.csv`,
-                ['period', 'revenue', 'sessions'],
-                revenueData.revenueByPeriod.map((r) => [r.period, r.revenue, r.sessions]),
-              );
-            }}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Analytics"
+        description="Revenue, rentals, and reward performance"
+        actions={
+          <>
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Time range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={fetchAnalytics} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!revenueData}
+              onClick={() => {
+                if (!revenueData) return;
+                downloadCsv(
+                  `powerdon-analytics-${timeRange}.csv`,
+                  ['period', 'revenue', 'sessions'],
+                  revenueData.revenueByPeriod.map((r) => [r.period, r.revenue, r.sessions]),
+                );
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </>
+        }
+      />
 
-      {/* Key Metrics */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <Euro className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-xl font-semibold text-foreground">
-              {revenueData ? `€${formatNumber(revenueData.totalRevenue)}` : '-'}
-            </p>
-            <p className="text-xs text-muted-foreground">Total Revenue</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <Zap className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-xl font-semibold text-foreground">
-              {sessionData ? formatNumber(sessionData.totalSessions) : '-'}
-            </p>
-            <p className="text-xs text-muted-foreground">Total Rentals</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-xl font-semibold text-foreground">
-              {sessionData ? formatDuration(sessionData.averageDuration) : '-'}
-            </p>
-            <p className="text-xs text-muted-foreground">Avg Duration</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <Gift className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-xl font-semibold text-foreground">
-              {rewardData ? `${rewardData.redemptionRate.toFixed(0)}%` : '-'}
-            </p>
-            <p className="text-xs text-muted-foreground">Reward Rate</p>
-          </CardContent>
-        </Card>
-      </div>
+      {error && !revenueData && (
+        <AdminErrorBanner message={error} onRetry={fetchAnalytics} />
+      )}
 
-      {/* Charts Row 1 */}
+      {loading && revenueData ? (
+        <div className="flex items-center justify-center py-4">
+          <Spinner className="h-5 w-5" />
+        </div>
+      ) : null}
+
+      <AdminStatGrid columns={4}>
+        <AdminStatCard
+          label="Total Revenue"
+          value={revenueData ? `€${formatNumber(revenueData.totalRevenue)}` : '—'}
+          icon={Euro}
+        />
+        <AdminStatCard
+          label="Total Rentals"
+          value={sessionData ? formatNumber(sessionData.totalSessions) : '—'}
+          icon={Zap}
+        />
+        <AdminStatCard
+          label="Avg Duration"
+          value={sessionData ? formatDuration(sessionData.averageDuration) : '—'}
+          icon={Clock}
+        />
+        <AdminStatCard
+          label="Reward Rate"
+          value={rewardData ? `${rewardData.redemptionRate.toFixed(0)}%` : '—'}
+          icon={Gift}
+        />
+      </AdminStatGrid>
+
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Revenue & Rentals */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium">Revenue & Rentals</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData?.revenueByPeriod || []}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="period" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number) => [`€${value}`, 'Revenue']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(var(--primary))"
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {!hasRevenueChartData ? (
+                <AdminEmptyState title="No revenue data in this period" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={revenueData?.revenueByPeriod || []}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="period" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                      formatter={(value: number) => [`€${value}`, 'Revenue']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="hsl(var(--primary))"
+                      fillOpacity={1}
+                      fill="url(#colorRevenue)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Hourly Usage Pattern */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium">Hourly Usage Pattern</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="hour" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Rentals" />
-                </BarChart>
-              </ResponsiveContainer>
+              {!hasHourlyData ? (
+                <AdminEmptyState title="No rental activity in this period" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hourlyData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="hour" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Rentals" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts Row 2 */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Duration Distribution */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium">Duration Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              {durationDistribution.length === 0 || durationDistribution.every((d) => d.count === 0) ? (
+              {!hasDurationData ? (
                 <AdminEmptyState title="No completed rentals in range" />
               ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={durationDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {durationDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={durationDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {durationDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               )}
             </div>
-            {durationDistribution.some((d) => d.count > 0) && (
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {durationDistribution.map((item) => (
-                <div key={item.name} className="flex items-center gap-2 text-sm">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-muted-foreground">{item.name}</span>
-                  <span className="font-medium ml-auto">{item.value}% ({item.count})</span>
-                </div>
-              ))}
-            </div>
+            {hasDurationData && (
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                {durationDistribution.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2 text-sm">
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-muted-foreground">{item.name}</span>
+                    <span className="font-medium ml-auto">{item.value}% ({item.count})</span>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Station Performance */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base font-medium">Station Performance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sessionData?.sessionsByStation || []} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis type="number" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis type="category" dataKey="stationName" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} width={100} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Rentals" />
-                </BarChart>
-              </ResponsiveContainer>
+              {!hasStationData ? (
+                <AdminEmptyState title="No station activity in this period" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={sessionData?.sessionsByStation || []} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis type="number" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis type="category" dataKey="stationName" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} width={100} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Legend />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Rentals" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Conversion Funnel */}
       {funnelData && (
         <Card>
           <CardHeader>
@@ -407,23 +388,23 @@ export default function AnalyticsPage() {
                 <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[1] ? ((funnelData.stages[1].count / funnelData.stages[0].count) * 100).toFixed(0) : 0}%
                 </p>
-                <p className="text-xs text-muted-foreground">Scan -&gt; Info</p>
+                <p className="text-xs text-muted-foreground">Scan to info</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[2] && funnelData.stages[1] ? ((funnelData.stages[2].count / funnelData.stages[1].count) * 100).toFixed(0) : 0}%
                 </p>
-                <p className="text-xs text-muted-foreground">Info -&gt; Payment</p>
+                <p className="text-xs text-muted-foreground">Info to payment</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-semibold text-foreground">
                   {funnelData.stages[3] && funnelData.stages[2] ? ((funnelData.stages[3].count / funnelData.stages[2].count) * 100).toFixed(0) : 0}%
                 </p>
-                <p className="text-xs text-muted-foreground">Payment -&gt; Rental</p>
+                <p className="text-xs text-muted-foreground">Payment to rental</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-semibold text-foreground">{funnelData.overallConversion.toFixed(0)}%</p>
-                <p className="text-xs text-muted-foreground">Overall Conversion</p>
+                <p className="text-xs text-muted-foreground">Overall conversion</p>
               </div>
             </div>
           </CardContent>

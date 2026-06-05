@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
 import {
   Select,
   SelectContent,
@@ -11,26 +9,68 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { TableBody } from '@/components/ui/table'
+import { StatusBadge } from '@/components/volt/status-badge'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { AdminFilterBar, AdminFilterToggleGroup } from '@/components/admin/admin-filter-bar'
+import {
+  AdminDataTableCard,
+  AdminDataTable,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+  AdminDataTableEmpty,
+  AdminMobileCardList,
+  AdminMobileCard,
+  AdminDesktopOnly,
+} from '@/components/admin/admin-data-table'
+import { AdminPaginationBar } from '@/components/admin/admin-pagination-bar'
+import { AdminTableSkeleton, AdminCardListSkeleton } from '@/components/admin/admin-skeletons'
+import { AdminErrorBanner } from '@/components/admin/admin-states'
 import { useSupportTickets } from '@/hooks/use-services'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { useAdminPagination } from '@/hooks/use-admin-pagination'
+import { useTableSort } from '@/hooks/use-table-sort'
 import { supportService } from '@/lib/services'
 import { isSuccessResponse } from '@/lib/api/client'
-import { AdminErrorBanner, AdminEmptyState } from '@/components/admin/admin-states'
 import { formatDateTime } from '@/lib/utils'
+import { formatStatusLabel } from '@/lib/admin/status-config'
 import type { SupportTicket } from '@/lib/api/types'
 import { RefreshCw } from 'lucide-react'
 
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'waiting_customer', label: 'Waiting' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+]
+
 export default function SupportPage() {
-  const { data: tickets, loading, error, fetchTickets, refetch } = useSupportTickets()
+  const { data: tickets, loading, error, total, fetchTickets, refetch } = useSupportTickets()
+  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
+  const debouncedSearch = useDebouncedValue(searchQuery)
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = useAdminPagination()
+
   useEffect(() => {
-    fetchTickets(
-      statusFilter !== 'all'
-        ? { status: [statusFilter as SupportTicket['status']] }
-        : undefined,
-    )
-  }, [statusFilter, fetchTickets])
+    resetPage()
+  }, [debouncedSearch, statusFilter, resetPage])
+
+  useEffect(() => {
+    const filters: Parameters<typeof fetchTickets>[0] = {
+      ...paginationParams,
+    }
+    if (debouncedSearch) filters.search = debouncedSearch
+    if (statusFilter !== 'all') {
+      filters.status = [statusFilter as SupportTicket['status']]
+    }
+    fetchTickets(filters)
+  }, [debouncedSearch, statusFilter, paginationParams, fetchTickets])
 
   const handleStatusChange = async (id: string, status: SupportTicket['status']) => {
     setUpdatingId(id)
@@ -43,93 +83,186 @@ export default function SupportPage() {
   }
 
   const rows = tickets ?? []
+  const { sorted: sortedRows, sortOrder, toggleSort, isSorted } = useTableSort(
+    rows,
+    'createdAt',
+    'desc',
+  )
+
+  const activeFilters = [
+    ...(debouncedSearch
+      ? [{ key: 'search', label: `Search: ${debouncedSearch}`, onRemove: () => setSearchQuery('') }]
+      : []),
+    ...(statusFilter !== 'all'
+      ? [
+          {
+            key: 'status',
+            label: `Status: ${formatStatusLabel(statusFilter)}`,
+            onRemove: () => setStatusFilter('all'),
+          },
+        ]
+      : []),
+  ]
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setStatusFilter('all')
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Support Tickets</h1>
-          <p className="text-sm text-muted-foreground">Customer support cases from the database</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Support Tickets"
+        description="Customer support cases from the database"
+        meta={
+          total > 0 ? (
+            <p className="text-xs text-muted-foreground">{total} total tickets</p>
+          ) : null
+        }
+        actions={
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
+            <RefreshCw className={`mr-2 size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+            Refresh
+          </Button>
+        }
+      />
 
       {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
 
-      <Select value={statusFilter} onValueChange={setStatusFilter}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          <SelectItem value="open">Open</SelectItem>
-          <SelectItem value="in_progress">In progress</SelectItem>
-          <SelectItem value="waiting_customer">Waiting on customer</SelectItem>
-          <SelectItem value="resolved">Resolved</SelectItem>
-          <SelectItem value="closed">Closed</SelectItem>
-        </SelectContent>
-      </Select>
+      <AdminFilterBar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by ticket number, subject, or email…"
+        activeFilters={activeFilters}
+        onClearFilters={activeFilters.length ? clearFilters : undefined}
+      >
+        <AdminFilterToggleGroup
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={STATUS_FILTER_OPTIONS}
+        />
+      </AdminFilterBar>
 
-      <Card>
-        <CardContent className="p-0">
-          {loading && !rows.length ? (
-            <div className="flex h-48 items-center justify-center">
-              <Spinner />
-            </div>
-          ) : rows.length === 0 ? (
-            <AdminEmptyState title="No support tickets" description="Tickets appear when customers submit the support form." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ticket</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Subject</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((ticket) => (
-                    <tr key={ticket.id} className="border-b border-border/50">
-                      <td className="px-4 py-3 font-mono text-xs">{ticket.ticketNumber}</td>
-                      <td className="px-4 py-3 max-w-[200px] truncate">{ticket.subject}</td>
-                      <td className="px-4 py-3">{ticket.userEmail}</td>
-                      <td className="px-4 py-3">
-                        <Select
-                          value={ticket.status}
-                          disabled={updatingId === ticket.id}
-                          onValueChange={(v) => handleStatusChange(ticket.id, v as SupportTicket['status'])}
-                        >
-                          <SelectTrigger className="h-8 w-[130px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Open</SelectItem>
-                            <SelectItem value="in_progress">In progress</SelectItem>
-                            <SelectItem value="waiting_customer">Waiting on customer</SelectItem>
-                            <SelectItem value="resolved">Resolved</SelectItem>
-                            <SelectItem value="closed">Closed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+      <AdminDataTableCard>
+        {loading ? (
+          <>
+            <AdminDesktopOnly>
+              <AdminTableSkeleton rows={pageSize} columns={5} />
+            </AdminDesktopOnly>
+            <AdminCardListSkeleton count={5} />
+          </>
+        ) : rows.length === 0 ? (
+          <AdminDataTableEmpty
+            title="No support tickets"
+            description="Tickets appear when customers submit the support form."
+          />
+        ) : (
+          <>
+            <AdminDesktopOnly>
+              <AdminDataTable>
+                <AdminDataTableHeader>
+                  <AdminDataTableRow>
+                    <AdminDataTableHead>Ticket</AdminDataTableHead>
+                    <AdminDataTableHead>Subject</AdminDataTableHead>
+                    <AdminDataTableHead>Email</AdminDataTableHead>
+                    <AdminDataTableHead>Status</AdminDataTableHead>
+                    <AdminDataTableHead
+                      sortable
+                      sorted={isSorted('createdAt') ? sortOrder : false}
+                      onSort={() => toggleSort('createdAt')}
+                    >
+                      Created
+                    </AdminDataTableHead>
+                  </AdminDataTableRow>
+                </AdminDataTableHeader>
+                <TableBody>
+                  {sortedRows.map((ticket) => (
+                    <AdminDataTableRow key={ticket.id}>
+                      <AdminDataTableCell className="font-mono text-xs">
+                        {ticket.ticketNumber}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="max-w-[200px] truncate">
+                        {ticket.subject}
+                      </AdminDataTableCell>
+                      <AdminDataTableCell>{ticket.userEmail}</AdminDataTableCell>
+                      <AdminDataTableCell>
+                        <div className="flex flex-col gap-2">
+                          <StatusBadge status={ticket.status} size="sm" />
+                          <Select
+                            value={ticket.status}
+                            disabled={updatingId === ticket.id}
+                            onValueChange={(v) =>
+                              handleStatusChange(ticket.id, v as SupportTicket['status'])
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[150px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In progress</SelectItem>
+                              <SelectItem value="waiting_customer">Waiting on customer</SelectItem>
+                              <SelectItem value="resolved">Resolved</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </AdminDataTableCell>
+                      <AdminDataTableCell className="text-muted-foreground">
                         {formatDateTime(new Date(ticket.createdAt))}
-                      </td>
-                    </tr>
+                      </AdminDataTableCell>
+                    </AdminDataTableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </TableBody>
+              </AdminDataTable>
+            </AdminDesktopOnly>
 
-      <p className="text-xs text-muted-foreground">{rows.length} ticket{rows.length === 1 ? '' : 's'} loaded</p>
+            <AdminMobileCardList>
+              {sortedRows.map((ticket) => (
+                <AdminMobileCard key={ticket.id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-semibold">{ticket.ticketNumber}</p>
+                      <p className="truncate text-sm">{ticket.subject}</p>
+                    </div>
+                    <StatusBadge status={ticket.status} size="sm" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ticket.userEmail}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateTime(new Date(ticket.createdAt))}
+                  </p>
+                  <Select
+                    value={ticket.status}
+                    disabled={updatingId === ticket.id}
+                    onValueChange={(v) =>
+                      handleStatusChange(ticket.id, v as SupportTicket['status'])
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In progress</SelectItem>
+                      <SelectItem value="waiting_customer">Waiting on customer</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </AdminMobileCard>
+              ))}
+            </AdminMobileCardList>
+
+            <AdminPaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </AdminDataTableCard>
     </div>
   )
 }

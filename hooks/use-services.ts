@@ -298,6 +298,7 @@ export function useReturnPowerBank() {
 
 export function useRewards() {
   const state = useAsyncState<Reward[]>([]);
+  const [total, setTotal] = useState(0);
 
   const fetchRewards = useCallback(async (filters?: Parameters<typeof rewardService.getRewards>[0]) => {
     state.setLoading(true);
@@ -306,6 +307,7 @@ export function useRewards() {
       const response = await rewardService.getRewards(filters);
       if (isSuccessResponse(response)) {
         state.setData(response.data);
+        setTotal(response.meta?.total ?? response.data.length);
       } else {
         state.setError(getErrorMessage(response));
       }
@@ -316,7 +318,7 @@ export function useRewards() {
     }
   }, []);
 
-  return { ...state, fetchRewards, refetch: fetchRewards };
+  return { ...state, total, fetchRewards, refetch: fetchRewards };
 }
 
 export function useUserRewards(userEmail: string) {
@@ -462,6 +464,7 @@ export function useUpdateCampaign() {
 
 export function useSupportTickets() {
   const state = useAsyncState<SupportTicket[]>([]);
+  const [total, setTotal] = useState(0);
 
   const fetchTickets = useCallback(async (filters?: Parameters<typeof supportService.getTickets>[0]) => {
     state.setLoading(true);
@@ -470,6 +473,7 @@ export function useSupportTickets() {
       const response = await supportService.getTickets(filters);
       if (isSuccessResponse(response)) {
         state.setData(response.data);
+        setTotal(response.meta?.total ?? response.data.length);
       } else {
         state.setError(getErrorMessage(response));
       }
@@ -480,7 +484,7 @@ export function useSupportTickets() {
     }
   }, []);
 
-  return { ...state, fetchTickets, refetch: fetchTickets };
+  return { ...state, total, fetchTickets, refetch: fetchTickets };
 }
 
 export function useCreateSupportTicket() {
@@ -547,6 +551,7 @@ export function useDashboardStats() {
 
 export function useUsers() {
   const state = useAsyncState<User[]>([]);
+  const [total, setTotal] = useState(0);
 
   const fetchUsers = useCallback(async (filters?: Parameters<typeof userService.getUsers>[0]) => {
     state.setLoading(true);
@@ -555,6 +560,7 @@ export function useUsers() {
       const response = await userService.getUsers(filters);
       if (isSuccessResponse(response)) {
         state.setData(response.data);
+        setTotal(response.meta?.total ?? response.data.length);
       } else {
         state.setError(getErrorMessage(response));
       }
@@ -565,7 +571,7 @@ export function useUsers() {
     }
   }, []);
 
-  return { ...state, fetchUsers, refetch: fetchUsers };
+  return { ...state, fetchUsers, total, refetch: fetchUsers };
 }
 
 export function useCreateUser() {
