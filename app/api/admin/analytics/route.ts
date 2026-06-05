@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminSession } from '@/lib/api/route-helpers'
 import { analyticsRepository } from '@/lib/db'
 
+function parseAnalyticsType(request: NextRequest): string {
+  const raw = request.nextUrl.searchParams.get('type') || 'dashboard'
+  // Tolerate legacy malformed URLs: ?type=daily-revenue?days=14
+  return raw.split('?')[0].split('&')[0]
+}
+
 function parseDays(request: NextRequest): number {
-  const raw = request.nextUrl.searchParams.get('days')
+  let raw = request.nextUrl.searchParams.get('days')
+  if (!raw) {
+    const typeParam = request.nextUrl.searchParams.get('type') || ''
+    const embedded = typeParam.match(/[?&]days=(\d+)/)
+    if (embedded) raw = embedded[1]
+  }
   const n = raw ? Number(raw) : 30
   return Number.isFinite(n) && n > 0 ? Math.min(n, 365) : 30
 }
@@ -12,7 +23,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
 
-  const type = request.nextUrl.searchParams.get('type') || 'dashboard'
+  const type = parseAnalyticsType(request)
   const days = parseDays(request)
 
   try {

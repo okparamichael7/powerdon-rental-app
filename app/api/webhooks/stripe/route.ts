@@ -218,7 +218,14 @@ async function handlePaymentIntentFailed(
 ): Promise<WebhookResult> {
   const mapped = mapPaymentIntentFailedUpdate(paymentIntent)
   const sessionId = mapped.sessionCode
-  
+
+  if (!sessionId) {
+    logger.warn('Payment intent failed without session_id', {
+      paymentIntentId: paymentIntent.id,
+    })
+    return { success: true, message: 'No session_id in metadata' }
+  }
+
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     
@@ -262,7 +269,14 @@ async function handlePaymentIntentCanceled(
 ): Promise<WebhookResult> {
   const mapped = mapPaymentIntentCanceledUpdate(paymentIntent)
   const sessionId = mapped.sessionCode
-  
+
+  if (!sessionId) {
+    logger.warn('Payment intent canceled without session_id', {
+      paymentIntentId: paymentIntent.id,
+    })
+    return { success: true, message: 'No session_id in metadata' }
+  }
+
   try {
     const supabase = createServiceClient() as ReturnType<typeof createServiceClient>
     

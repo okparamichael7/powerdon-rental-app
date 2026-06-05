@@ -1,8 +1,8 @@
 # Post-Implementation Verification Audit
 
 **Audit standard:** No fix accepted without file-level evidence.  
-**Verification runs:** Round 3 → Round 7 (admin) → Round 8 (PWA) → **Round 9** (schema-compat admin API fixes + strict re-audit + final).  
-**Build/tests (Round 9 final):** `npm run test` **30/30** pass, `npm run build` pass.
+**Verification runs:** Round 3 → Round 7 (admin) → Round 8 (PWA) → Round 9 (schema-compat) → **Round 10** (analytics URL fix + strict re-audit + final).  
+**Build/tests (Round 10 final):** `npm run test` **32/32** pass, `npm run build` pass.
 
 ---
 
@@ -413,6 +413,80 @@ node scripts/verify-admin-queries.mjs  # optional live Supabase probe
 - `lib/ops/health-response.ts`, `app/api/admin/ops/route.ts`, `app/api/health/route.ts`
 - `app/api/admin/rewards/route.ts`, `app/api/admin/rewards/[id]/route.ts`
 - `supabase/migrations/009_rental_sessions_schema_sync.sql`, `010_rewards_schema_sync.sql`
+
+---
+
+## Round 10 — Analytics URL pre-remediation audit (strict)
+
+Production report: `GET /api/admin/analytics?type=daily-revenue?days=14` → **400** `Unknown analytics type`.
+
+| # | Finding | Round 10 pre status | Evidence |
+|---|---------|---------------------|----------|
+| AN1 | `daysParam()` appended `?days=N` after `?type=…` (double `?`) | **Still Open** | `production-services.ts:338-340` — `buildQuery({ days })` returns `?days=14` |
+| AN2 | Server parsed `type` as `daily-revenue?days=14` | **Still Open** | No `parseAnalyticsType` sanitizer pre-fix |
+| AN3 | All dated analytics endpoints affected | **Still Open** | `revenue`, `sessions`, `rewards`, `hourly`, `duration`, `daily-revenue` used `daysParam` |
+| AN4 | No unit test for analytics URL shape | **Still Open** | No `analytics-url.test.ts` |
+| AN5 | `npm run build` failed (stripe webhook `sessionId` null) | **Still Open** | `app/api/webhooks/stripe/route.ts:231` — `string \| null` in logger metadata |
+| AN6 | Test factory `buildRentalSession` missing `DbRentalSession` fields | **Still Open** | `tests/fixtures/factories.ts:31` — build type error |
+
+**Round 10 pre-remediation summary:** 0 Fully Resolved, 0 Partially Resolved, 0 Deferred, **6 Still Open**.
+
+---
+
+## Round 10 — Remediation
+
+| Item | Change |
+|------|--------|
+| AN1–AN3 | `ProductionAnalyticsService.analyticsUrl()` — single `buildQuery({ type, days })` |
+| AN2 | `parseAnalyticsType()` + embedded `days` extraction in `app/api/admin/analytics/route.ts` (legacy URL tolerance) |
+| AN4 | `lib/services/analytics-url.test.ts` wired in `test:admin` |
+| AN5 | Early `!sessionId` guards in `handlePaymentIntentFailed` / `handlePaymentIntentCanceled` |
+| AN6 | `buildRentalSession` aligned with `DbRentalSession` in `tests/fixtures/factories.ts` |
+
+---
+
+## Round 10 — Final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| AN1 | Double-`?` analytics URLs | **Fully Resolved** | `production-services.ts:338-342` — `analyticsUrl()` → `?type=daily-revenue&days=14` |
+| AN2 | Malformed legacy URL tolerance | **Fully Resolved** | `app/api/admin/analytics/route.ts:5-19` — `parseAnalyticsType`, embedded days |
+| AN3 | All dated analytics endpoints | **Fully Resolved** | `production-services.ts:348-369` — all use `analyticsUrl()` |
+| AN4 | Analytics URL unit tests | **Fully Resolved** | `lib/services/analytics-url.test.ts` (2 tests) |
+| AN5 | Stripe webhook build/type safety | **Fully Resolved** | `stripe/route.ts` — `!sessionId` guards before DB/logger |
+| AN6 | Test factory build type error | **Fully Resolved** | `tests/fixtures/factories.ts` — full `DbRentalSession` shape |
+
+### Cross-cutting (Round 10)
+
+| # | Prior finding | Final status | Evidence |
+|---|---------------|--------------|----------|
+| AD2 | Admin overview daily revenue | **Fully Resolved** | `getDailyRevenue` → correct URL; verified `type=daily-revenue`, `days=14` |
+| SC2 | Analytics API failures | **Fully Resolved** | Re-verified with AN1–AN3; 400 eliminated for dated types |
+
+### Round 10 summary
+
+| Status | Count |
+|--------|------:|
+| Fully Resolved | 6 |
+| Partially Resolved | 0 |
+| Deferred | 0 |
+| Not Actionable | 0 |
+| Still Open | 0 |
+
+```bash
+npm run test   # 32/32 pass (13+6+9+4)
+npm run build  # pass
+```
+
+**Deploy note:** Round 10 changes are **uncommitted** locally; `app.powerdon.nl` needs deploy after commit.
+
+### Key files (Round 10)
+
+- `lib/services/production-services.ts` — `analyticsUrl()`
+- `app/api/admin/analytics/route.ts` — `parseAnalyticsType`, `parseDays`
+- `lib/services/analytics-url.test.ts`
+- `app/api/webhooks/stripe/route.ts` — null session guards
+- `tests/fixtures/factories.ts` — `DbRentalSession` factory fields
 
 ---
 
