@@ -15,7 +15,6 @@ function AppContent() {
   const [isOnline, setIsOnline] = useState(true);
   const { activeSession, rewards } = useAppState();
 
-  // Network status detection
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -35,11 +34,9 @@ function AppContent() {
     setActiveTab(tab);
   }, []);
 
-  // Badge counts
   const hasActiveSession = !!activeSession;
   const pendingRewardsCount = rewards.filter(r => r.status === 'issued').length;
 
-  // Render the active page
   const renderPage = () => {
     switch (activeTab) {
       case 'rent':
@@ -56,22 +53,24 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background max-w-md mx-auto relative">
-      {/* Offline Banner */}
+    <div className="relative mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden bg-background">
       {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-amber-950 text-center py-2 text-sm font-medium max-w-md mx-auto">
-          You are offline. Some features may not work.
+        <div
+          className="absolute inset-x-0 top-0 z-50 bg-amber-500 px-4 py-2 text-center text-sm font-medium text-amber-950"
+          role="status"
+        >
+          You&apos;re offline — some features may be unavailable
         </div>
       )}
 
-      {/* Page Content */}
-      <div className={!isOnline ? 'pt-8' : ''}>
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden ${!isOnline ? 'pt-9' : ''}`}
+      >
         {renderPage()}
       </div>
 
-      {/* Bottom Navigation */}
-      <BottomNav 
-        activeTab={activeTab} 
+      <BottomNav
+        activeTab={activeTab}
         onTabChange={handleTabChange}
         showStatusBadge={hasActiveSession}
         rewardsBadgeCount={pendingRewardsCount}

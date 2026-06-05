@@ -1,12 +1,26 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import { MobileHeader } from '@/components/volt/mobile-header';
-import { 
-  PowerDonLogo, GiftIcon, MapPinIcon, PowerBankIcon, 
-  CheckCircleIcon, XCircleIcon, RefreshIcon, ClockIcon,
-  HeadphonesIcon
+import {
+  PwaScreen,
+  PwaBody,
+  PwaScrollBody,
+  PwaActionBar,
+  PwaCenteredState,
+  PwaMetricHero,
+  PwaListGroup,
+  PwaListRow,
+  PWA_BTN_CLASS,
+} from '@/components/pwa/pwa-screen';
+import {
+  PowerDonLogo,
+  GiftIcon,
+  PowerBankIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  RefreshIcon,
+  HeadphonesIcon,
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -24,7 +38,7 @@ interface StatusPageProps {
 export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   const { activeSession, completedSession, completeRental, setCompletedSession, syncActiveSession, currentStation } = useAppState();
   const rewardValue = activeSession?.rewardValue ?? completedSession?.rewardValue ?? currentStation?.rewardValue ?? 0;
-  
+
   const [isReturning, setIsReturning] = useState(false);
   const [returnProgress, setReturnProgress] = useState(0);
   const [returnComplete, setReturnComplete] = useState(false);
@@ -89,41 +103,34 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
     }
   };
 
-  // Handle dismissing completed view
   const handleDismissCompleted = () => {
     setReturnComplete(false);
     setCompletedSession(null);
   };
 
-  // No session state
   if (!activeSession && !returnComplete) {
     return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
+      <PwaScreen>
         <NoSessionView
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
           onStartRental={() => onNavigate('rent')}
         />
-      </div>
+      </PwaScreen>
     );
   }
 
-  // Returning state
   if (isReturning) {
     return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
-        <ReturningView
-          session={activeSession!}
-          progress={returnProgress}
-        />
-      </div>
+      <PwaScreen>
+        <ReturningView session={activeSession!} progress={returnProgress} />
+      </PwaScreen>
     );
   }
 
-  // Return complete state
   if (returnComplete && completedSession) {
     return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
+      <PwaScreen>
         <CompletedView
           session={completedSession}
           qualifiedForReward={qualifiedForReward}
@@ -137,14 +144,13 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
             onNavigate('rent');
           }}
         />
-      </div>
+      </PwaScreen>
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
+      <PwaScreen>
         <ErrorView
           error={error}
           onRetry={() => {
@@ -153,31 +159,27 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
           }}
           onSupport={() => onNavigate('support')}
         />
-      </div>
+      </PwaScreen>
     );
   }
 
-  // Active session state
   return (
-    <div className="flex flex-col min-h-screen bg-background pb-20">
-      <AnimatePresence mode="wait">
-        {activeSession && (
-          <ActiveSessionView
-            session={activeSession}
-            isOnline={isOnline}
-            isRefreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            onReturn={handleReturn}
-            onSupport={() => onNavigate('support')}
-            rewardValue={activeSession.rewardValue}
-          />
-        )}
-      </AnimatePresence>
-    </div>
+    <PwaScreen>
+      {activeSession && (
+        <ActiveSessionView
+          session={activeSession}
+          isOnline={isOnline}
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          onReturn={handleReturn}
+          onSupport={() => onNavigate('support')}
+          rewardValue={activeSession.rewardValue}
+        />
+      )}
+    </PwaScreen>
   );
 }
 
-// No Active Session View
 function NoSessionView({
   isRefreshing,
   onRefresh,
@@ -188,59 +190,36 @@ function NoSessionView({
   onStartRental: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <>
       <MobileHeader statusBadge="Status" />
-      
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
+      <PwaCenteredState
+        icon={<PowerBankIcon size={26} className="text-muted-foreground" />}
+        title="No Active Rental"
+        description="Start a rental to stay charged."
+      >
+        <Button onClick={onStartRental} className={PWA_BTN_CLASS}>
+          Start Rental
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="h-10 w-full text-sm"
         >
-          <PowerBankIcon size={28} className="text-muted-foreground" />
-        </motion.div>
-
-        <div className="text-center max-w-xs mb-10">
-          <h1 className="text-lg font-medium text-foreground mb-2">No Active Rental</h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Start a rental to stay charged.
-          </p>
-        </div>
-
-        <div className="w-full max-w-xs space-y-3">
-          <Button 
-            onClick={onStartRental}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Start Rental
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="w-full h-10 text-sm"
-          >
-            {isRefreshing ? (
-              <>
-                <Spinner className="w-4 h-4" />
-                Refreshing
-              </>
-            ) : (
-              'Refresh'
-            )}
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+          {isRefreshing ? (
+            <>
+              <Spinner className="h-4 w-4" />
+              Refreshing
+            </>
+          ) : (
+            'Refresh'
+          )}
+        </Button>
+      </PwaCenteredState>
+    </>
   );
 }
 
-// Active Session View
 function ActiveSessionView({
   session,
   isOnline,
@@ -278,71 +257,47 @@ function ActiveSessionView({
   const lastSync = session.lastSyncTime || session.startTime;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <>
       <MobileHeader
         stationContext={{ eventName: session.campaignName, stationId: session.stationId }}
         statusBadge="Active"
         statusBadgeVariant="active"
+        showHelp
+        onHelp={onSupport}
       />
-      
-      <main className="flex-1 px-6 py-8 space-y-8">
-        {/* Connection Status Banner */}
+
+      <PwaBody scroll className="gap-3 py-2">
         {!isOnline && (
-          <div className="bg-muted rounded-md px-4 py-3 flex items-center gap-3">
-            <XCircleIcon size={16} className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Offline - data will sync when reconnected</p>
+          <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
+            <XCircleIcon size={14} className="shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Offline — data syncs when reconnected</p>
           </div>
         )}
 
-        {/* Status Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center pt-4"
-        >
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Active</p>
-          <h1 className="text-4xl font-medium text-foreground tabular-nums">
-            {formatDuration(session.elapsedMinutes)}
-          </h1>
-        </motion.div>
+        <PwaMetricHero
+          label="Active"
+          value={formatDuration(session.elapsedMinutes)}
+          sublabel={`Started ${formatTime(session.startTime)}`}
+        />
 
-        {/* Power Bank Info */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-foreground text-background rounded-md p-5"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-background/60 uppercase tracking-wide">Power Bank</p>
-              <p className="text-sm font-medium mt-1">PowerDon Pro</p>
+        <div className="rounded-xl bg-foreground p-4 text-background">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-background/60">
+                PowerDon Pro
+              </p>
+              <p className="mt-0.5 truncate text-sm font-medium">{session.stationName}</p>
+              <p className="text-xs text-background/70">Slot {session.slotNumber}</p>
             </div>
-            <PowerBankIcon size={32} className="text-background/20" />
+            <PowerBankIcon size={28} className="shrink-0 text-background/25" />
           </div>
-          
-          <div className="mt-4 pt-4 border-t border-background/10 flex items-center justify-between text-sm">
-            <span className="text-background/60">{session.stationName}</span>
-            <span>Slot {session.slotNumber}</span>
-          </div>
-        </motion.div>
+        </div>
 
-        {/* Reward Progress */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Reward Progress</p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">Reward progress</p>
             {isQualified ? (
-              <span className="text-xs font-medium px-2 py-0.5 bg-foreground text-background rounded-full">
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
                 Qualified
               </span>
             ) : (
@@ -351,114 +306,43 @@ function ActiveSessionView({
               </span>
             )}
           </div>
-          
-          <div className="space-y-2">
-            <Progress value={rewardProgress} className="h-1.5" />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>0m</span>
-              <span>{session.rewardThreshold}m</span>
-            </div>
-          </div>
-
+          <Progress value={rewardProgress} className="h-1.5" />
           {isQualified && (
             <p className="text-xs text-muted-foreground">
               Return to claim your {formatCurrency(rewardValue)} voucher.
             </p>
           )}
-        </motion.div>
+        </div>
 
-        {/* Cost Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="space-y-3 py-4 border-t border-border"
-        >
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Current charge</span>
-            <span className="font-medium text-foreground tabular-nums">{formatCurrency(currentCharge)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Deposit held</span>
-              <span className="text-foreground tabular-nums">{formatCurrency(session.depositAmount)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm pt-2 border-t border-border/50">
-              <span className="text-muted-foreground">Est. refund</span>
-              <span className="font-medium text-foreground tabular-nums">{formatCurrency(estimatedRefund)}</span>
-            </div>
-        </motion.div>
+        <PwaListGroup>
+          <PwaListRow label="Current charge" value={formatCurrency(currentCharge)} />
+          <PwaListRow label="Deposit held" value={formatCurrency(session.depositAmount)} />
+          <PwaListRow label="Est. refund" value={formatCurrency(estimatedRefund)} />
+          <PwaListRow
+            label="Session"
+            value={session.sessionCode}
+            hint={
+              isRefreshing
+                ? 'Refreshing…'
+                : `Updated ${formatTime(lastSync)} · tap to refresh`
+            }
+            onClick={onRefresh}
+          />
+        </PwaListGroup>
+      </PwaBody>
 
-        {/* Session Details */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="space-y-3"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Session</p>
-            <button 
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-              aria-label="Refresh status"
-            >
-              {isRefreshing ? <Spinner className="w-3 h-3" /> : 'Refresh'}
-            </button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">ID</span>
-              <span className="font-mono text-foreground">{session.sessionCode}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Started</span>
-              <span className="text-foreground">{formatTime(session.startTime)}</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="space-y-3 pt-4"
-        >
-          <Button 
-            onClick={onReturn}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Return Power Bank
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Return at any station to end rental
-          </p>
-        </motion.div>
-
-        {/* Help Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-muted rounded-md p-4"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Need help?</p>
-            <button
-              onClick={onSupport}
-              className="text-sm text-foreground font-medium hover:underline"
-            >
-              Contact Support
-            </button>
-          </div>
-        </motion.div>
-      </main>
-    </motion.div>
+      <PwaActionBar>
+        <Button onClick={onReturn} className={PWA_BTN_CLASS}>
+          Return Power Bank
+        </Button>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Return at any station to end rental
+        </p>
+      </PwaActionBar>
+    </>
   );
 }
 
-// Returning View
 function ReturningView({
   session,
   progress,
@@ -470,56 +354,30 @@ function ReturningView({
   progress: number;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <>
       <MobileHeader statusBadge="Returning" statusBadgeVariant="active" />
-      
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          className="w-12 h-12 mb-8"
-        >
-          <RefreshIcon size={48} className="text-muted-foreground" />
-        </motion.div>
-
-        <div className="text-center mb-8">
-          <h1 className="text-lg font-medium text-foreground">Waiting for return</h1>
-          <p className="mt-2 text-muted-foreground">
-            Insert your power bank fully into any available slot. We will detect the return automatically.
-          </p>
-        </div>
-
-        <div className="w-full max-w-sm">
-          <div className="bg-muted rounded-full h-3 overflow-hidden mb-4">
-            <motion.div
-              className="h-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
+      <PwaCenteredState
+        icon={<RefreshIcon size={28} className="animate-spin text-muted-foreground" />}
+        title="Waiting for return"
+        description="Insert your power bank fully into any available slot. We will detect the return automatically."
+      >
+        <div className="w-full space-y-4">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${progress}%` }}
             />
           </div>
-          
-          <div className="bg-card rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Session</span>
-              <span className="font-mono text-foreground">{session.sessionCode}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-muted-foreground">Duration</span>
-              <span className="text-foreground">{formatDuration(session.elapsedMinutes)}</span>
-            </div>
-          </div>
+          <PwaListGroup>
+            <PwaListRow label="Session" value={session.sessionCode} />
+            <PwaListRow label="Duration" value={formatDuration(session.elapsedMinutes)} />
+          </PwaListGroup>
         </div>
-      </main>
-    </motion.div>
+      </PwaCenteredState>
+    </>
   );
 }
 
-// Completed View
 function CompletedView({
   session,
   qualifiedForReward,
@@ -546,136 +404,83 @@ function CompletedView({
   const completedAt = new Date();
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <>
       <MobileHeader statusBadge="Completed" statusBadgeVariant="success" />
-      
-      <main className="flex-1 px-5 py-6 space-y-6">
-        {/* Success Animation */}
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="flex justify-center"
-        >
-          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
-            <CheckCircleIcon size={40} className="text-emerald-600" />
-          </div>
-        </motion.div>
 
-        <div className="text-center">
-          <h1 className="text-xl font-semibold text-foreground">Return Complete!</h1>
-          <p className="mt-1 text-muted-foreground">
+      <PwaScrollBody className="space-y-4 py-3">
+        <div className="flex flex-col items-center pt-2 text-center">
+          <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-volt-success/15">
+            <CheckCircleIcon size={36} className="text-volt-success" />
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">Return Complete!</h1>
+          <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
             Thank you for using PowerDon. Your rental has been successfully completed.
           </p>
         </div>
 
-        {/* Receipt Card */}
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</span>
-            <span className="font-mono text-xs text-foreground">{session.sessionCode}</span>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Completed</span>
-              <span className="text-foreground">{formatTime(completedAt)}</span>
-            </div>
-            {session.stationName && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Returned At</span>
-                <span className="text-foreground">{session.stationName}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Duration</span>
-              <span className="font-medium text-foreground">{formatDuration(session.elapsedMinutes)}</span>
-            </div>
-          </div>
-          <div className="px-4 py-3 border-t border-border space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Rental Fee</span>
-              <span className="text-foreground">{formatCurrency(finalCharge)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Deposit Held</span>
-              <span className="text-foreground">{formatCurrency(session.depositAmount)}</span>
-            </div>
-          </div>
-          <div className="px-4 py-4 bg-emerald-50 border-t border-emerald-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-emerald-800">Deposit Refund</span>
-                <p className="text-xs text-emerald-600 mt-0.5">Processing in 1-5 business days</p>
-              </div>
-              <span className="font-bold text-emerald-700 text-xl">{formatCurrency(refundAmount)}</span>
-            </div>
-          </div>
-        </div>
+        <PwaListGroup>
+          <PwaListRow label="Receipt" value={session.sessionCode} />
+          <PwaListRow label="Completed" value={formatTime(completedAt)} />
+          {session.stationName ? (
+            <PwaListRow label="Returned at" value={session.stationName} />
+          ) : null}
+          <PwaListRow label="Total duration" value={formatDuration(session.elapsedMinutes)} />
+          <PwaListRow label="Rental fee" value={formatCurrency(finalCharge)} />
+          <PwaListRow label="Deposit held" value={formatCurrency(session.depositAmount)} />
+          <PwaListRow
+            label="Deposit refund"
+            value={formatCurrency(refundAmount)}
+            hint="Processing in 1–5 business days"
+            className="bg-volt-success/10"
+          />
+        </PwaListGroup>
 
-        {/* Reward Card */}
         {qualifiedForReward && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-primary to-primary/80 rounded-lg p-5 text-primary-foreground"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 bg-primary-foreground/20 rounded-xl flex items-center justify-center">
-                <GiftIcon size={24} />
+          <div className="rounded-xl bg-gradient-to-br from-primary to-primary/80 p-4 text-primary-foreground">
+            <div className="mb-2 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/20">
+                <GiftIcon size={22} />
               </div>
-              <div>
-                <p className="text-xs text-primary-foreground/80 uppercase tracking-wide">Reward Unlocked</p>
-                <p className="font-bold text-lg">{formatCurrency(rewardValue)} Merch Voucher</p>
+              <div className="min-w-0 text-left">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/80">
+                  Reward unlocked
+                </p>
+                <p className="font-semibold">{formatCurrency(rewardValue)} merch voucher</p>
               </div>
             </div>
-            <p className="text-sm text-primary-foreground/80">
+            <p className="text-left text-xs text-primary-foreground/80">
               You&apos;ve earned a voucher for renting 60+ minutes. Check your rewards to claim it!
             </p>
-          </motion.div>
+          </div>
         )}
+      </PwaScrollBody>
 
-        {/* Actions */}
-        <div className="space-y-3 pt-4">
-          {qualifiedForReward ? (
-            <Button 
-              onClick={onViewRewards}
-              className="w-full h-12 text-sm font-medium"
-            >
+      <PwaActionBar>
+        {qualifiedForReward ? (
+          <>
+            <Button onClick={onViewRewards} className="h-12 w-full text-sm font-medium">
               <GiftIcon size={18} />
               View My Reward
             </Button>
-          ) : (
-            <Button 
-              onClick={onStartNew}
-              className="w-full h-12 text-sm font-medium"
-            >
-              <PowerDonLogo size={18} />
-              Start New Rental
-            </Button>
-          )}
-          
-          {qualifiedForReward && (
             <Button
               variant="outline"
               onClick={onStartNew}
-              className="w-full h-12 text-sm font-medium"
+              className="mt-2 h-12 w-full text-sm font-medium"
             >
               Start Another Rental
             </Button>
-          )}
-        </div>
-      </main>
-    </motion.div>
+          </>
+        ) : (
+          <Button onClick={onStartNew} className="h-12 w-full text-sm font-medium">
+            <PowerDonLogo size={18} />
+            Start New Rental
+          </Button>
+        )}
+      </PwaActionBar>
+    </>
   );
 }
 
-// Error View
 function ErrorView({
   error,
   onRetry,
@@ -686,80 +491,27 @@ function ErrorView({
   onSupport: () => void;
 }) {
   const errorCode = `ERR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-  
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
-      <MobileHeader statusBadge="Error" statusBadgeVariant="error" />
-      
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
-        >
-          <XCircleIcon size={40} className="text-destructive" />
-        </motion.div>
-
-        <div className="text-center max-w-sm mb-6">
-          <h1 className="text-xl font-semibold text-foreground mb-2">Something Went Wrong</h1>
-          <p className="text-muted-foreground">
-            {error || 'We encountered an error processing your request. Please try again.'}
-          </p>
-        </div>
-
-        {/* Error Details */}
-        <div className="w-full max-w-sm bg-muted/50 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Error Reference</span>
-            <span className="font-mono text-foreground">{errorCode}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            If this issue persists, please contact support with this reference code for faster assistance.
-          </p>
-        </div>
-
-        {/* Quick Troubleshooting */}
-        <div className="w-full max-w-sm bg-card rounded-xl border border-border p-4 mb-6">
-          <p className="text-sm font-medium text-foreground mb-3">Quick troubleshooting:</p>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2">
-              <span className="text-primary">1.</span>
-              <span>Check your internet connection is stable</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">2.</span>
-              <span>Ensure the power bank is fully inserted into the slot</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">3.</span>
-              <span>Try a different slot if available</span>
-            </li>
-          </ul>
-        </div>
-
-        <div className="w-full max-w-sm space-y-3">
-          <Button 
-            onClick={onRetry}
-            className="w-full h-12 text-sm font-medium"
-          >
-            <RefreshIcon size={18} />
-            Try Again
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onSupport}
-            className="w-full h-12 text-sm font-medium"
-          >
-            <HeadphonesIcon size={18} />
-            Contact Support
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+    <>
+      <MobileHeader statusBadge="Error" statusBadgeVariant="error" showHelp onHelp={onSupport} />
+      <PwaCenteredState
+        icon={<XCircleIcon size={32} className="text-destructive" />}
+        title="Something Went Wrong"
+        description={error || 'We encountered an error processing your request. Please try again.'}
+      >
+        <p className="rounded-lg bg-muted/60 px-3 py-2 text-left text-xs text-muted-foreground">
+          Reference: <span className="font-mono text-foreground">{errorCode}</span>
+        </p>
+        <Button onClick={onRetry} className="h-12 w-full text-sm font-medium">
+          <RefreshIcon size={18} />
+          Try Again
+        </Button>
+        <Button variant="outline" onClick={onSupport} className="h-12 w-full text-sm font-medium">
+          <HeadphonesIcon size={18} />
+          Contact Support
+        </Button>
+      </PwaCenteredState>
+    </>
   );
 }

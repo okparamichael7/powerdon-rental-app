@@ -20,60 +20,69 @@ const tabs: { id: NavTab; label: string; icon: typeof QRScanIcon; ariaLabel: str
   { id: 'support', label: 'Support', icon: HeadphonesIcon, ariaLabel: 'Get help and support' },
 ];
 
-export function BottomNav({ 
-  activeTab, 
-  onTabChange, 
+export function BottomNav({
+  activeTab,
+  onTabChange,
   showStatusBadge = false,
   rewardsBadgeCount = 0,
-  className 
+  className,
 }: BottomNavProps) {
   return (
-    <nav 
+    <nav
       className={cn(
-        'fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm z-40',
-        className
+        'shrink-0 border-t border-border/80 bg-background/90 backdrop-blur-xl',
+        className,
       )}
       aria-label="Main navigation"
     >
-      <div className="flex items-center justify-around h-16 max-w-md mx-auto safe-area-pb">
+      <div
+        className="mx-auto flex h-[var(--pwa-tab-bar-height)] max-w-md items-stretch px-1 safe-area-pb"
+        style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-          const showBadge = (tab.id === 'status' && showStatusBadge) || 
-                           (tab.id === 'rewards' && rewardsBadgeCount > 0);
+          const showBadge =
+            (tab.id === 'status' && showStatusBadge) ||
+            (tab.id === 'rewards' && rewardsBadgeCount > 0);
           const badgeCount = tab.id === 'rewards' ? rewardsBadgeCount : 0;
-          
+
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                'relative flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
-                'focus:outline-none',
-                isActive ? 'text-foreground' : 'text-muted-foreground'
+                'relative flex flex-1 flex-col items-center justify-center gap-0.5 pwa-tap',
+                'transition-colors duration-150',
+                isActive ? 'text-foreground' : 'text-muted-foreground',
               )}
               aria-label={tab.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
             >
-              <div className="relative">
-                <Icon size={22} className={isActive ? 'opacity-100' : 'opacity-70'} />
+              {isActive && (
+                <span
+                  className="absolute top-1 h-0.5 w-8 rounded-full bg-foreground"
+                  aria-hidden
+                />
+              )}
+              <div className="relative mt-1">
+                <Icon size={24} className={cn(!isActive && 'opacity-75')} />
                 {showBadge && (
-                  <span 
+                  <span
                     className={cn(
-                      'absolute -top-0.5 -right-1 flex items-center justify-center rounded-full bg-foreground text-background text-[9px] font-medium',
-                      badgeCount > 0 ? 'min-w-[14px] h-3.5 px-0.5' : 'w-1.5 h-1.5'
+                      'absolute -right-1 -top-0.5 flex items-center justify-center rounded-full bg-foreground font-medium text-background',
+                      badgeCount > 0 ? 'min-w-[16px] h-4 px-1 text-[10px]' : 'size-2',
                     )}
-                    aria-label={
-                      tab.id === 'status' 
-                        ? 'Active rental' 
-                        : `${badgeCount} pending reward${badgeCount !== 1 ? 's' : ''}`
-                    }
+                    aria-hidden
                   >
                     {badgeCount > 0 ? (badgeCount > 9 ? '9+' : badgeCount) : null}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <span className={cn('text-[10px] font-medium leading-none', isActive && 'font-semibold')}>
+                {tab.label}
+              </span>
             </button>
           );
         })}

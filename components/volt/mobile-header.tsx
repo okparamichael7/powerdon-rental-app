@@ -57,7 +57,7 @@ function StationContextBar({ eventName, stationId }: StationContextProps) {
   const displayEvent = eventName.trim() || 'Event';
 
   return (
-    <div className="flex items-center gap-3 border-t border-border/40 bg-muted/25 px-5 py-2.5">
+    <div className="flex items-center gap-3 border-t border-border/40 bg-muted/20 px-4 py-2">
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
           Event
@@ -99,26 +99,27 @@ export function MobileHeader({
   const resolvedBadge = statusBadge ?? (!title && !stationContext ? subtitle : undefined);
 
   return (
-    <header className={cn('bg-background', className)}>
-      <div className="flex h-14 items-center justify-between px-5">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className={cn('shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md', className)}>
+      <div className="flex h-[var(--pwa-header-height)] items-center justify-between px-4">
+        <div className="flex min-w-0 items-center gap-2.5">
           {showBack ? (
             <button
+              type="button"
               onClick={onBack}
-              className="-ml-2 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-muted/60"
+              className="pwa-tap -ml-1 flex items-center justify-center rounded-full active:bg-muted/60"
               aria-label="Go back"
             >
-              <ArrowLeftIcon size={18} className="text-foreground" />
+              <ArrowLeftIcon size={22} className="text-foreground" />
             </button>
           ) : (
             <div className="flex shrink-0 items-center gap-2">
-              <PowerDonLogo size={20} className="text-foreground" />
-              <span className="text-sm font-medium tracking-tight text-foreground">PowerDon</span>
+              <PowerDonLogo size={22} className="text-foreground" />
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">PowerDon</span>
             </div>
           )}
           {title && (
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium text-foreground">{title}</span>
+            <div className="flex min-w-0 flex-col justify-center">
+              <span className="truncate text-[15px] font-semibold text-foreground">{title}</span>
               {subtitle && !stationContext && (
                 <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
               )}
@@ -136,11 +137,12 @@ export function MobileHeader({
           )}
           {showHelp && (
             <button
+              type="button"
               onClick={onHelp}
-              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-muted/60"
+              className="pwa-tap flex items-center justify-center rounded-full active:bg-muted/60"
               aria-label="Help"
             >
-              <HelpCircleIcon size={18} className="text-muted-foreground" />
+              <HelpCircleIcon size={20} className="text-muted-foreground" />
             </button>
           )}
         </div>

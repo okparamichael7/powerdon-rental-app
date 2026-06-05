@@ -10,6 +10,7 @@ import { loadStripe } from '@stripe/stripe-js'
 import { startRentalCheckout, getCheckoutStatus, type StartRentalCheckoutParams } from '@/app/actions/stripe'
 import { getErrorMessage } from '@/lib/errors/get-error-message'
 import { Spinner } from '@/components/ui/spinner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null
@@ -145,9 +146,12 @@ export function RentalCheckout({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner className="h-8 w-8" />
-        <span className="ml-3 text-muted-foreground">Preparing checkout...</span>
+      <div className="space-y-4 p-2" aria-busy="true" aria-label="Preparing checkout">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+        <p className="text-center text-sm text-muted-foreground">Preparing checkout…</p>
       </div>
     )
   }
@@ -282,13 +286,13 @@ export function CheckoutStatus({ sessionCode, onRetry }: CheckoutStatusProps) {
 
   if (status.status === 'completed') {
     return (
-      <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-6 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
-          <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="rounded-xl border border-volt-success/30 bg-volt-success/10 p-6 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-volt-success/20">
+          <svg className="h-6 w-6 text-volt-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-green-500 font-medium">Payment Authorized</p>
+        <p className="font-medium text-volt-success">Payment Authorized</p>
         <p className="text-sm text-muted-foreground mt-1">
           Your deposit has been secured. Proceed to the station.
         </p>

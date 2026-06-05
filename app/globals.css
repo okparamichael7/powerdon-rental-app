@@ -159,6 +159,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -169,4 +171,55 @@
 
 .pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* PWA native shell tokens */
+:root {
+  --pwa-tab-bar-height: 3.5rem;
+  --pwa-header-height: 3.5rem;
+  --pwa-touch-min: 44px;
+  --pwa-radius-card: 0.75rem;
+}
+
+@layer utilities {
+  .pwa-tap {
+    min-height: var(--pwa-touch-min);
+    min-width: var(--pwa-touch-min);
+  }
+
+  .pwa-title {
+    @apply text-lg font-semibold tracking-tight text-foreground;
+  }
+
+  .pwa-subtitle {
+    @apply text-sm text-muted-foreground leading-relaxed;
+  }
+
+  .pwa-caption {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .pwa-section-label {
+    @apply text-xs font-medium uppercase tracking-wide text-muted-foreground;
+  }
+
+  .pwa-no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .pwa-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Reduce decorative motion for native feel */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

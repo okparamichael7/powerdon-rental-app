@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader, formatStationRef } from '@/components/volt/mobile-header';
 import {
   PowerDonLogo, ArrowRightIcon, ShieldCheckIcon, GiftIcon,
-  XCircleIcon, RefreshIcon, CheckCircleIcon, ArrowLeftIcon
+  XCircleIcon, RefreshIcon, CheckCircleIcon,
 } from '@/components/volt/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +19,12 @@ import { isStripeCheckoutEnabled, isStripeMisconfigured } from '@/lib/services/c
 import { getPwaDataLayer } from '@/lib/data';
 import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token';
 import { formatDailyCapLabel, formatLadderRateLabel, LADDER_PRICING } from '@/lib/pwa/pricing-display';
+import {
+  PwaScreen, PwaBody, PwaScrollBody, PwaActionBar,
+  PwaCenteredState, PwaListGroup, PwaListRow, PwaMetricHero, PWA_BTN_CLASS,
+} from '@/components/pwa/pwa-screen';
+import { PwaBottomSheet } from '@/components/pwa/pwa-bottom-sheet';
+import { PwaLoadingScreen } from '@/components/pwa/pwa-states';
 
 type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
@@ -74,6 +79,8 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
     canRetry: true,
   },
 };
+
+const btnClass = PWA_BTN_CLASS;
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation } =
@@ -326,176 +333,150 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
 
   // Render loading state
   if (isLoading) {
-    return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
-        <MobileHeader statusBadge="Loading" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <Spinner className="w-8 h-8 mx-auto text-primary" />
-            <p className="text-muted-foreground">Finding your station...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <PwaLoadingScreen message="Finding your station..." />;
   }
 
   // Render error state (initial errors)
   if (error && step !== 'error') {
     const config = errorConfigs[error];
     return (
-      <div className="flex flex-col min-h-screen bg-background pb-20">
+      <PwaScreen>
         <MobileHeader />
-        <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
+        <PwaCenteredState
+          icon={<XCircleIcon size={28} className="text-muted-foreground" />}
+          title={config.title}
+          description={config.description}
+        >
+          <Button onClick={handleErrorAction} className={btnClass}>
+            {config.action}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onNavigate('support')}
+            className={btnClass}
           >
-            <XCircleIcon size={28} className="text-muted-foreground" />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-center max-w-xs"
-          >
-            <h1 className="text-lg font-medium text-foreground mb-2">{config.title}</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">{config.description}</p>
-          </motion.div>
-
-          <div className="w-full max-w-xs space-y-3 mt-10">
-            <Button
-              onClick={handleErrorAction}
-              className="w-full h-12 text-sm font-medium"
-            >
-              {config.action}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => onNavigate('support')}
-              className="w-full h-12 text-sm font-medium"
-            >
-              Contact Support
-            </Button>
-          </div>
-        </main>
-      </div>
+            Contact Support
+          </Button>
+        </PwaCenteredState>
+      </PwaScreen>
     );
   }
 
   // Render step content
-  return (
-    <div className="flex flex-col min-h-screen bg-background pb-20">
-      <AnimatePresence mode="wait">
-        {step === 'active_warning' && (
-          <ActiveWarningStep
-            key="active_warning"
-            onViewRental={() => onNavigate('status')}
-            onContinueAnyway={() => setStep('landing')}
-          />
-        )}
+  if (step === 'active_warning') {
+    return (
+      <ActiveWarningStep
+        onViewRental={() => onNavigate('status')}
+        onContinueAnyway={() => setStep('landing')}
+      />
+    );
+  }
 
-        {step === 'landing' && currentStation && (
-          <LandingStep
-            key="landing"
-            station={currentStation}
-            onStart={() => setStep('info')}
-          />
-        )}
+  if (step === 'landing' && currentStation) {
+    return (
+      <LandingStep
+        station={currentStation}
+        onStart={() => setStep('info')}
+      />
+    );
+  }
 
-        {step === 'info' && currentStation && (
-          <InfoStep
-            key="info"
-            station={currentStation}
-            email={email}
-            setEmail={setEmail}
-            name={name}
-            setName={setName}
-            termsAccepted={termsAccepted}
-            setTermsAccepted={setTermsAccepted}
-            marketingConsent={marketingConsent}
-            setMarketingConsent={setMarketingConsent}
-            formErrors={formErrors}
-            onBack={() => setStep('landing')}
-            onSubmit={handleInfoSubmit}
-          />
-        )}
+  if (step === 'info' && currentStation) {
+    return (
+      <InfoStep
+        station={currentStation}
+        email={email}
+        setEmail={setEmail}
+        name={name}
+        setName={setName}
+        termsAccepted={termsAccepted}
+        setTermsAccepted={setTermsAccepted}
+        marketingConsent={marketingConsent}
+        setMarketingConsent={setMarketingConsent}
+        formErrors={formErrors}
+        onBack={() => setStep('landing')}
+        onSubmit={handleInfoSubmit}
+      />
+    );
+  }
 
-        {step === 'payment' && currentStation && (
-          isStripeMisconfigured() ? (
-            <motion.div key="payment-misconfigured" className="flex flex-col min-h-screen px-5 py-8">
-              <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
-              <p className="text-destructive font-medium">Payment is not configured</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Stripe secret key is set but NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is missing. Add the publishable key or remove STRIPE_SECRET_KEY for deposit-only mode.
-              </p>
-            </motion.div>
-          ) : isStripeCheckoutEnabled() ? (
-            <motion.div
-              key="payment-stripe"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="flex flex-col min-h-screen"
-            >
-              <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
-              <main className="flex-1 px-5 py-6">
-                <RentalCheckout
-                  email={email}
-                  name={name || undefined}
-                  stationId={currentStation.id}
-                  campaignId={currentStation.campaignId || undefined}
-                  depositAmount={Math.round(currentStation.depositAmount * 100)}
-                  onSuccess={handleStripeCheckoutSuccess}
-                  onCancel={() => setStep('info')}
-                  onError={handleStripeCheckoutError}
-                />
-              </main>
-            </motion.div>
-          ) : (
-            <PaymentStep
-              key="payment"
-              station={currentStation}
-              isProcessing={isProcessing}
-              onBack={() => setStep('info')}
-              onSubmit={handlePayment}
+  if (step === 'payment' && currentStation) {
+    if (isStripeMisconfigured()) {
+      return (
+        <PwaScreen>
+          <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
+          <PwaBody>
+            <p className="text-destructive font-medium">Payment is not configured</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Stripe secret key is set but NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is missing. Add the publishable key or remove STRIPE_SECRET_KEY for deposit-only mode.
+            </p>
+          </PwaBody>
+        </PwaScreen>
+      );
+    }
+    if (isStripeCheckoutEnabled()) {
+      return (
+        <PwaScreen>
+          <MobileHeader title="Payment" showBack onBack={() => setStep('info')} />
+          <PwaScrollBody>
+            <RentalCheckout
+              email={email}
+              name={name || undefined}
+              stationId={currentStation.id}
+              campaignId={currentStation.campaignId || undefined}
+              depositAmount={Math.round(currentStation.depositAmount * 100)}
+              onSuccess={handleStripeCheckoutSuccess}
+              onCancel={() => setStep('info')}
+              onError={handleStripeCheckoutError}
             />
-          )
-        )}
+          </PwaScrollBody>
+        </PwaScreen>
+      );
+    }
+    return (
+      <PaymentStep
+        station={currentStation}
+        isProcessing={isProcessing}
+        onBack={() => setStep('info')}
+        onSubmit={handlePayment}
+      />
+    );
+  }
 
-        {step === 'unlocking' && currentStation && (
-          <UnlockingStep
-            key="unlocking"
-            station={currentStation}
-            assignedSlot={activeSession?.slotNumber ?? assignedSlot ?? 1}
-            progress={unlockProgress}
-          />
-        )}
+  if (step === 'unlocking' && currentStation) {
+    return (
+      <UnlockingStep
+        station={currentStation}
+        assignedSlot={activeSession?.slotNumber ?? assignedSlot ?? 1}
+        progress={unlockProgress}
+      />
+    );
+  }
 
-        {step === 'success' && currentStation && activeSession && (
-          <SuccessStep
-            key="success"
-            station={currentStation}
-            sessionCode={activeSession.sessionCode}
-            assignedSlot={activeSession.slotNumber}
-            startTime={activeSession.startTime}
-            onContinue={() => onNavigate('status')}
-          />
-        )}
+  if (step === 'success' && currentStation && activeSession) {
+    return (
+      <SuccessStep
+        station={currentStation}
+        sessionCode={activeSession.sessionCode}
+        assignedSlot={activeSession.slotNumber}
+        startTime={activeSession.startTime}
+        onContinue={() => onNavigate('status')}
+      />
+    );
+  }
 
-        {step === 'error' && error && (
-          <ErrorStep
-            key="error"
-            error={error}
-            customMessage={errorMessage}
-            onAction={handleErrorAction}
-            onSupport={() => onNavigate('support')}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  if (step === 'error' && error) {
+    return (
+      <ErrorStep
+        error={error}
+        customMessage={errorMessage}
+        onAction={handleErrorAction}
+        onSupport={() => onNavigate('support')}
+      />
+    );
+  }
+
+  return null;
 }
 
 // Active Warning Step
@@ -507,47 +488,21 @@ function ActiveWarningStep({
   onContinueAnyway: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader />
-
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-8"
-        >
-          <PowerDonLogo size={28} className="text-foreground" />
-        </motion.div>
-
-        <div className="text-center max-w-xs mb-10">
-          <h1 className="text-lg font-medium text-foreground mb-2">Active Rental</h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            You have an active rental. View its status or continue browsing.
-          </p>
-        </div>
-
-        <div className="w-full max-w-sm space-y-3">
-          <Button
-            onClick={onViewRental}
-            className="w-full h-12 text-sm font-medium rounded-none"
-          >
-            View Active Rental
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onContinueAnyway}
-            className="w-full h-12 text-sm font-medium rounded-none"
-          >
-            Continue Browsing
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+      <PwaCenteredState
+        icon={<PowerDonLogo size={28} className="text-foreground" />}
+        title="Active Rental"
+        description="You have an active rental. View its status or continue browsing."
+      >
+        <Button onClick={onViewRental} className={btnClass}>
+          View Active Rental
+        </Button>
+        <Button variant="outline" onClick={onContinueAnyway} className={btnClass}>
+          Continue Browsing
+        </Button>
+      </PwaCenteredState>
+    </PwaScreen>
   );
 }
 
@@ -560,123 +515,67 @@ function LandingStep({
   onStart: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader
         stationContext={{ eventName: station.campaignName, stationId: station.id }}
         showSecure
       />
 
-      <main className="flex-1 flex flex-col">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="relative w-full aspect-[4/3] overflow-hidden"
-        >
-          <img
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/powerbanks.png-n6OHfLGwW8PS0RkEAFHCgSp1h0fhk6.jpeg"
-            alt="PowerDon power banks"
-            className="w-full h-full object-cover"
-          />
-        </motion.div>
+      <PwaBody className="justify-between py-3">
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
+            <PowerDonLogo size={28} className="text-foreground" />
+          </div>
 
-        <div className="flex-1 px-6 py-8 space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-center"
-          >
-            <h1 className="text-2xl font-medium text-foreground">Stay charged.</h1>
-            <p className="mt-2 text-sm text-muted-foreground text-balance leading-relaxed">
-              Rent a power bank in seconds.
+          <div className="text-center">
+            <h1 className="text-xl font-semibold text-foreground">Stay charged</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Rent a power bank in seconds
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <div className="flex items-center justify-between py-4">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Rate</p>
-                <p className="text-xl font-medium text-foreground mt-1">
-                  {formatLadderRateLabel()}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">First {LADDER_PRICING.freeMinutes} min free</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Deposit</p>
-                <p className="text-xl font-medium text-foreground mt-1">{formatCurrency(station.depositAmount)}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Refundable</p>
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground border-t border-border/50 pt-3">
-              Max {formatDailyCapLabel(station.dailyCap)}/day • Tax included
-            </div>
-          </motion.div>
+          <PwaListGroup className="w-full">
+            <PwaListRow
+              label="Rate"
+              hint={`First ${LADDER_PRICING.freeMinutes} min free`}
+              value={formatLadderRateLabel()}
+            />
+            <PwaListRow
+              label="Deposit"
+              hint="Refundable"
+              value={formatCurrency(station.depositAmount)}
+            />
+            <PwaListRow
+              label="Daily cap"
+              hint="Tax included"
+              value={formatDailyCapLabel(station.dailyCap)}
+            />
+          </PwaListGroup>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-muted rounded-md p-4"
-          >
-            <div className="flex items-start gap-3">
-              <GiftIcon size={18} className="text-foreground mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-foreground">Merch Reward</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{station.rewardDescription}</p>
-              </div>
-            </div>
-          </motion.div>
+          <div className="flex w-full items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
+            <GiftIcon size={16} className="shrink-0 text-primary" />
+            <p className="text-xs text-muted-foreground line-clamp-1">
+              <span className="font-medium text-foreground">Reward:</span> {station.rewardDescription}
+            </p>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="space-y-4"
-          >
-            <div className="space-y-3">
-              {[
-                { step: 1, title: 'Scan', desc: 'Start your rental' },
-                { step: 2, title: 'Unlock', desc: 'Pick up your power bank' },
-                { step: 3, title: 'Return', desc: 'Drop at any station' },
-              ].map((item) => (
-                <div key={item.step} className="flex items-center gap-4">
-                  <span className="w-6 h-6 rounded-full bg-foreground text-background text-xs font-medium flex items-center justify-center flex-shrink-0">
-                    {item.step}
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-        </div>
-
-        <div className="sticky bottom-20 px-6 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-          <Button
-            onClick={onStart}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Start rental
-            <ArrowRightIcon size={16} />
-          </Button>
-          <p className="text-center text-xs text-muted-foreground mt-3">
-            {station.availableSlots} slots available
+          <p className="text-xs text-muted-foreground">
+            Scan → Unlock → Return at any station
           </p>
         </div>
-      </main>
-    </motion.div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          {station.availableSlots} slots available
+        </p>
+      </PwaBody>
+
+      <PwaActionBar>
+        <Button onClick={onStart} className={btnClass}>
+          Start rental
+          <ArrowRightIcon size={16} />
+        </Button>
+      </PwaActionBar>
+    </PwaScreen>
   );
 }
 
@@ -709,37 +608,30 @@ function InfoStep({
   onSubmit: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader title="Your Info" showBack onBack={onBack} />
 
-      <main className="flex-1 px-6 py-8 space-y-8">
+      <PwaBody scroll className="gap-4 py-3">
         <div>
-          <h1 className="text-lg font-medium text-foreground">Your details</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter your email to continue.
-          </p>
+          <h1 className="text-base font-semibold text-foreground">Your details</h1>
+          <p className="text-xs text-muted-foreground">Enter your email to continue</p>
         </div>
 
-        <div className="flex items-center justify-between py-4 border-b border-border/50">
-          <div>
-            <p className="text-xs text-muted-foreground">Rate</p>
-            <p className="text-sm font-medium text-foreground">{formatLadderRateLabel()}</p>
-            <p className="text-[10px] text-muted-foreground">First {LADDER_PRICING.freeMinutes} min free</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Deposit</p>
-            <p className="text-sm font-medium text-foreground">{formatCurrency(station.depositAmount)}</p>
-          </div>
-        </div>
+        <PwaListGroup>
+          <PwaListRow
+            label="Rate"
+            hint={`First ${LADDER_PRICING.freeMinutes} min free`}
+            value={formatLadderRateLabel()}
+          />
+          <PwaListRow
+            label="Deposit"
+            value={formatCurrency(station.depositAmount)}
+          />
+        </PwaListGroup>
 
-        <div className="space-y-5">
+        <div className="space-y-3">
           <div>
-            <label htmlFor="email" className="block text-xs text-muted-foreground mb-2">
+            <label htmlFor="email" className="block text-xs text-muted-foreground mb-1.5">
               Email
             </label>
             <Input
@@ -748,17 +640,17 @@ function InfoStep({
               placeholder="email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={formErrors.email ? 'border-destructive' : ''}
+              className={`h-11 rounded-xl ${formErrors.email ? 'border-destructive' : ''}`}
               aria-invalid={!!formErrors.email}
               aria-describedby={formErrors.email ? 'email-error' : undefined}
             />
             {formErrors.email && (
-              <p id="email-error" className="mt-1.5 text-xs text-destructive">{formErrors.email}</p>
+              <p id="email-error" className="mt-1 text-xs text-destructive">{formErrors.email}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="name" className="block text-xs text-muted-foreground mb-2">
+            <label htmlFor="name" className="block text-xs text-muted-foreground mb-1.5">
               Name <span className="text-muted-foreground/60">(optional)</span>
             </label>
             <Input
@@ -767,11 +659,12 @@ function InfoStep({
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="h-11 rounded-xl"
             />
           </div>
 
-          <div className="space-y-3 pt-2">
-            <div className="flex items-start gap-3">
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-2.5">
               <Checkbox
                 id="terms"
                 checked={termsAccepted}
@@ -787,10 +680,10 @@ function InfoStep({
               </label>
             </div>
             {formErrors.terms && (
-              <p className="text-xs text-destructive ml-7">{formErrors.terms}</p>
+              <p className="text-xs text-destructive ml-6">{formErrors.terms}</p>
             )}
 
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2.5">
               <Checkbox
                 id="marketing"
                 checked={marketingConsent}
@@ -803,18 +696,15 @@ function InfoStep({
             </div>
           </div>
         </div>
+      </PwaBody>
 
-        <div className="pt-6">
-          <Button
-            onClick={onSubmit}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Continue
-            <ArrowRightIcon size={16} />
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+      <PwaActionBar>
+        <Button onClick={onSubmit} className={btnClass}>
+          Continue
+          <ArrowRightIcon size={16} />
+        </Button>
+      </PwaActionBar>
+    </PwaScreen>
   );
 }
 
@@ -831,71 +721,69 @@ function PaymentStep({
   onSubmit: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader title="Payment" showBack onBack={onBack} />
 
-      <main className="flex-1 px-5 py-6 space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Authorize deposit</h1>
-          <p className="mt-1 text-muted-foreground">
-            Your rental starts when you confirm. Usage is billed from the deposit hold on return.
-          </p>
-        </div>
-
-        <div className="bg-card rounded-lg border border-border p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Deposit hold</span>
-            <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
-          </div>
-          <div className="space-y-2 text-xs text-muted-foreground border-t border-border pt-4">
-            <div className="flex justify-between">
-              <span>Rate</span>
-              <span>{formatLadderRateLabel()} (first {LADDER_PRICING.freeMinutes} min free)</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Daily cap</span>
-              <span>{formatDailyCapLabel(station.dailyCap)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Max rental</span>
-              <span>{LADDER_PRICING.maxRentalHours} hours</span>
-            </div>
-            <p className="pt-2">
-              You are only charged for actual usage. Unused deposit is refunded after return. Tax included.
+      <PwaBody className="justify-between gap-4 py-3">
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-base font-semibold text-foreground">Authorize deposit</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Usage is billed from the deposit hold on return.
             </p>
           </div>
-        </div>
 
-        <div className="pt-4">
-          <Button
-            onClick={onSubmit}
-            disabled={isProcessing}
-            className="w-full h-12 text-sm font-medium"
-          >
-            {isProcessing ? (
-              <>
-                <Spinner className="w-5 h-5" />
-                Authorizing...
-              </>
-            ) : (
-              <>
-                Authorize {formatCurrency(station.depositAmount)}
-                <ArrowRightIcon size={18} />
-              </>
-            )}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground mt-3">
-            <ShieldCheckIcon size={12} className="inline mr-1" />
-            Deposit authorization processed securely on our servers
+          <PwaListGroup>
+            <PwaListRow
+              label="Deposit hold"
+              value={formatCurrency(station.depositAmount)}
+            />
+            <PwaListRow
+              label="Rate"
+              hint={`First ${LADDER_PRICING.freeMinutes} min free`}
+              value={formatLadderRateLabel()}
+            />
+            <PwaListRow
+              label="Daily cap"
+              value={formatDailyCapLabel(station.dailyCap)}
+            />
+            <PwaListRow
+              label="Max rental"
+              value={`${LADDER_PRICING.maxRentalHours} hours`}
+            />
+          </PwaListGroup>
+
+          <p className="text-xs text-muted-foreground">
+            You are only charged for actual usage. Unused deposit is refunded after return. Tax included.
           </p>
         </div>
-      </main>
-    </motion.div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          <ShieldCheckIcon size={12} className="inline mr-1" />
+          Deposit authorization processed securely on our servers
+        </p>
+      </PwaBody>
+
+      <PwaActionBar>
+        <Button
+          onClick={onSubmit}
+          disabled={isProcessing}
+          className={btnClass}
+        >
+          {isProcessing ? (
+            <>
+              <Spinner className="w-5 h-5" />
+              Authorizing...
+            </>
+          ) : (
+            <>
+              Authorize {formatCurrency(station.depositAmount)}
+              <ArrowRightIcon size={18} />
+            </>
+          )}
+        </Button>
+      </PwaActionBar>
+    </PwaScreen>
   );
 }
 
@@ -910,59 +798,45 @@ function UnlockingStep({
   progress: number;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader
         stationContext={{ eventName: 'Rental', stationId: station.id }}
         statusBadge="Unlocking"
         statusBadgeVariant="active"
       />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 mb-6"
-        >
-          <RefreshIcon size={64} className="text-primary" />
-        </motion.div>
-
-        <div className="text-center mb-8">
-          <p className="text-xs font-medium tracking-wider text-primary uppercase mb-2">Unlocking Power Bank</p>
-          <h1 className="text-xl font-semibold text-foreground">Please wait...</h1>
-          <p className="mt-2 text-muted-foreground">
-            The power bank at slot {assignedSlot} is being released.
-          </p>
+      <PwaBody className="items-center justify-center text-center">
+        <div className="mb-5 animate-spin">
+          <RefreshIcon size={48} className="text-primary" />
         </div>
 
-        <div className="w-full max-w-sm">
-          <div className="bg-muted rounded-full h-3 overflow-hidden mb-4">
-            <motion.div
-              className="h-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
+        <p className="text-[11px] font-medium uppercase tracking-wider text-primary">Unlocking Power Bank</p>
+        <h1 className="mt-1 text-lg font-semibold text-foreground">Please wait…</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Slot {assignedSlot} is being released
+        </p>
+
+        <div className="mt-6 w-full max-w-xs">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${progress}%` }}
             />
           </div>
 
-          <div className="bg-card rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Station</span>
-              <span className="font-mono text-foreground" title={station.id}>
-                {formatStationRef(station.id)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-muted-foreground">Slot</span>
-              <span className="font-mono font-bold text-primary">{String(assignedSlot).padStart(2, '0')}</span>
-            </div>
-          </div>
+          <PwaListGroup className="mt-4">
+            <PwaListRow
+              label="Station"
+              value={<span className="font-mono" title={station.id}>{formatStationRef(station.id)}</span>}
+            />
+            <PwaListRow
+              label="Slot"
+              value={<span className="font-mono font-bold text-primary">{String(assignedSlot).padStart(2, '0')}</span>}
+            />
+          </PwaListGroup>
         </div>
-      </main>
-    </motion.div>
+      </PwaBody>
+    </PwaScreen>
   );
 }
 
@@ -981,86 +855,61 @@ function SuccessStep({
   onContinue: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader
         stationContext={{ eventName: station.campaignName, stationId: station.id }}
         statusBadge="Confirmed"
         statusBadgeVariant="success"
       />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6"
-        >
-          <CheckCircleIcon size={48} className="text-emerald-600" />
-        </motion.div>
+      <PwaBody className="items-center justify-center gap-4 py-3">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10">
+          <CheckCircleIcon size={32} className="text-primary" />
+        </div>
 
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2">You&apos;re all set!</h1>
-          <p className="text-muted-foreground">
-            Your power bank is ready. Pick it up from slot {assignedSlot} at station {formatStationRef(station.id)}.
+        <div className="text-center">
+          <h1 className="text-lg font-semibold text-foreground">You&apos;re all set!</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pick up from slot {assignedSlot} at {formatStationRef(station.id)}
           </p>
         </div>
 
-        {/* Slot Collection Card */}
-        <div className="bg-card rounded-lg border border-border overflow-hidden w-full max-w-sm mb-4">
-          <div className="px-4 py-3 bg-muted/50 border-b border-border">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Collect from</span>
-              <div className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-xs text-emerald-600">Ready</span>
-              </div>
-            </div>
-          </div>
-          <div className="p-5 text-center">
-            <p className="text-5xl font-bold text-primary">Slot {String(assignedSlot).padStart(2, '0')}</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Station {formatStationRef(station.id)} · {station.campaignName}
-            </p>
-          </div>
-        </div>
+        <PwaMetricHero
+          label="Collect from"
+          value={String(assignedSlot).padStart(2, '0')}
+          sublabel={`Station ${formatStationRef(station.id)} · ${station.campaignName}`}
+        />
 
-        {/* Session Details */}
-        <div className="bg-muted/50 rounded-xl p-3 w-full max-w-sm mb-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Session ID</span>
-            <span className="font-mono font-medium text-foreground">{sessionCode}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm mt-1">
-            <span className="text-muted-foreground">Started</span>
-            <span className="text-foreground">{formatTime(startTime)}</span>
-          </div>
-        </div>
+        <PwaListGroup className="w-full max-w-xs">
+          <PwaListRow label="Session ID" value={<span className="font-mono text-xs">{sessionCode}</span>} />
+          <PwaListRow label="Started" value={formatTime(startTime)} />
+          <PwaListRow
+            label="Status"
+            value={
+              <span className="flex items-center gap-1.5 text-primary">
+                <span className="size-1.5 rounded-full bg-primary" />
+                Ready
+              </span>
+            }
+          />
+        </PwaListGroup>
 
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 w-full max-w-sm mb-6">
-          <div className="flex items-start gap-3">
-            <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">Remember:</span> {station.rewardDescription || `Rent for at least ${station.rewardThreshold ?? 60} minutes to earn your reward.`}
-            </p>
-          </div>
+        <div className="flex w-full max-w-xs items-start gap-2 rounded-xl bg-muted/60 px-3 py-2.5">
+          <GiftIcon size={16} className="shrink-0 text-primary mt-0.5" />
+          <p className="text-xs text-muted-foreground text-left">
+            <span className="font-medium text-foreground">Remember:</span>{' '}
+            {station.rewardDescription || `Rent for at least ${station.rewardThreshold ?? 60} minutes to earn your reward.`}
+          </p>
         </div>
+      </PwaBody>
 
-        <div className="w-full max-w-sm">
-          <Button
-            onClick={onContinue}
-            className="w-full h-12 text-sm font-medium"
-          >
-            View Rental Status
-            <ArrowRightIcon size={18} />
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+      <PwaActionBar>
+        <Button onClick={onContinue} className={btnClass}>
+          View Rental Status
+          <ArrowRightIcon size={18} />
+        </Button>
+      </PwaActionBar>
+    </PwaScreen>
   );
 }
 
@@ -1076,6 +925,7 @@ function ErrorStep({
   onAction: () => void;
   onSupport: () => void;
 }) {
+  const [tipsOpen, setTipsOpen] = useState(false);
   const config = errorConfigs[error];
   const errorCode = `ERR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
@@ -1112,64 +962,49 @@ function ErrorStep({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col min-h-screen"
-    >
+    <PwaScreen>
       <MobileHeader statusBadge="Error" statusBadgeVariant="error" />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-5 py-8">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="w-20 h-20 bg-destructive/10 rounded-lg flex items-center justify-center mb-6"
-        >
-          <XCircleIcon size={40} className="text-destructive" />
-        </motion.div>
+      <PwaCenteredState
+        icon={<XCircleIcon size={28} className="text-destructive" />}
+        title={config.title}
+        description={customMessage || config.description}
+      >
+        <p className="rounded-lg bg-muted/60 px-3 py-2 text-left text-xs text-muted-foreground">
+          Reference: <span className="font-mono text-foreground">{errorCode}</span>
+        </p>
+        <Button variant="outline" onClick={() => setTipsOpen(true)} className={btnClass}>
+          Troubleshooting tips
+        </Button>
+      </PwaCenteredState>
 
-        <div className="text-center max-w-sm mb-4">
-          <h1 className="text-xl font-semibold text-foreground mb-2">{config.title}</h1>
-          <p className="text-muted-foreground">{customMessage || config.description}</p>
-        </div>
+      <PwaBottomSheet
+        open={tipsOpen}
+        onOpenChange={setTipsOpen}
+        title="Quick troubleshooting"
+        description="Try these steps before contacting support."
+      >
+        <ol className="space-y-3 pb-2">
+          {troubleshootingTips[error].map((tip, index) => (
+            <li key={index} className="flex gap-3 text-sm text-muted-foreground">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
+                {index + 1}
+              </span>
+              <span className="pt-0.5">{tip}</span>
+            </li>
+          ))}
+        </ol>
+      </PwaBottomSheet>
 
-        {/* Error Reference */}
-        <div className="bg-muted/50 rounded-lg px-3 py-2 mb-4">
-          <span className="text-xs text-muted-foreground">Reference: </span>
-          <span className="font-mono text-xs text-foreground">{errorCode}</span>
-        </div>
-
-        {/* Troubleshooting Tips */}
-        <div className="bg-card rounded-xl border border-border p-4 w-full max-w-sm mb-6">
-          <p className="text-sm font-medium text-foreground mb-3">Quick troubleshooting:</p>
-          <ul className="space-y-2">
-            {troubleshootingTips[error].map((tip, index) => (
-              <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="text-primary font-medium">{index + 1}.</span>
-                <span>{tip}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="w-full max-w-sm space-y-3">
-          <Button
-            onClick={onAction}
-            className="w-full h-12 text-sm font-medium"
-          >
-            <RefreshIcon size={18} />
-            {config.action}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onSupport}
-            className="w-full h-12 text-sm font-medium"
-          >
-            Contact Support
-          </Button>
-        </div>
-      </main>
-    </motion.div>
+      <PwaActionBar>
+        <Button onClick={onAction} className={btnClass}>
+          <RefreshIcon size={18} />
+          {config.action}
+        </Button>
+        <Button variant="outline" onClick={onSupport} className={btnClass}>
+          Contact Support
+        </Button>
+      </PwaActionBar>
+    </PwaScreen>
   );
 }
