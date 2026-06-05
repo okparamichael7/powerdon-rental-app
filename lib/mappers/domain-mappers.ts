@@ -84,13 +84,23 @@ export function mapUserFromDb(u: DbUser): User {
   }
 }
 
+export function normalizeSessionReward(reward: SessionWithRelations['reward']): DbReward | null {
+  if (!reward) return null
+  if (Array.isArray(reward)) return reward[0] ?? null
+  return reward
+}
+
+function rewardCodeFromRelation(reward: SessionWithRelations['reward']): string | undefined {
+  return normalizeSessionReward(reward)?.code
+}
+
 export function mapSessionFromDb(s: SessionWithRelations, campaignName?: string): RentalSession {
   return {
     id: s.id,
     sessionCode: s.session_code,
-    stationId: s.pickup_station_id,
+    stationId: s.pickup_station_id ?? '',
     stationName: s.pickup_station?.name ?? 'Unknown Station',
-    slotNumber: s.pickup_slot_number,
+    slotNumber: s.pickup_slot_number ?? 0,
     userId: s.user_id,
     userEmail: s.user?.email ?? '',
     userName: s.user?.name ?? undefined,
@@ -104,7 +114,7 @@ export function mapSessionFromDb(s: SessionWithRelations, campaignName?: string)
     paymentMethod: s.payment_method ?? 'card',
     paymentStatus: s.payment_status as RentalSession['paymentStatus'],
     rewardStatus: (s.reward_status ?? 'pending') as RentalSession['rewardStatus'],
-    rewardCode: s.reward?.code,
+    rewardCode: rewardCodeFromRelation(s.reward),
     campaignId: s.campaign_id ?? '',
     campaignName: campaignName ?? '',
   }

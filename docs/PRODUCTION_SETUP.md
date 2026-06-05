@@ -61,6 +61,8 @@ Complete these in order so tokens and URLs stay consistent.
    - `006_rls_staff_operator.sql`
    - `007_staff_roles.sql`
    - `008_staff_audit_log.sql`
+   - `009_rental_sessions_schema_sync.sql` (partial `rental_sessions` — required for admin sessions/analytics)
+   - `010_rewards_schema_sync.sql` (partial `rewards` — required for admin rewards + redemption metadata)
 2. **Authentication → Providers**: enable Email (and any OAuth you use).
 3. **Authentication → URL configuration**: set **Site URL** and redirect URLs to your production app, e.g. `https://your-app.vercel.app`.
 4. Copy **Project URL**, **anon key**, and **service_role key** (server only — never expose service role to the browser).

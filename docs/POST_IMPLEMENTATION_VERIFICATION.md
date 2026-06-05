@@ -1,8 +1,8 @@
 # Post-Implementation Verification Audit
 
 **Audit standard:** No fix accepted without file-level evidence.  
-**Verification runs:** Round 3 → Round 7 (admin) → **Round 8** (PWA remediation + strict re-audit + final).  
-**Build/tests (Round 8 final):** `npm run test` **25/25** pass, `npm run build` pass.
+**Verification runs:** Round 3 → Round 7 (admin) → Round 8 (PWA) → **Round 9** (schema-compat admin API fixes + strict re-audit + final).  
+**Build/tests (Round 9 final):** `npm run test` **30/30** pass, `npm run build` pass.
 
 ---
 
@@ -220,6 +220,8 @@ npm run build  # pass (includes /admin/audit, /admin/support)
 # 006_rls_staff_operator.sql
 # 007_staff_roles.sql
 # 008_staff_audit_log.sql
+# 009_rental_sessions_schema_sync.sql
+# 010_rewards_schema_sync.sql
 
 npm run test && npm run build
 
@@ -318,6 +320,99 @@ npm run build  # pass
 ```
 
 See also: `docs/PWA_PRODUCTION_READINESS_REPORT.md`
+
+---
+
+## Round 9 — Admin API schema-compat pre-remediation audit (strict)
+
+Production 500s on `app.powerdon.nl` traced to **partial Supabase schema** (tables created without full `001_initial_schema` columns). Re-verified every schema-compat finding (SC1–SC12) against the codebase. Claims without file evidence marked **Still Open**.
+
+| # | Finding | Round 9 pre status | Evidence |
+|---|---------|-------------------|----------|
+| SC1 | `GET /api/admin/sessions` 500 — station FK join on missing `pickup_station_id` | **Still Open** | `session-repository.ts:68` — `reward:rewards(*)`, station embed; no fallback before fix |
+| SC2 | `GET /api/admin/analytics` 500 — `amount_charged` missing | **Still Open** | `analytics-repository.ts:18` — hard-coded column list |
+| SC3 | `GET /api/admin/rewards` 500 — `ORDER BY issued_at` missing | **Still Open** | `session-repository.ts:593` — `order('issued_at')` |
+| SC4 | `GET /api/admin/ops` 500 — unhandled `getDashboardStats` + self-fetch `/api/health` | **Still Open** | `app/api/admin/ops/route.ts:23` — no try/catch; `fetch(origin/api/health)` |
+| SC5 | Partial DB missing `rental_sessions` columns | **Partially Resolved** | Migration `009` added locally; not in operator checklist pre-R9 |
+| SC6 | Partial DB uses `reward_value` not `value` | **Partially Resolved** | Migration `010` added locally; redeem still wrote `redeemed_at` without fallback |
+| SC7 | Ambiguous `rental_sessions` ↔ `rewards` embed | **Partially Resolved** | `rewards(*)` ambiguous; `rewards!session_id` needed |
+| SC8 | Session search filter invalid PostgREST `.or()` | **Still Open** | `session_code.ilike.%term%` syntax |
+| SC9 | `getActiveByUserId` no schema fallback (PWA active session) | **Still Open** | `session-repository.ts:178` — station embed only |
+| SC10 | `rewardRepository.redeem` fails without `redeemed_at` column | **Still Open** | `session-repository.ts:716` — hard-coded redemption columns |
+| SC11 | `GET /api/admin/rewards/[id]` no error boundary | **Partially Resolved** | Uncaught throw → 500 |
+| SC12 | No tests for schema-compat helpers | **Still Open** | No `schema-compat.test.ts` pre-R9 |
+| SC13 | `/api/health` duplicated logic vs ops | **Partially Resolved** | Inline duplication; self-fetch in ops |
+
+**Round 9 pre-remediation summary:** 0 Fully Resolved, 5 Partially Resolved, 0 Deferred, 0 Not Actionable, **8 Still Open**.
+
+---
+
+## Round 9 — Remediation
+
+| Item | Change |
+|------|--------|
+| SC1–SC2, SC7–SC8 | `lib/db/schema-compat.ts` — `isSchemaGapError`, `SESSION_SELECT_*`, `normalizeRewardRow`; session/analytics fallback queries |
+| SC3, SC6, SC10 | `RewardRepository` — order by `created_at` fallback; `reward_value`/`value` insert fallback; redeem patch fallback |
+| SC4, SC13 | `lib/ops/health-response.ts` + `buildHealthResponse()`; ops route resilient stats + no self-fetch |
+| SC5–SC6 | `009_rental_sessions_schema_sync.sql`, `010_rewards_schema_sync.sql` |
+| SC9 | `getActiveByUserId` uses `SESSION_SELECT_FULL` → `SESSION_SELECT_MINIMAL` fallback |
+| SC11 | try/catch on `app/api/admin/rewards/[id]/route.ts` |
+| SC12 | `lib/db/schema-compat.test.ts` (5 tests) wired in `test:admin` |
+| Ops/docs | `docs/PRODUCTION_SETUP.md` — migrations 009–010 in operator list |
+
+---
+
+## Round 9 — Final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| SC1 | Admin sessions list on partial schema | **Fully Resolved** | `session-repository.ts:63-129` — `SESSION_SELECT_*` attempts + `.ilike` search |
+| SC2 | Admin analytics on partial schema | **Fully Resolved** | `analytics-repository.ts:15-85` — `selectSessionMetrics` / `selectStationMetrics` column fallbacks |
+| SC3 | Admin rewards list on partial schema | **Fully Resolved** | `session-repository.ts:603-619` — `issued_at` → `created_at` order fallback |
+| SC4 | Admin ops 500 | **Fully Resolved** | `app/api/admin/ops/route.ts` — `buildHealthResponse()` + try/catch stats |
+| SC5 | `rental_sessions` schema sync migration | **Fully Resolved** | `supabase/migrations/009_rental_sessions_schema_sync.sql` |
+| SC6 | `rewards` schema sync migration | **Fully Resolved** | `supabase/migrations/010_rewards_schema_sync.sql` |
+| SC7 | Reward embed ambiguity | **Fully Resolved** | `schema-compat.ts:14` — `reward:rewards!session_id(...)` |
+| SC8 | Session search filter | **Fully Resolved** | `session-repository.ts:95` — `.ilike('session_code', ...)` |
+| SC9 | Active session lookup fallback | **Fully Resolved** | `session-repository.ts:170-191` |
+| SC10 | Reward redeem on partial schema | **Fully Resolved** | `session-repository.ts:706-737` — status-only patch fallback |
+| SC11 | Reward detail error boundary | **Fully Resolved** | `app/api/admin/rewards/[id]/route.ts:13-22` |
+| SC12 | Schema-compat unit tests | **Fully Resolved** | `lib/db/schema-compat.test.ts`; `package.json` `test:admin` |
+| SC13 | Shared health payload | **Fully Resolved** | `lib/ops/health-response.ts`; `app/api/health/route.ts:8-9` |
+
+### Cross-cutting (Round 9 updates to prior findings)
+
+| # | Prior finding | Final status | Evidence |
+|---|---------------|--------------|----------|
+| G7 | Apply migrations 005–008 | **Deferred** | Operator SQL; extended to **005–010** in `docs/PRODUCTION_SETUP.md:57-65` |
+| AD5 | Ops page fake/zero metrics | **Fully Resolved** | Re-verified post SC4 — `app/api/admin/ops/route.ts` + resilient `getDashboardStats` |
+
+### Round 9 summary
+
+| Status | Count |
+|--------|------:|
+| Fully Resolved | 13 |
+| Partially Resolved | 0 |
+| Deferred | 1 (G7 operator migrations — code + SQL files ready) |
+| Not Actionable | 0 |
+| Still Open | 0 |
+
+```bash
+npm run test   # 30/30 pass (includes schema-compat)
+npm run build  # pass
+node scripts/verify-admin-queries.mjs  # optional live Supabase probe
+```
+
+**Launch blockers in code:** None.  
+**Launch blockers in ops:** Apply migrations **005–010** in Supabase; deploy Round 9 changes to Vercel (`app.powerdon.nl`).
+
+### Key files (Round 9)
+
+- `lib/db/schema-compat.ts`, `lib/db/schema-compat.test.ts`
+- `lib/db/session-repository.ts`, `lib/db/analytics-repository.ts`
+- `lib/ops/health-response.ts`, `app/api/admin/ops/route.ts`, `app/api/health/route.ts`
+- `app/api/admin/rewards/route.ts`, `app/api/admin/rewards/[id]/route.ts`
+- `supabase/migrations/009_rental_sessions_schema_sync.sql`, `010_rewards_schema_sync.sql`
 
 ---
 

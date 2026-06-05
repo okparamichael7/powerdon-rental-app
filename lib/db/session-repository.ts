@@ -1,5 +1,12 @@
 // Session Repository - Database operations for rental sessions
 import { createServiceClient } from '@/lib/supabase/admin';
+import {
+  isSchemaGapError,
+  normalizeRewardRow,
+  normalizeRewardRows,
+  SESSION_SELECT_FULL,
+  SESSION_SELECT_MINIMAL,
+} from './schema-compat';
 import type { 
   Database, 
   DbRentalSession, 
@@ -16,7 +23,7 @@ export interface SessionWithRelations extends DbRentalSession {
   user?: DbUser;
   pickup_station?: { id: string; name: string; location: string | null };
   return_station?: { id: string; name: string; location: string | null } | null;
-  reward?: DbReward | null;
+  reward?: DbReward | DbReward[] | null;
   events?: DbSessionEvent[];
 }
 
@@ -57,127 +64,130 @@ class SessionRepository {
 
   async getAll(filters?: SessionFilters): Promise<SessionWithRelations[]> {
     const supabase = await createServiceClient();
-    
-    let query = supabase
-      .from('rental_sessions')
-      .select(`
-        *,
-        user:users(*),
-        pickup_station:stations!pickup_station_id(id, name, location),
-        return_station:stations!return_station_id(id, name, location),
-        reward:rewards(*)
-      `)
-      .order('created_at', { ascending: false });
 
-    if (filters?.status && filters.status.length > 0) {
-      query = query.in('status', filters.status);
+    const applyFilters = (select: string, includeStationFilter: boolean) => {
+      let query = supabase
+        .from('rental_sessions')
+        .select(select)
+        .order('created_at', { ascending: false });
+
+      if (filters?.status && filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
+
+      if (filters?.userId) {
+        query = query.eq('user_id', filters.userId);
+      }
+
+      if (filters?.campaignId) {
+        query = query.eq('campaign_id', filters.campaignId);
+      }
+
+      if (includeStationFilter && filters?.stationId) {
+        query = query.or(
+          `pickup_station_id.eq.${filters.stationId},return_station_id.eq.${filters.stationId}`,
+        );
+      }
+
+      if (filters?.search) {
+        query = query.ilike('session_code', `%${filters.search}%`);
+      }
+
+      if (filters?.startDate) {
+        query = query.gte('created_at', filters.startDate.toISOString());
+      }
+
+      if (filters?.endDate) {
+        query = query.lte('created_at', filters.endDate.toISOString());
+      }
+
+      if (filters?.limit) {
+        query = query.limit(filters.limit);
+      }
+
+      if (filters?.offset) {
+        query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1);
+      }
+
+      return query;
+    };
+
+    const attempts: { select: string; stationFilter: boolean }[] = [
+      { select: SESSION_SELECT_FULL, stationFilter: Boolean(filters?.stationId) },
+      { select: SESSION_SELECT_FULL, stationFilter: false },
+      { select: SESSION_SELECT_MINIMAL, stationFilter: false },
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const attempt of attempts) {
+      const { data, error } = await applyFilters(attempt.select, attempt.stationFilter);
+      if (!error) return data || [];
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
     }
 
-    if (filters?.userId) {
-      query = query.eq('user_id', filters.userId);
+    throw lastError ?? new Error('Failed to load sessions');
+  }
+
+  private async getOneWithSchemaFallback(
+    supabase: ReturnType<typeof createServiceClient>,
+    column: 'id' | 'session_code',
+    value: string,
+  ): Promise<SessionWithRelations | null> {
+    const selects = [
+      `${SESSION_SELECT_FULL}, events:session_events(*)`,
+      `${SESSION_SELECT_MINIMAL}, events:session_events(*)`,
+      SESSION_SELECT_MINIMAL,
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const select of selects) {
+      const { data, error } = await supabase
+        .from('rental_sessions')
+        .select(select)
+        .eq(column, value)
+        .single();
+
+      if (!error) return data;
+      if (error.code === 'PGRST116') return null;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
     }
 
-    if (filters?.campaignId) {
-      query = query.eq('campaign_id', filters.campaignId);
-    }
-
-    if (filters?.stationId) {
-      query = query.or(`pickup_station_id.eq.${filters.stationId},return_station_id.eq.${filters.stationId}`);
-    }
-
-    if (filters?.search) {
-      query = query.or(`session_code.ilike.%${filters.search}%`);
-    }
-
-    if (filters?.startDate) {
-      query = query.gte('created_at', filters.startDate.toISOString());
-    }
-
-    if (filters?.endDate) {
-      query = query.lte('created_at', filters.endDate.toISOString());
-    }
-
-    if (filters?.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters?.offset) {
-      query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-    return data || [];
+    throw lastError ?? new Error('Failed to load session');
   }
 
   async getById(id: string): Promise<SessionWithRelations | null> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select(`
-        *,
-        user:users(*),
-        pickup_station:stations!pickup_station_id(id, name, location),
-        return_station:stations!return_station_id(id, name, location),
-        reward:rewards(*),
-        events:session_events(*)
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-
-    return data;
+    return this.getOneWithSchemaFallback(supabase, 'id', id);
   }
 
   async getByCode(code: string): Promise<SessionWithRelations | null> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select(`
-        *,
-        user:users(*),
-        pickup_station:stations!pickup_station_id(id, name, location),
-        return_station:stations!return_station_id(id, name, location),
-        reward:rewards(*),
-        events:session_events(*)
-      `)
-      .eq('session_code', code)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-
-    return data;
+    return this.getOneWithSchemaFallback(supabase, 'session_code', code);
   }
 
   async getActiveByUserId(userId: string): Promise<SessionWithRelations | null> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select(`
-        *,
-        user:users(*),
-        pickup_station:stations!pickup_station_id(id, name, location),
-        return_station:stations!return_station_id(id, name, location)
-      `)
-      .eq('user_id', userId)
-      .in('status', ['pending', 'active'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const selects = [SESSION_SELECT_FULL, SESSION_SELECT_MINIMAL];
 
-    if (error) throw error;
-    return data;
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const select of selects) {
+      const { data, error } = await supabase
+        .from('rental_sessions')
+        .select(select)
+        .eq('user_id', userId)
+        .in('status', ['pending', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error) return data;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to load active session');
   }
 
   async getActiveByUserEmail(email: string): Promise<SessionWithRelations | null> {
@@ -582,66 +592,65 @@ class UserRepository {
 // ============================================================================
 
 class RewardRepository {
-  async getAll(filters?: { status?: string[]; search?: string; limit?: number }): Promise<DbReward[]> {
-    const supabase = createServiceClient();
-    let query = supabase.from('rewards').select('*').order('issued_at', { ascending: false });
+  private applyRewardFilters<T extends { in: (col: string, vals: string[]) => T; ilike: (col: string, pattern: string) => T; limit: (n: number) => T }>(
+    query: T,
+    filters?: { status?: string[]; search?: string; limit?: number },
+  ): T {
     if (filters?.status?.length) query = query.in('status', filters.status);
     if (filters?.search) query = query.ilike('code', `%${filters.search}%`);
     if (filters?.limit) query = query.limit(filters.limit);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+    return query;
+  }
+
+  async getAll(filters?: { status?: string[]; search?: string; limit?: number }): Promise<DbReward[]> {
+    const supabase = createServiceClient();
+    const orderAttempts = ['issued_at', 'created_at'] as const;
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const orderCol of orderAttempts) {
+      const query = this.applyRewardFilters(
+        supabase.from('rewards').select('*').order(orderCol, { ascending: false }),
+        filters,
+      );
+      const { data, error } = await query;
+      if (!error) return normalizeRewardRows(data as Record<string, unknown>[] | null);
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to load rewards');
+  }
+
+  private async getOneReward(
+    column: 'id' | 'code' | 'session_id',
+    value: string,
+  ): Promise<DbReward | null> {
+    const supabase = await createServiceClient();
+
+    const { data, error } = await supabase
+      .from('rewards')
+      .select('*')
+      .eq(column, value)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+
+    return normalizeRewardRow(data as Record<string, unknown>);
   }
 
   async getById(id: string): Promise<DbReward | null> {
-    const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-
-    return data;
+    return this.getOneReward('id', id);
   }
 
   async getByCode(code: string): Promise<DbReward | null> {
-    const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('code', code)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-
-    return data;
+    return this.getOneReward('code', code);
   }
 
   async getBySessionId(sessionId: string): Promise<DbReward | null> {
-    const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('session_id', sessionId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-
-    return data;
+    return this.getOneReward('session_id', sessionId);
   }
 
   async create(reward: {
@@ -654,26 +663,32 @@ class RewardRepository {
     expiresAt: Date;
   }): Promise<DbReward> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('rewards')
-      .insert({
-        session_id: reward.sessionId,
-        user_id: reward.userId,
-        campaign_id: reward.campaignId,
-        reward_type: reward.rewardType,
-        value: reward.value,
-        description: reward.description,
-        status: 'qualified',
-        issued_at: new Date().toISOString(),
-        expires_at: reward.expiresAt.toISOString(),
-        metadata: {},
-      })
-      .select()
-      .single();
+    const now = new Date().toISOString();
+    const base = {
+      session_id: reward.sessionId,
+      user_id: reward.userId,
+      campaign_id: reward.campaignId,
+      reward_type: reward.rewardType,
+      description: reward.description,
+      status: 'qualified' as const,
+      expires_at: reward.expiresAt.toISOString(),
+      metadata: {},
+    };
 
-    if (error) throw error;
-    return data;
+    const payloads: Record<string, unknown>[] = [
+      { ...base, value: reward.value, issued_at: now },
+      { ...base, reward_value: reward.value },
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const payload of payloads) {
+      const { data, error } = await supabase.from('rewards').insert(payload).select().single();
+      if (!error) return normalizeRewardRow(data as Record<string, unknown>);
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to create reward');
   }
 
   async issue(id: string): Promise<DbReward> {
@@ -687,7 +702,7 @@ class RewardRepository {
       .single();
 
     if (error) throw error;
-    return data;
+    return normalizeRewardRow(data as Record<string, unknown>);
   }
 
   async redeem(id: string, data: {
@@ -695,21 +710,32 @@ class RewardRepository {
     redeemedByStaffId?: string;
   }): Promise<DbReward> {
     const supabase = await createServiceClient();
-    
-    const { data: reward, error } = await supabase
-      .from('rewards')
-      .update({
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown>[] = [
+      {
         status: 'redeemed',
-        redeemed_at: new Date().toISOString(),
+        redeemed_at: now,
         redemption_location: data.redemptionLocation,
         redeemed_by_staff_id: data.redeemedByStaffId,
-      })
-      .eq('id', id)
-      .select()
-      .single();
+      },
+      { status: 'redeemed' },
+    ];
 
-    if (error) throw error;
-    return reward;
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const patch of updates) {
+      const { data: reward, error } = await supabase
+        .from('rewards')
+        .update(patch)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (!error) return normalizeRewardRow(reward as Record<string, unknown>);
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
+    }
+
+    throw lastError ?? new Error('Failed to redeem reward');
   }
 
   async expireOldRewards(): Promise<number> {

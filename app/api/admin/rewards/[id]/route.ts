@@ -10,10 +10,15 @@ export async function GET(
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
 
-  const { id } = await params
-  const reward = await rewardRepository.getById(id)
-  if (!reward) {
-    return NextResponse.json({ success: false, error: 'Reward not found' }, { status: 404 })
+  try {
+    const { id } = await params
+    const reward = await rewardRepository.getById(id)
+    if (!reward) {
+      return NextResponse.json({ success: false, error: 'Reward not found' }, { status: 404 })
+    }
+    return NextResponse.json({ success: true, data: mapRewardFromDb(reward) })
+  } catch (error) {
+    console.error('[Admin] reward detail:', error)
+    return NextResponse.json({ success: false, error: 'Failed to load reward' }, { status: 500 })
   }
-  return NextResponse.json({ success: true, data: mapRewardFromDb(reward) })
 }

@@ -11,6 +11,7 @@ import {
   toPublicSessionView,
 } from '@/lib/security/session-access';
 import { estimateRentalChargeEur } from '@/lib/rental/charge-estimate';
+import { normalizeSessionReward } from '@/lib/mappers/domain-mappers';
 
 export const GET = withPublicApi(async (
   request: NextRequest,
@@ -93,16 +94,19 @@ export const GET = withPublicApi(async (
         rewardQualified: session.reward_qualified,
         rewardStatus: session.reward_status,
         rewardThresholdMinutes: session.reward_threshold_minutes,
-        reward: session.reward ? {
-          id: session.reward.id,
-          code: session.reward.code,
-          type: session.reward.reward_type,
-          value: session.reward.value,
-          description: session.reward.description,
-          status: session.reward.status,
-          expiresAt: session.reward.expires_at,
-          redeemedAt: session.reward.redeemed_at,
-        } : null,
+        reward: (() => {
+          const reward = normalizeSessionReward(session.reward);
+          return reward ? {
+            id: reward.id,
+            code: reward.code,
+            type: reward.reward_type,
+            value: reward.value,
+            description: reward.description,
+            status: reward.status,
+            expiresAt: reward.expires_at,
+            redeemedAt: reward.redeemed_at,
+          } : null;
+        })(),
         powerBankId: session.power_bank_id,
         events: events.map(e => ({
           id: e.id,

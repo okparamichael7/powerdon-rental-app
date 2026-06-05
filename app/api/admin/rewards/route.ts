@@ -7,19 +7,24 @@ export async function GET(request: NextRequest) {
   const auth = await requireAdminSession(request)
   if (!auth.ok) return auth.response
 
-  const params = request.nextUrl.searchParams
-  const email = params.get('email')
-  let rewards = await rewardRepository.getAll({
-    status: params.get('status')?.split(',').filter(Boolean),
-    search: params.get('search') || undefined,
-    limit: params.get('limit') ? Number(params.get('limit')) : 200,
-  })
+  try {
+    const params = request.nextUrl.searchParams
+    const email = params.get('email')
+    let rewards = await rewardRepository.getAll({
+      status: params.get('status')?.split(',').filter(Boolean),
+      search: params.get('search') || undefined,
+      limit: params.get('limit') ? Number(params.get('limit')) : 200,
+    })
 
-  if (email) {
-    const user = await userRepository.getByEmail(email)
-    if (user) rewards = rewards.filter((r) => r.user_id === user.id)
-    else rewards = []
+    if (email) {
+      const user = await userRepository.getByEmail(email)
+      if (user) rewards = rewards.filter((r) => r.user_id === user.id)
+      else rewards = []
+    }
+
+    return NextResponse.json({ success: true, data: rewards.map((r) => mapRewardFromDb(r)) })
+  } catch (error) {
+    console.error('[Admin] rewards list:', error)
+    return NextResponse.json({ success: false, error: 'Failed to load rewards' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, data: rewards.map((r) => mapRewardFromDb(r)) })
 }

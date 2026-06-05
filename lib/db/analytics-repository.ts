@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/admin'
+import { isSchemaGapError } from '@/lib/db/schema-compat'
 import type { DbRentalSession, DbReward, DbStation } from '@/lib/db/types'
 import type { DashboardStats } from '@/lib/types'
 
@@ -11,22 +12,85 @@ type RewardMetricsRow = Pick<DbReward, 'status' | 'created_at'>
 type DailyRevenueRow = Pick<DbRentalSession, 'created_at' | 'amount_charged' | 'status'>
 
 class AnalyticsRepository {
-  async getDashboardStats(): Promise<DashboardStats> {
+  private async selectSessionMetrics() {
     const supabase = createServiceClient()
+    const attempts = [
+      'status, amount_charged, duration_minutes, deposit_amount',
+      'status, duration_minutes, deposit_amount',
+      'status, duration_minutes',
+    ]
 
-    const [sessionsRes, stationsRes, rewardsRes] = await Promise.all([
-      supabase.from('rental_sessions').select('status, amount_charged, duration_minutes, deposit_amount'),
-      supabase.from('stations').select('status, is_enabled'),
-      supabase.from('rewards').select('status'),
+    let lastError: { code?: string; message?: string } | null = null
+    for (const columns of attempts) {
+      const { data, error } = await supabase.from('rental_sessions').select(columns)
+      if (!error) {
+        return ((data || []) as SessionMetricsRow[]).map((row) => ({
+          ...row,
+          amount_charged: Number(row.amount_charged ?? 0),
+        }))
+      }
+      if (!isSchemaGapError(error)) throw error
+      lastError = error
+    }
+
+    throw lastError ?? new Error('Failed to load session metrics')
+  }
+
+  private async selectStationMetrics(): Promise<StationMetricsRow[]> {
+    const supabase = createServiceClient()
+    const attempts = ['status, is_enabled', 'status']
+
+    let lastError: { code?: string; message?: string } | null = null
+    for (const columns of attempts) {
+      const { data, error } = await supabase.from('stations').select(columns)
+      if (!error) {
+        return ((data || []) as Array<{ status: string; is_enabled?: boolean }>).map((row) => ({
+          status: row.status as StationMetricsRow['status'],
+          is_enabled: row.is_enabled ?? true,
+        }))
+      }
+      if (!isSchemaGapError(error)) throw error
+      lastError = error
+    }
+
+    throw lastError ?? new Error('Failed to load station metrics')
+  }
+
+  private async selectRewardStatuses(): Promise<RewardMetricsRow[]> {
+    const supabase = createServiceClient()
+    const { data, error } = await supabase.from('rewards').select('status')
+    if (error) throw error
+    return (data || []) as RewardMetricsRow[]
+  }
+
+  private async selectSessionsSince(
+    columns: string,
+    fallbackColumns: string,
+    since: string,
+    extra?: (q: ReturnType<ReturnType<typeof createServiceClient>['from']>) => ReturnType<ReturnType<typeof createServiceClient>['from']>,
+  ) {
+    const supabase = createServiceClient()
+    for (const cols of [columns, fallbackColumns]) {
+      let query = supabase.from('rental_sessions').select(cols).gte('created_at', since)
+      if (extra) query = extra(query) as typeof query
+      const { data, error } = await query
+      if (!error) {
+        return (data || []).map((row: Record<string, unknown>) => ({
+          ...row,
+          amount_charged: Number((row as { amount_charged?: number }).amount_charged ?? 0),
+        }))
+      }
+      if (!isSchemaGapError(error)) throw error
+    }
+    throw new Error('Failed to load session analytics')
+  }
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    const [sessions, stations, rewards] = await Promise.all([
+      this.selectSessionMetrics(),
+      this.selectStationMetrics(),
+      this.selectRewardStatuses(),
     ])
-
-    if (sessionsRes.error) throw sessionsRes.error
-    if (stationsRes.error) throw stationsRes.error
-    if (rewardsRes.error) throw rewardsRes.error
-
-    const sessions = (sessionsRes.data || []) as SessionMetricsRow[]
-    const stations = (stationsRes.data || []) as StationMetricsRow[]
-    const rewards = (rewardsRes.data || []) as RewardMetricsRow[]
 
     const totalSessions = sessions.length
     const activeSessions = sessions.filter((s) => s.status === 'active' || s.status === 'pending').length
@@ -56,20 +120,18 @@ class AnalyticsRepository {
   }
 
   async getDailyRevenue(days = 14): Promise<{ date: string; revenue: number; sessions: number }[]> {
-    const supabase = createServiceClient()
     const since = new Date()
     since.setDate(since.getDate() - days)
 
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select('created_at, amount_charged, status')
-      .gte('created_at', since.toISOString())
-      .order('created_at', { ascending: true })
-
-    if (error) throw error
+    const data = await this.selectSessionsSince(
+      'created_at, amount_charged, status',
+      'created_at, status',
+      since.toISOString(),
+      (q) => q.order('created_at', { ascending: true }),
+    )
 
     const byDay = new Map<string, { revenue: number; sessions: number }>()
-    for (const row of (data || []) as DailyRevenueRow[]) {
+    for (const row of data as DailyRevenueRow[]) {
       const date = row.created_at.slice(0, 10)
       const entry = byDay.get(date) || { revenue: 0, sessions: 0 }
       entry.sessions += 1
@@ -93,16 +155,13 @@ class AnalyticsRepository {
   }
 
   async getRevenueAnalytics(days = 30) {
-    const supabase = createServiceClient()
     const since = this.sinceDate(days)
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select('created_at, amount_charged, status')
-      .gte('created_at', since)
-      .order('created_at', { ascending: true })
-    if (error) throw error
-
-    const rows = (data || []) as DailyRevenueRow[]
+    const rows = (await this.selectSessionsSince(
+      'created_at, amount_charged, status',
+      'created_at, status',
+      since,
+      (q) => q.order('created_at', { ascending: true }),
+    )) as DailyRevenueRow[]
     const byDay = new Map<string, { revenue: number; sessions: number }>()
     let totalRevenue = 0
     let refundTotal = 0
@@ -140,21 +199,36 @@ class AnalyticsRepository {
   async getSessionAnalytics(days = 30) {
     const supabase = createServiceClient()
     const since = this.sinceDate(days)
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select('id, status, duration_minutes, created_at, pickup_station_id, pickup_station:stations!pickup_station_id(name)')
-      .gte('created_at', since)
-    if (error) throw error
 
     type Row = {
       id: string
       status: string
       duration_minutes: number | null
       created_at: string
-      pickup_station_id: string | null
-      pickup_station: { name: string } | null
+      pickup_station_id?: string | null
+      pickup_station?: { name: string } | null
     }
-    const rows = (data || []) as Row[]
+
+    const selects = [
+      'id, status, duration_minutes, created_at, pickup_station_id, pickup_station:stations!pickup_station_id(name)',
+      'id, status, duration_minutes, created_at',
+    ]
+
+    let rows: Row[] | null = null
+    let lastError: { code?: string; message?: string } | null = null
+    for (const select of selects) {
+      const { data, error } = await supabase
+        .from('rental_sessions')
+        .select(select)
+        .gte('created_at', since)
+      if (!error) {
+        rows = (data || []) as Row[]
+        break
+      }
+      if (!isSchemaGapError(error)) throw error
+      lastError = error
+    }
+    if (rows === null) throw lastError ?? new Error('Failed to load session analytics')
     const byDay = new Map<string, number>()
     const byStation = new Map<string, { stationName: string; count: number }>()
     let durationSum = 0
@@ -275,12 +349,6 @@ class AnalyticsRepository {
 
   async getRecentActivity(limit = 8) {
     const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from('rental_sessions')
-      .select('session_code, status, created_at, updated_at, user:users(email, name), pickup_station:stations!pickup_station_id(name)')
-      .order('updated_at', { ascending: false })
-      .limit(limit)
-    if (error) throw error
 
     type ActivityRow = {
       session_code: string
@@ -288,10 +356,32 @@ class AnalyticsRepository {
       created_at: string
       updated_at: string
       user: { email: string; name: string | null } | null
-      pickup_station: { name: string } | null
+      pickup_station?: { name: string } | null
     }
 
-    return ((data || []) as ActivityRow[]).map((r) => {
+    const selects = [
+      'session_code, status, created_at, updated_at, user:users(email, name), pickup_station:stations!pickup_station_id(name)',
+      'session_code, status, created_at, updated_at, user:users(email, name)',
+    ]
+
+    let data: ActivityRow[] | null = null
+    let lastError: { code?: string; message?: string } | null = null
+    for (const select of selects) {
+      const result = await supabase
+        .from('rental_sessions')
+        .select(select)
+        .order('updated_at', { ascending: false })
+        .limit(limit)
+      if (!result.error) {
+        data = (result.data || []) as ActivityRow[]
+        break
+      }
+      if (!isSchemaGapError(result.error)) throw result.error
+      lastError = result.error
+    }
+    if (data === null) throw lastError ?? new Error('Failed to load recent activity')
+
+    return data.map((r) => {
       const type =
         r.status === 'completed' ? 'return' : r.status === 'active' ? 'rental_start' : 'session'
       return {
