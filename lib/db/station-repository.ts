@@ -225,11 +225,14 @@ class StationRepository {
     // Check if station already exists
     const existing = await this.getByExternalId(externalId);
     
+    const now = new Date().toISOString();
+
     if (existing) {
       // Update existing station
       return this.updateByExternalId(externalId, {
         status: 'online',
-        last_heartbeat: new Date().toISOString(),
+        connected_at: now,
+        last_heartbeat: now,
         iccid: data.iccid || existing.iccid,
         firmware_version: data.firmwareVersion || existing.firmware_version,
         hardware_version: data.hardwareVersion || existing.hardware_version,
@@ -252,7 +255,8 @@ class StationRepository {
         hardware_version: data.hardwareVersion,
         connection_ip: data.connectionIp,
         connection_port: data.connectionPort,
-        last_heartbeat: new Date().toISOString(),
+        connected_at: now,
+        last_heartbeat: now,
         is_enabled: true,
         settings: {},
         metadata: {},

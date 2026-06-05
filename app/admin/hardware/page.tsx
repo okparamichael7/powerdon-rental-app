@@ -61,8 +61,8 @@ interface HardwareStation {
   stationId: string
   productSn: string
   isOnline: boolean
-  connectedAt: string
-  lastHeartbeat: string
+  connectedAt: string | null
+  lastHeartbeat: string | null
   lastInventoryUpdate: string | null
   signalStrength: number
   iccid: string | null
@@ -254,13 +254,17 @@ export default function HardwarePage() {
     return { label: 'Poor', color: 'text-red-500' }
   }
 
-  const formatTime = (isoString: string) => {
+  const formatTime = (isoString: string | null | undefined) => {
+    if (!isoString) return '—'
     const date = new Date(isoString)
+    if (Number.isNaN(date.getTime())) return '—'
     return date.toLocaleTimeString()
   }
 
-  const formatDateTime = (isoString: string) => {
+  const formatDateTime = (isoString: string | null | undefined) => {
+    if (!isoString) return '—'
     const date = new Date(isoString)
+    if (Number.isNaN(date.getTime())) return '—'
     return date.toLocaleString()
   }
 

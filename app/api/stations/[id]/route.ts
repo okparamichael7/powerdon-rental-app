@@ -50,6 +50,10 @@ export async function GET(
             rewardDescription: campaign?.reward_description ?? '',
             rewardValue: campaign ? Number(campaign.reward_value) : 0,
             lastHeartbeat: dbStation.last_heartbeat,
+            connectedAt:
+              memoryStation?.connectedAt?.toISOString() ??
+              dbStation.connected_at ??
+              dbStation.created_at,
             inventory: dbStation.slots?.map((slot) => ({
               slotNumber: slot.slot_number,
               status: slot.status,
@@ -187,6 +191,30 @@ export async function POST(
         { success: false, error: result.error },
         { status: 500 }
       );
+    }
+
+    // Proxy path: inventory response is async via /api/stations/message → DB
+    if (command === 'query_inventory' && result.proxyOnly) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const dbStation =
+        (await stationRepository.getById(stationId)) ??
+        (await stationRepository.getByExternalId(stationId));
+      const occupied =
+        dbStation?.slots?.filter((s) => s.status === 'occupied') ?? [];
+      return NextResponse.json({
+        success: true,
+        data: {
+          proxyOnly: true,
+          slotCount: occupied.length,
+          slots: occupied.map((s) => ({
+            slotNumber: s.slot_number,
+            batteryLevel: s.battery_level,
+            status: s.status,
+          })),
+        },
+        command,
+        stationId,
+      });
     }
 
     return NextResponse.json({

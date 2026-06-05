@@ -98,7 +98,10 @@ export const GET = withPublicApi(async (request: NextRequest) => {
         
         // Connection info
         connectionIp: dbStation.connection_ip,
-        connectedAt: memoryStation?.connectedAt?.toISOString(),
+        connectedAt:
+          memoryStation?.connectedAt?.toISOString() ??
+          dbStation.connected_at ??
+          dbStation.created_at,
       };
     });
 

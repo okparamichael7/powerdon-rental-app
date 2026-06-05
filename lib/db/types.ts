@@ -54,6 +54,7 @@ export interface DbStation {
   signal_strength: number | null;
   temperature: number | null;
   last_heartbeat: string | null;
+  connected_at: string | null;
   last_inventory_sync: string | null;
   connection_ip: string | null;
   connection_port: number | null;

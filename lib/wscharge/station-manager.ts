@@ -3,6 +3,8 @@
 
 import * as protocol from './protocol';
 import { dispatchCommandToTcpProxy } from './command-dispatch';
+import { getWsChargeConfig } from './config';
+import { stationRepository } from '@/lib/db';
 
 // Station connection state
 export interface StationConnection {
@@ -66,6 +68,25 @@ class StationConnectionManager {
 
   resolveConnectionKey(stationIdOrDbId: string): string {
     return this.dbIdToProductSn.get(stationIdOrDbId) ?? stationIdOrDbId;
+  }
+
+  /** Resolve DB UUID or product SN to cabinet ProductSn for TCP proxy commands. */
+  async resolveProductSn(stationIdOrDbId: string): Promise<string> {
+    const mapped = this.dbIdToProductSn.get(stationIdOrDbId);
+    if (mapped) return mapped;
+
+    const live = this.connections.get(stationIdOrDbId);
+    if (live) return live.productSn;
+
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stationIdOrDbId)) {
+      const row = await stationRepository.getById(stationIdOrDbId);
+      if (row?.external_id) {
+        this.linkDbId(stationIdOrDbId, row.external_id);
+        return row.external_id;
+      }
+    }
+
+    return stationIdOrDbId;
   }
 
   // Register event listener
@@ -251,17 +272,9 @@ class StationConnectionManager {
     stationId: string, 
     command: protocol.CommandCode, 
     payload?: Buffer
-  ): Promise<{ success: boolean; data?: T; error?: string; commandBuffer: Buffer; dispatched?: boolean }> {
-    const connectionKey = this.resolveConnectionKey(stationId);
-    const connection = this.connections.get(connectionKey);
-    
-    if (!connection || !connection.isOnline) {
-      return { 
-        success: false, 
-        error: 'Station not connected',
-        commandBuffer: Buffer.alloc(0),
-      };
-    }
+  ): Promise<{ success: boolean; data?: T; error?: string; commandBuffer: Buffer; dispatched?: boolean; proxyOnly?: boolean }> {
+    const productSn = await this.resolveProductSn(stationId);
+    const connection = this.connections.get(productSn);
 
     // Build command buffer
     let commandBuffer: Buffer;
@@ -302,12 +315,34 @@ class StationConnectionManager {
         return { success: false, error: 'Unknown command', commandBuffer: Buffer.alloc(0) };
     }
 
-    // Create pending command with promise
+    // Production: cabinet TCP lives on Hetzner proxy, not in-memory on Vercel.
+    const { proxyUrl } = getWsChargeConfig();
+    if ((!connection || !connection.isOnline) && proxyUrl) {
+      const dispatch = await dispatchCommandToTcpProxy(productSn, commandBuffer);
+      if (!dispatch.dispatched) {
+        return {
+          success: false,
+          error: dispatch.error || 'Station not connected',
+          commandBuffer,
+        };
+      }
+      return { success: true, commandBuffer, dispatched: true, proxyOnly: true };
+    }
+
+    if (!connection || !connection.isOnline) {
+      return {
+        success: false,
+        error: 'Station not connected',
+        commandBuffer: Buffer.alloc(0),
+      };
+    }
+
+    // Local dev: wait for in-process response via pending command queue
     return new Promise((resolve) => {
-      const commandId = `${connectionKey}-${command}-${Date.now()}`;
+      const commandId = `${productSn}-${command}-${Date.now()}`;
       
       const timeoutId = setTimeout(() => {
-        this.handleCommandTimeout(connectionKey, commandId);
+        this.handleCommandTimeout(productSn, commandId);
         resolve({ success: false, error: 'Command timeout', commandBuffer });
       }, this.commandTimeout);
 
@@ -329,7 +364,7 @@ class StationConnectionManager {
 
       connection.pendingCommands.push(pendingCommand);
 
-      void dispatchCommandToTcpProxy(connectionKey, commandBuffer).then((dispatch) => {
+      void dispatchCommandToTcpProxy(productSn, commandBuffer).then((dispatch) => {
         if (!dispatch.dispatched) {
           pendingCommand.reject(new Error(dispatch.error || 'Failed to send command to station'));
         }
