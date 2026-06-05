@@ -38,7 +38,7 @@ Powerdon is a power bank rental system consisting of:
 **Investigation:**
 ```bash
 # Check TCP proxy logs
-docker logs Powerdon-tcp-proxy --tail 100
+docker logs powerdon-tcp-proxy --tail 100
 
 # Check station events in database
 SELECT * FROM station_events 
@@ -130,13 +130,13 @@ ORDER BY count DESC;
 docker ps -a | grep tcp-proxy
 
 # Check logs
-docker logs Powerdon-tcp-proxy --tail 200
+docker logs powerdon-tcp-proxy --tail 200
 ```
 
 **Resolution:**
 ```bash
 # Restart container
-docker restart Powerdon-tcp-proxy
+docker restart powerdon-tcp-proxy
 
 # If persistent, recreate
 docker-compose down
@@ -159,18 +159,18 @@ docker-compose up -d
 cd server
 
 # Build new image
-docker build -t Powerdon-tcp-proxy:v1.x.x .
+docker build -t powerdon-tcp-proxy:v1.x.x .
 
 # Stop old container
-docker stop Powerdon-tcp-proxy
+docker stop powerdon-tcp-proxy
 
 # Start new container
 docker run -d \
-  --name Powerdon-tcp-proxy \
+  --name powerdon-tcp-proxy \
   -p 8765:8765 \
   --env-file .env \
   --restart unless-stopped \
-  Powerdon-tcp-proxy:v1.x.x
+  powerdon-tcp-proxy:v1.x.x
 ```
 
 ### Database Migrations
@@ -194,12 +194,12 @@ supabase db push
 
 ```bash
 # TCP Proxy
-docker restart Powerdon-tcp-proxy
+docker restart powerdon-tcp-proxy
 
 # To force reconnect all stations
-docker stop Powerdon-tcp-proxy
+docker stop powerdon-tcp-proxy
 sleep 10
-docker start Powerdon-tcp-proxy
+docker start powerdon-tcp-proxy
 ```
 
 ### Backup Procedures

@@ -151,7 +151,7 @@ export default function AdminLayout({
           <div className="flex h-14 shrink-0 items-center justify-between px-5">
             <Link href="/admin" className="flex items-center gap-2">
               <PowerdonLogo size={20} className="text-foreground" />
-              <span className="text-sm font-medium text-foreground">Powerdon</span>
+              <span className="text-sm font-medium text-foreground">POWERDON</span>
             </Link>
             <button
               type="button"
