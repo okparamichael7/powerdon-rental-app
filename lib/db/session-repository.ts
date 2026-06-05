@@ -57,9 +57,10 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
     metadata: {},
   };
 
+  // Prefer payloads without unlock_token first (common on partial DBs before migration 014).
   return [
-    full,
     omitKeys(full, ['unlock_token', 'unlock_token_expires_at']),
+    full,
     omitKeys(full, [
       'unlock_token',
       'unlock_token_expires_at',
@@ -287,17 +288,25 @@ class SessionRepository {
   async create(data: CreateSessionData): Promise<DbRentalSession> {
     const supabase = await createServiceClient();
 
+    const selectAttempts = [
+      'id, session_code, user_id, status, payment_status, deposit_amount, hourly_rate, pickup_station_id, pickup_slot_number, unlock_token, created_at',
+      'id, session_code, user_id, status, payment_status, deposit_amount, hourly_rate, created_at',
+      'id, session_code, user_id, status, created_at',
+    ];
+
     let lastError: { code?: string; message?: string } | null = null;
     for (const payload of buildSessionInsertPayloads(data)) {
-      const { data: session, error } = await supabase
-        .from('rental_sessions')
-        .insert(payload)
-        .select()
-        .single();
+      for (const select of selectAttempts) {
+        const { data: session, error } = await supabase
+          .from('rental_sessions')
+          .insert(payload)
+          .select(select)
+          .single();
 
-      if (!error) return session as DbRentalSession;
-      if (!isSchemaGapError(error)) throw error;
-      lastError = error;
+        if (!error) return session as DbRentalSession;
+        if (!isSchemaGapError(error)) throw error;
+        lastError = error;
+      }
     }
 
     throw lastError ?? new Error('Failed to create rental session');
