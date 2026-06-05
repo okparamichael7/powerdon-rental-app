@@ -21,7 +21,7 @@ interface RentalCheckoutProps {
   email: string
   name?: string
   stationId: string
-  slotNumber: number
+  slotNumber?: number
   campaignId?: string
   depositAmount: number // In cents
   onSuccess?: (sessionCode: string, unlockToken?: string, sessionId?: string) => void

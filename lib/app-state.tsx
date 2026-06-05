@@ -9,9 +9,7 @@ import {
   type RentalState,
   calculateCharge,
 } from './session-store';
-import { isMockDataEnabled } from '@/lib/services/config';
 import { getPwaDataLayer } from '@/lib/data';
-import { mockStation } from './session-store';
 
 interface AppState {
   user: UserInfo | null;
@@ -29,8 +27,9 @@ interface AppState {
   startRental: (userInfo: UserInfo, options?: { paymentMethodId?: string }) => Promise<{ success: boolean; error?: string; sessionId?: string }>;
   syncActiveSession: () => Promise<void>;
   completeRental: () => Promise<{ success: boolean; qualifiedForReward: boolean }>;
-  cancelRental: () => void;
+  cancelRental: () => Promise<void>;
   redeemReward: (rewardId: string, rewardCode?: string) => Promise<{ success: boolean }>;
+  refreshRewards: () => Promise<void>;
   clearAllState: () => void;
 }
 
@@ -87,11 +86,10 @@ function removeStoredItem(key: string): void {
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const useMock = isMockDataEnabled();
   const [user, setUserState] = useState<UserInfo | null>(null);
   const [activeSession, setActiveSessionState] = useState<ActiveSession | null>(null);
   const [completedSession, setCompletedSession] = useState<ActiveSession | null>(null);
-  const [currentStation, setCurrentStation] = useState<StationInfo | null>(useMock ? mockStation : null);
+  const [currentStation, setCurrentStation] = useState<StationInfo | null>(null);
   const [rewards, setRewards] = useState<UserReward[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -124,13 +122,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const syncActiveSession = useCallback(async () => {
     const sessionId = getStoredItem<string>(STORAGE_KEYS.sessionId);
-    if (!sessionId || useMock) return;
+    if (!sessionId) return;
     const station = currentStation;
     if (!station) return;
     const syncResult = await getPwaDataLayer().syncSessionFromApi(sessionId, station);
-    if ('terminal' in syncResult && syncResult.terminal && !syncResult.active) setActiveSession(null);
-    else if (syncResult.active) setActiveSession(syncResult.active);
-  }, [currentStation, setActiveSession, useMock]);
+    if ('terminal' in syncResult && syncResult.terminal && !syncResult.active) {
+      setActiveSession(null);
+    } else if (syncResult.active) {
+      setActiveSession(syncResult.active);
+    }
+  }, [currentStation, setActiveSession]);
 
   useEffect(() => {
     const storedUser = getStoredItem<UserInfo>(STORAGE_KEYS.user);
@@ -147,19 +148,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const params = new URLSearchParams(window.location.search);
         const qrStation = params.get('station') || params.get('stationId');
         if (qrStation) await loadStation(qrStation);
-        else if (stationId && !useMock) await loadStation(stationId);
+        else if (stationId) await loadStation(stationId);
       }
       setIsHydrated(true);
     };
     void init();
-  }, [loadStation, useMock]);
+  }, [loadStation]);
 
   useEffect(() => {
-    if (!isHydrated || useMock) return;
+    if (!isHydrated) return;
     void syncActiveSession();
     const interval = setInterval(() => void syncActiveSession(), 30000);
     return () => clearInterval(interval);
-  }, [isHydrated, syncActiveSession, useMock]);
+  }, [isHydrated, syncActiveSession]);
 
   useEffect(() => {
     if (!activeSession || activeSession.status !== 'active') return;
@@ -203,19 +204,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const pushReward = (reward: UserReward) => {
       setRewards((prev) => {
-        const updated = [...prev, reward];
+        const updated = [...prev.filter((r) => r.id !== reward.id), reward];
         setStoredItem(STORAGE_KEYS.rewards, updated);
         return updated;
       });
     };
 
-    if (!useMock) await syncActiveSession();
-    const result = await getPwaDataLayer().completeRentalFromApi(activeSession, currentStation);
-    setCompletedSession({ ...activeSession, status: 'completed' as RentalState });
+    const sessionToComplete =
+      activeSession ?? getStoredItem<ActiveSession>(STORAGE_KEYS.session);
+    if (!sessionToComplete) return { success: false, qualifiedForReward: false };
+    const result = await getPwaDataLayer().completeRentalFromApi(sessionToComplete, currentStation);
+    setCompletedSession({ ...sessionToComplete, status: 'completed' as RentalState });
     setActiveSession(null);
     if (result.reward) pushReward(result.reward);
     return { success: result.success, qualifiedForReward: result.qualifiedForReward };
-  }, [activeSession, currentStation, setActiveSession, syncActiveSession, useMock]);
+  }, [activeSession, currentStation, setActiveSession, syncActiveSession]);
 
   const addReward = useCallback((reward: UserReward) => {
     setRewards((prev) => {
@@ -235,29 +238,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const cancelRental = useCallback(async () => {
     const sessionId = activeSession?.id ?? getStoredItem<string>(STORAGE_KEYS.sessionId);
-    if (sessionId && !useMock) {
+    if (sessionId) {
       await getPwaDataLayer().cancelRentalFromApi(sessionId);
     }
     setActiveSession(null);
     setCompletedSession(null);
-  }, [activeSession, useMock, setActiveSession]);
+  }, [activeSession, setActiveSession]);
 
   const redeemReward = useCallback(
     async (rewardId: string, rewardCode?: string): Promise<{ success: boolean }> => {
-      if (!useMock) {
-        const code = rewardCode ?? rewards.find((r) => r.id === rewardId)?.code;
-        if (!code) return { success: false };
-        const result = await getPwaDataLayer().redeemRewardFromApi(rewardId, code);
-        if (!result.success) return { success: false };
-      }
+      const code = rewardCode ?? rewards.find((r) => r.id === rewardId)?.code;
+      if (!code) return { success: false };
+      const result = await getPwaDataLayer().redeemRewardFromApi(rewardId, code);
+      if (!result.success) return { success: false };
       updateReward(rewardId, {
         status: 'redeemed',
         redeemedAt: new Date(),
       });
       return { success: true };
     },
-    [updateReward, useMock, rewards],
+    [updateReward, rewards],
   );
+
+  const refreshRewards = useCallback(async () => {
+    await syncActiveSession();
+    setRewards((prev) => {
+      setStoredItem(STORAGE_KEYS.rewards, prev);
+      return prev;
+    });
+  }, [syncActiveSession]);
 
   const clearAllState = useCallback(() => {
     setUserState(null);
@@ -289,6 +298,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         completeRental,
         cancelRental,
         redeemReward,
+        refreshRewards,
         clearAllState,
       }}
     >

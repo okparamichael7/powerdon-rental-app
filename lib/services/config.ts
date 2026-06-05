@@ -1,9 +1,9 @@
 /**
- * PWA customer app mock layer (lib/data). Does NOT affect the admin dashboard.
- * Set NEXT_PUBLIC_USE_MOCK_DATA=true only for offline PWA UI work without Supabase.
+ * @deprecated PWA runtime always uses production APIs (lib/data/pwa-api.ts).
+ * NEXT_PUBLIC_USE_MOCK_DATA is ignored; kept for legacy env diagnostics only.
  */
 export function isMockDataEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'
+  return false
 }
 
 /**

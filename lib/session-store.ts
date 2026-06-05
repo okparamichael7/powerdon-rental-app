@@ -1,6 +1,8 @@
 // Session store for managing rental state across the app
 // In production, this would be backed by an API and persistent storage
 
+import { calculateRentalCharge } from '@/lib/stripe/types';
+
 export type RentalState = 
   | 'idle'
   | 'starting'
@@ -34,6 +36,7 @@ export interface ActiveSession {
   currentCharge: number;
   rewardThreshold: number;
   rewardDescription: string;
+  rewardValue: number;
   campaignId: string;
   campaignName: string;
   status: RentalState;
@@ -72,6 +75,7 @@ export interface StationInfo {
   depositAmount: number;
   rewardThreshold: number;
   rewardDescription: string;
+  rewardValue: number;
 }
 
 export interface UserInfo {
@@ -97,6 +101,7 @@ export const mockStation: StationInfo = {
   depositAmount: 28.00,
   rewardThreshold: 60,
   rewardDescription: 'Rent for 60 mins and get a €10 voucher for Sundance merch.',
+  rewardValue: 10,
 };
 
 // Mock active session for demo purposes
@@ -115,6 +120,7 @@ export const createMockActiveSession = (): ActiveSession => ({
   currentCharge: 3.00, // 45 min = 5 free + 40 chargeable = ceil(40/15) * €1 = 3 intervals = €3
   rewardThreshold: 60,
   rewardDescription: 'Rent for 60 mins and get a €10 voucher for Sundance merch.',
+  rewardValue: 10,
   campaignId: 'CMP-001',
   campaignName: 'Sundance Festival',
   status: 'active',
@@ -153,26 +159,10 @@ export function formatCurrency(amount: number): string {
   return `€${amount.toFixed(2)}`;
 }
 
-// Calculate current charge based on elapsed time using ladder billing
-// First 5 min free, then €1 per 15 minutes, capped at daily max
-export function calculateCharge(elapsedMinutes: number, _hourlyRate: number, dailyCap: number): number {
-  const FREE_MINUTES = 5;
-  const RATE_PER_INTERVAL = 1.00; // €1
-  const INTERVAL_MINUTES = 15;
-  
-  // First 5 minutes are free
-  const chargeableMinutes = Math.max(0, elapsedMinutes - FREE_MINUTES);
-  
-  if (chargeableMinutes === 0) {
-    return 0;
-  }
-  
-  // Calculate intervals (round up)
-  const intervals = Math.ceil(chargeableMinutes / INTERVAL_MINUTES);
-  const charge = intervals * RATE_PER_INTERVAL;
-  
-  // Apply daily cap
-  return Math.min(charge, dailyCap);
+/** Client charge estimate using the same Stripe ladder as server finalize. */
+export function calculateCharge(elapsedMinutes: number, _hourlyRate: number, _dailyCap: number): number {
+  const { totalCents } = calculateRentalCharge(Math.max(0, elapsedMinutes));
+  return Math.round(totalCents) / 100;
 }
 
 // Calculate reward progress percentage

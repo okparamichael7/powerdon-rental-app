@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
+import { getPwaDataLayer } from '@/lib/data';
+import type { PublicSessionLookup } from '@/lib/data/pwa-api';
 import { formatDuration, formatCurrency } from '@/lib/session-store';
 
 interface SupportPageProps {
@@ -37,7 +39,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: 'What if the station is full?',
-    answer: 'If a station is full, try a nearby station. Use the "Find Stations" feature to locate other available stations at the venue. Your rental continues until you successfully return.',
+    answer: 'If a station is full, try another PowerDon station at the venue (look for QR codes on cabinets). Your rental continues until you successfully return.',
   },
   {
     question: 'How do I earn rewards?',
@@ -70,6 +72,9 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
   const [sessionLookup, setSessionLookup] = useState('');
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<'found' | 'not_found' | null>(null);
+  const [lookupSession, setLookupSession] = useState<PublicSessionLookup | null>(null);
+  const [contactCategory, setContactCategory] = useState<IssueCategory>('other');
+  const [submittedTicketNumber, setSubmittedTicketNumber] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [contactFormVisible, setContactFormVisible] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
@@ -94,19 +99,19 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
     setLookupError(null);
     setLookupResult(null);
 
+    if (!isOnline) {
+      setLookupError('You are offline. Connect to look up a session.');
+      setIsLookingUp(false);
+      return;
+    }
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      if (!isOnline) {
-        throw new Error('Network unavailable');
-      }
-
-      // Check if it matches active session
-      if (activeSession && sessionLookup.toUpperCase() === activeSession.sessionCode) {
-        setLookupResult('found');
-      } else if (sessionLookup.toUpperCase().startsWith('VR-')) {
+      const result = await getPwaDataLayer().lookupSessionByCode(sessionLookup.trim());
+      if (result.success && result.session) {
+        setLookupSession(result.session);
         setLookupResult('found');
       } else {
+        setLookupSession(null);
         setLookupResult('not_found');
       }
     } catch {
@@ -114,6 +119,18 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
     } finally {
       setIsLookingUp(false);
     }
+  };
+
+  const mapCategoryToApi = (category: IssueCategory) => {
+    const map: Record<IssueCategory, 'rental_issue' | 'return_issue' | 'payment_issue' | 'reward_issue' | 'station_issue' | 'other'> = {
+      rental: 'rental_issue',
+      return: 'return_issue',
+      payment: 'payment_issue',
+      reward: 'reward_issue',
+      station: 'station_issue',
+      other: 'other',
+    };
+    return map[category];
   };
 
   // Validate email
@@ -143,13 +160,34 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
       return;
     }
 
+    if (!isOnline) {
+      setFormErrors({ message: 'You are offline. Connect to submit a support request.' });
+      return;
+    }
+
     setFormErrors({});
     setIsSubmitting(true);
 
-    // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setContactSubmitted(true);
-    setIsSubmitting(false);
+    try {
+      const result = await getPwaDataLayer().submitSupportTicket({
+        email: contactEmail.trim(),
+        subject: `Support: ${issueCategories.find((c) => c.id === contactCategory)?.label ?? 'General'}`,
+        description: contactMessage.trim(),
+        category: mapCategoryToApi(contactCategory),
+        sessionId: activeSession?.id,
+        priority: 'medium',
+      });
+      if (!result.success) {
+        setFormErrors({ message: result.error || 'Failed to submit. Please try again.' });
+        return;
+      }
+      setSubmittedTicketNumber(result.ticketNumber ?? null);
+      setContactSubmitted(true);
+    } catch {
+      setFormErrors({ message: 'Network error. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Render issue detail view
@@ -160,6 +198,7 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
         onBack={() => setSelectedCategory(null)}
         onNavigate={onNavigate}
         onContactSupport={() => {
+          setContactCategory(selectedCategory);
           setSelectedCategory(null);
           setContactFormVisible(true);
         }}
@@ -181,9 +220,11 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
         formErrors={formErrors}
         onSubmit={handleContactSubmit}
         activeSessionCode={activeSession?.sessionCode}
+        ticketNumber={submittedTicketNumber}
         onBack={() => {
           setContactFormVisible(false);
           setContactSubmitted(false);
+          setSubmittedTicketNumber(null);
           setContactMessage('');
           setContactEmail('');
           setFormErrors({});
@@ -286,16 +327,22 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
             >
               <div className="flex items-center gap-2">
                 <CheckCircleIcon size={16} />
-                <span className="text-sm">Session found!</span>
+                <span className="text-sm">
+                  {lookupSession?.sessionCode} — {lookupSession?.status}
+                  {lookupSession?.currentDurationMinutes != null &&
+                    ` · ${formatDuration(lookupSession.currentDurationMinutes)}`}
+                </span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onNavigate('status')}
-                className="text-emerald-700"
-              >
-                View Details
-              </Button>
+              {activeSession?.sessionCode === lookupSession?.sessionCode && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onNavigate('status')}
+                  className="text-emerald-700"
+                >
+                  View active rental
+                </Button>
+              )}
             </motion.div>
           )}
           {lookupResult === 'not_found' && (
@@ -326,7 +373,10 @@ export function SupportPage({ isOnline, onNavigate }: SupportPageProps) {
             <p className="text-xs text-muted-foreground">View active rental</p>
           </button>
           <button
-            onClick={() => setContactFormVisible(true)}
+            onClick={() => {
+              setContactCategory('other');
+              setContactFormVisible(true);
+            }}
             className="flex-1 bg-card rounded-lg border border-border p-4 text-left hover:bg-muted transition-colors"
           >
             <HeadphonesIcon size={20} className="text-primary mb-2" />
@@ -618,6 +668,7 @@ function ContactFormView({
   isSubmitting,
   formErrors,
   activeSessionCode,
+  ticketNumber,
   onSubmit,
   onBack,
 }: {
@@ -629,11 +680,10 @@ function ContactFormView({
   isSubmitting: boolean;
   formErrors: Record<string, string>;
   activeSessionCode?: string;
+  ticketNumber?: string | null;
   onSubmit: () => void;
   onBack: () => void;
 }) {
-  const ticketId = `SUP-${Date.now().toString(36).toUpperCase()}`;
-
   if (submitted) {
     return (
       <div className="flex flex-col min-h-screen bg-background pb-20">
@@ -659,7 +709,7 @@ function ContactFormView({
           <div className="mt-8 bg-card rounded-xl border border-border p-4 w-full max-w-sm space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Ticket Reference</span>
-              <span className="font-mono font-medium text-foreground">{ticketId}</span>
+              <span className="font-mono font-medium text-foreground">{ticketNumber ?? '—'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>

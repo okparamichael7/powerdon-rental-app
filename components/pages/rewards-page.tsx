@@ -20,7 +20,7 @@ interface RewardsPageProps {
 }
 
 export function RewardsPage({ isOnline, onNavigate }: RewardsPageProps) {
-  const { rewards, activeSession, redeemReward } = useAppState();
+  const { rewards, activeSession, redeemReward, syncActiveSession } = useAppState();
   
   const [selectedReward, setSelectedReward] = useState<UserReward | null>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -34,9 +34,13 @@ export function RewardsPage({ isOnline, onNavigate }: RewardsPageProps) {
 
   // Handle refresh
   const handleRefresh = async () => {
+    if (!isOnline) return;
     setIsRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setIsRefreshing(false);
+    try {
+      await syncActiveSession();
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   // Handle copy code
@@ -82,6 +86,8 @@ export function RewardsPage({ isOnline, onNavigate }: RewardsPageProps) {
         <InProgressView
           elapsedMinutes={activeSession.elapsedMinutes}
           thresholdMinutes={activeSession.rewardThreshold}
+          rewardValue={activeSession.rewardValue}
+          rewardDescription={activeSession.rewardDescription}
           onViewStatus={() => onNavigate('status')}
         />
       </div>
@@ -232,10 +238,14 @@ function NoRewardsView({
 function InProgressView({
   elapsedMinutes,
   thresholdMinutes,
+  rewardValue,
+  rewardDescription,
   onViewStatus,
 }: {
   elapsedMinutes: number;
   thresholdMinutes: number;
+  rewardValue: number;
+  rewardDescription: string;
   onViewStatus: () => void;
 }) {
   const progress = Math.min((elapsedMinutes / thresholdMinutes) * 100, 100);
@@ -345,7 +355,9 @@ function InProgressView({
               <p className="text-xs text-white/60 uppercase tracking-wide">
                 {isQualified ? 'Ready to Claim' : 'Upcoming Reward'}
               </p>
-              <p className="font-bold text-lg">{formatCurrency(10)} Merch Voucher</p>
+              <p className="font-bold text-lg">
+                {rewardValue > 0 ? `${formatCurrency(rewardValue)} Merch Voucher` : rewardDescription || 'Campaign reward'}
+              </p>
             </div>
           </div>
         </motion.div>
@@ -665,7 +677,9 @@ function RedeemedDetailView({
         <div className="text-center">
           <h1 className="text-xl font-semibold text-foreground mb-2">Reward Redeemed</h1>
           <p className="text-muted-foreground">
-            You successfully used this voucher at {reward.redemptionLocation}.
+            {reward.redemptionLocation
+              ? `You successfully used this voucher at ${reward.redemptionLocation}.`
+              : 'This voucher has been marked as redeemed.'}
           </p>
         </div>
 

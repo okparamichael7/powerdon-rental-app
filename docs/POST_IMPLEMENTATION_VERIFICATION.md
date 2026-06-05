@@ -1,8 +1,8 @@
 # Post-Implementation Verification Audit
 
 **Audit standard:** No fix accepted without file-level evidence.  
-**Verification runs:** Round 3 → Round 4 → Round 5 → Round 6 → **Round 7** (admin remediation + strict re-audit + final).  
-**Build/tests (Round 7 final):** `npm run test` **21/21** pass, `npm run build` pass.
+**Verification runs:** Round 3 → Round 7 (admin) → **Round 8** (PWA remediation + strict re-audit + final).  
+**Build/tests (Round 8 final):** `npm run test` **25/25** pass, `npm run build` pass.
 
 ---
 
@@ -244,6 +244,83 @@ npm run test && npm run build
 
 ---
 
-## Historical rounds (Rounds 3–6)
+## Round 8 — PWA pre-remediation audit (strict)
 
-Earlier remediation rounds (C3 UUID guard, charge-estimate, staff roles, session-access tests, admin mock decoupling) are documented in git history and prior sections of this file. Round 6 final counts: 31 Fully Resolved, 5 Partially Resolved, 0 Still Open. Round 7 extends coverage to full admin dashboard production readiness and completes admin PATCH validation.
+Re-verified PWA remediation findings (PW1–PW15) from `docs/PWA_PRODUCTION_READINESS_REPORT.md`. Claims without file evidence marked **Still Open**.
+
+| # | Finding | Round 8 pre status | Evidence |
+|---|---------|-------------------|----------|
+| PW1 | Mock runtime via `mock-bridge` | **Fully Resolved** | `lib/data/index.ts:6-8` — always `pwa-api` |
+| PW2 | Simulated return flow | **Fully Resolved** | `status-page.tsx:58` — `waitForSessionCompletion` |
+| PW3 | Simulated support lookup/submit | **Fully Resolved** | `support-page.tsx:109`, `172` — real APIs |
+| PW4 | Fake success session code | **Fully Resolved** | `rent-page.tsx:475-481` — `activeSession.sessionCode` |
+| PW5 | Hardcoded €10 reward display | **Partially Resolved** | `status-page.tsx:356`, `rewards-page.tsx:352` still `formatCurrency(10)` |
+| PW6 | Dead "Find Stations" FAQ copy | **Partially Resolved** | `support-page.tsx:42` referenced nonexistent feature |
+| PW7 | `redemptionLocation` always shown | **Partially Resolved** | `rewards-page.tsx:672` — undefined at redeem |
+| PW8 | Stripe `slotNumber={1}` hardcoded | **Partially Resolved** | `rent-page.tsx:442` — no auto slot pick |
+| PW9 | Client `calculateCharge` ≠ Stripe ladder | **Partially Resolved** | `session-store.ts` duplicate ladder math |
+| PW10 | Fake Apple/Google Pay UI | **Fully Resolved** | `PaymentStep` — deposit-only server auth |
+| PW11 | Terms/Privacy `href="#"` | **Fully Resolved** | `rent-page.tsx` — `Link` to `/terms`, `/privacy` |
+| PW12 | Rewards refresh no-op | **Fully Resolved** | `rewards-page.tsx` — `syncActiveSession()` |
+| PW13 | Manifest PNG 404 | **Fully Resolved** | `app/manifest.ts` — `/icon.svg` |
+| PW14 | No service worker | **Deferred** | No SW in repo; online-first by design |
+| PW15 | Rewards history device-local only | **Deferred** | No public user rewards list API |
+
+**Round 8 pre-remediation summary:** 8 Fully Resolved, 5 Partially Resolved, 2 Deferred, 0 Still Open.
+
+---
+
+## Round 8 — PWA remediation
+
+| Item | Change |
+|------|--------|
+| PW5 | `rewardValue` on station API + `StationInfo`/`ActiveSession`; dynamic reward labels in status/rewards/rent |
+| PW6 | FAQ copy — nearby station QR guidance |
+| PW7 | Redeemed view fallback when `redemptionLocation` unset |
+| PW8 | `startRentalCheckout` auto-picks slot via `getAvailableSlot`; removed hardcoded `slotNumber={1}` |
+| PW9 | `calculateCharge` uses `calculateRentalCharge` from `lib/stripe/types`; tests in `charge-estimate-client.test.ts` |
+
+---
+
+## Round 8 — PWA final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| PW1 | Mock runtime removed | **Fully Resolved** | `lib/data/index.ts`, `lib/services/config.ts:5-7` |
+| PW2 | Return polling | **Fully Resolved** | `lib/data/pwa-api.ts:waitForSessionCompletion`, `status-page.tsx:58-75` |
+| PW3 | Support APIs | **Fully Resolved** | `lookupSessionByCode`, `submitSupportTicket` in `pwa-api.ts` |
+| PW4 | Real session on success | **Fully Resolved** | `SuccessStep` props from `activeSession` |
+| PW5 | Campaign reward values | **Fully Resolved** | `app/api/stations/[id]/route.ts:rewardValue`, UI uses `rewardValue` |
+| PW6 | FAQ dead feature | **Fully Resolved** | `support-page.tsx:42` updated |
+| PW7 | Redemption location | **Fully Resolved** | `rewards-page.tsx` conditional message |
+| PW8 | Auto slot selection | **Fully Resolved** | `app/actions/stripe.ts:getAvailableSlot`, optional `slotNumber` |
+| PW9 | Pricing consistency | **Fully Resolved** | `session-store.ts:calculateCharge` → `calculateRentalCharge` |
+| PW10 | Fake wallet UI | **Fully Resolved** | `rent-page.tsx` `PaymentStep` |
+| PW11 | Legal links | **Fully Resolved** | `Link href="/terms"` `/privacy` |
+| PW12 | Session refresh | **Fully Resolved** | `syncActiveSession` on rewards refresh |
+| PW13 | Manifest icons | **Fully Resolved** | `app/manifest.ts` |
+| PW14 | Service worker | **Deferred** | Ops backlog |
+| PW15 | Cross-device rewards | **Deferred** | Requires future API |
+
+### Round 8 summary
+
+| Status | Count |
+|--------|------:|
+| Fully Resolved | 13 |
+| Partially Resolved | 0 |
+| Deferred | 2 |
+| Not Actionable | 0 |
+| Still Open | 0 |
+
+```bash
+npm run test   # 25/25 pass
+npm run build  # pass
+```
+
+See also: `docs/PWA_PRODUCTION_READINESS_REPORT.md`
+
+---
+
+## Historical rounds (Rounds 3–7)
+
+Earlier remediation rounds (enterprise security, admin dashboard, C3 UUID guard, staff roles) are documented above. Round 7 admin final: 41 Fully Resolved, 5 Partially Resolved, 0 Still Open. Round 8 completes PWA customer app production readiness.

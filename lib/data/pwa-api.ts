@@ -25,6 +25,7 @@ export async function loadStationFromApi(stationId: string): Promise<{ success: 
         depositAmount: Number(s.depositAmount ?? 25),
         rewardThreshold: Number(s.rewardThresholdMinutes ?? 60),
         rewardDescription: String(s.rewardDescription ?? ''),
+        rewardValue: Number(s.rewardValue ?? 0),
       },
     }
   } catch {
@@ -63,6 +64,7 @@ export async function syncSessionFromApi(
         currentCharge: Number(body.session.currentCharge ?? 0),
         rewardThreshold: Number(body.session.rewardThresholdMinutes ?? station.rewardThreshold),
         rewardDescription: station.rewardDescription,
+        rewardValue: station.rewardValue,
         campaignId: station.campaignId,
         campaignName: station.campaignName,
         status: body.session.status === 'pending' ? 'unlocking' : 'active',
@@ -114,6 +116,7 @@ export async function startRentalFromApi(
       currentCharge: 0,
       rewardThreshold: station.rewardThreshold,
       rewardDescription: station.rewardDescription,
+      rewardValue: station.rewardValue,
       campaignId: station.campaignId,
       campaignName: station.campaignName,
       status: body.hardwareCommandSent ? 'active' : 'unlocking',
@@ -133,9 +136,15 @@ export async function completeRentalFromApi(
     headers: sessionAuthHeaders(session.id),
   })
   const body = await res.json()
-  const qualified = Boolean(body.session?.rewardQualified)
+  if (!res.ok || !body.success || !body.session) {
+    return { success: false, qualifiedForReward: false }
+  }
+  const qualified = Boolean(body.session.rewardQualified)
+  const actualMinutes = Number(
+    body.session.currentDurationMinutes ?? session.elapsedMinutes,
+  )
   let reward: UserReward | undefined
-  if (body.session?.reward) {
+  if (body.session.reward) {
     reward = {
       id: body.session.reward.id,
       code: body.session.reward.code,
@@ -145,11 +154,11 @@ export async function completeRentalFromApi(
       type: 'voucher',
       value: body.session.reward.value,
       description: body.session.reward.description ?? '',
-      status: 'issued',
+      status: body.session.reward.status === 'redeemed' ? 'redeemed' : 'issued',
       issuedAt: new Date(),
       expiresAt: new Date(body.session.reward.expiresAt),
       qualificationMinutes: session.rewardThreshold,
-      actualMinutes: session.elapsedMinutes,
+      actualMinutes,
     }
   }
   return { success: true, qualifiedForReward: qualified, reward }
@@ -178,6 +187,107 @@ export async function redeemRewardFromApi(
   return { success: Boolean(body.success) }
 }
 
+export type PublicSessionLookup = {
+  sessionCode: string
+  status: string
+  pickupSlotNumber?: number
+  currentDurationMinutes?: number
+  currentCharge?: number
+  rewardQualified?: boolean
+}
+
+export async function lookupSessionByCode(
+  code: string,
+): Promise<{ success: boolean; session?: PublicSessionLookup; error?: string }> {
+  try {
+    const normalized = code.trim().toUpperCase()
+    const res = await fetch(`/api/rentals/${encodeURIComponent(normalized)}`)
+    const body = await res.json()
+    if (!res.ok || !body.success || !body.session) {
+      return { success: false, error: body.error || 'Session not found' }
+    }
+    return {
+      success: true,
+      session: {
+        sessionCode: String(body.session.sessionCode),
+        status: String(body.session.status),
+        pickupSlotNumber: body.session.pickupSlotNumber,
+        currentDurationMinutes: body.session.currentDurationMinutes,
+        currentCharge: body.session.currentCharge,
+        rewardQualified: body.session.rewardQualified,
+      },
+    }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function waitForSessionCompletion(
+  sessionId: string,
+  options?: { intervalMs?: number; maxAttempts?: number },
+): Promise<{ completed: boolean; timedOut?: boolean }> {
+  const intervalMs = options?.intervalMs ?? 3000
+  const maxAttempts = options?.maxAttempts ?? 100
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionId)}`, {
+        headers: sessionAuthHeaders(sessionId),
+      })
+      const body = await res.json()
+      if (body.success && body.session) {
+        const status = String(body.session.status)
+        if (['completed', 'cancelled', 'expired', 'failed'].includes(status)) {
+          return { completed: status === 'completed' }
+        }
+      }
+    } catch {
+      /* retry */
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return { completed: false, timedOut: true }
+}
+
+export async function submitSupportTicket(input: {
+  email: string
+  subject: string
+  description: string
+  category:
+    | 'rental_issue'
+    | 'payment_issue'
+    | 'return_issue'
+    | 'reward_issue'
+    | 'station_issue'
+    | 'account_issue'
+    | 'other'
+  sessionId?: string
+  priority?: 'low' | 'medium' | 'high' | 'urgent'
+}): Promise<{ success: boolean; ticketNumber?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/support/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: input.email,
+        subject: input.subject,
+        description: input.description,
+        category: input.category,
+        sessionId: input.sessionId,
+        priority: input.priority ?? 'medium',
+        website: '',
+      }),
+    })
+    const body = await res.json()
+    if (!res.ok || !body.success) {
+      return { success: false, error: body.error || 'Failed to submit ticket' }
+    }
+    return { success: true, ticketNumber: body.data?.ticketNumber }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export function sessionFromCheckoutApi(
   session: Record<string, unknown>,
   station: StationInfo,
@@ -197,6 +307,7 @@ export function sessionFromCheckoutApi(
     currentCharge: Number(session.currentCharge ?? 0),
     rewardThreshold: station.rewardThreshold,
     rewardDescription: station.rewardDescription,
+    rewardValue: station.rewardValue,
     campaignId: station.campaignId,
     campaignName: station.campaignName,
     status: session.status === 'active' ? 'active' : 'unlocking',

@@ -12,7 +12,7 @@ export interface StartRentalCheckoutParams {
   email: string
   name?: string
   stationId: string
-  slotNumber: number
+  slotNumber?: number
   campaignId?: string
 }
 
@@ -44,13 +44,22 @@ export async function startRentalCheckout(
     const pricing = await loadCampaignPricing(params.campaignId, station?.campaign_id ?? null)
     const depositAmount = Math.round(pricing.depositAmount * 100) || DEFAULT_PRICING.preAuthAmountCents
 
+    let targetSlot = params.slotNumber
+    if (!targetSlot) {
+      const availableSlot = await stationRepository.getAvailableSlot(params.stationId)
+      if (!availableSlot) {
+        return { success: false, error: 'No power banks available at this station' }
+      }
+      targetSlot = availableSlot.slot_number
+    }
+
     let createdSession: DbRentalSession
     let unlockToken: string
     try {
       const prepared = await prepareRentalStart({
         userId,
         stationId: params.stationId,
-        slotNumber: params.slotNumber,
+        slotNumber: targetSlot,
         campaignId: pricing.campaignId,
         depositAmount: pricing.depositAmount,
         hourlyRate: pricing.hourlyRate,
@@ -73,7 +82,7 @@ export async function startRentalCheckout(
       sessionId: sessionCode,
       userId,
       stationId: params.stationId,
-      slotNumber: params.slotNumber,
+      slotNumber: targetSlot,
       campaignId: params.campaignId,
       depositAmountCents: depositAmount,
       successUrl: `${baseUrl}/?session=${sessionCode}`,

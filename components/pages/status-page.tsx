@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
+import { getPwaDataLayer } from '@/lib/data';
 import { formatDuration, formatCurrency, calculateCharge, calculateRewardProgress } from '@/lib/session-store';
 import { formatTime } from '@/lib/utils';
 
@@ -21,7 +22,8 @@ interface StatusPageProps {
 }
 
 export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
-  const { activeSession, completedSession, completeRental, setCompletedSession } = useAppState();
+  const { activeSession, completedSession, completeRental, setCompletedSession, syncActiveSession, currentStation } = useAppState();
+  const rewardValue = activeSession?.rewardValue ?? completedSession?.rewardValue ?? currentStation?.rewardValue ?? 0;
   
   const [isReturning, setIsReturning] = useState(false);
   const [returnProgress, setReturnProgress] = useState(0);
@@ -30,47 +32,58 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulate refresh
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setIsRefreshing(false);
+    setError(null);
+    try {
+      await syncActiveSession();
+    } catch {
+      setError('Unable to refresh session. Check your connection.');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  // Handle return initiation
   const handleReturn = async () => {
     if (!activeSession) return;
 
     setIsReturning(true);
-    setReturnProgress(0);
+    setReturnProgress(5);
     setError(null);
 
-    // Simulate return progress
-    const interval = setInterval(() => {
-      setReturnProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 400);
+    const progressInterval = setInterval(() => {
+      setReturnProgress((prev) => Math.min(prev + 2, 90));
+    }, 3000);
 
-    // Wait for progress to complete
-    await new Promise(resolve => setTimeout(resolve, 4500));
-
-    // Complete the rental
     try {
+      const wait = await getPwaDataLayer().waitForSessionCompletion(activeSession.id, {
+        intervalMs: 3000,
+        maxAttempts: 100,
+      });
+
+      clearInterval(progressInterval);
+      setReturnProgress(95);
+
+      if (!wait.completed) {
+        setError(
+          wait.timedOut
+            ? 'Return not detected yet. Insert the power bank fully into any station slot, then try again.'
+            : 'Return could not be confirmed. Contact support if the issue persists.',
+        );
+        return;
+      }
+
       const result = await completeRental();
+      setReturnProgress(100);
       if (result.success) {
         setQualifiedForReward(result.qualifiedForReward);
         setReturnComplete(true);
       } else {
-        setError('Failed to complete return. Please try again.');
+        setError('Failed to finalize rental. Please contact support.');
       }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
+    } catch {
+      clearInterval(progressInterval);
+      setError('An error occurred while processing your return.');
     } finally {
       setIsReturning(false);
     }
@@ -114,6 +127,7 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
         <CompletedView
           session={completedSession}
           qualifiedForReward={qualifiedForReward}
+          rewardValue={rewardValue}
           onViewRewards={() => {
             handleDismissCompleted();
             onNavigate('rewards');
@@ -155,6 +169,7 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
             onRefresh={handleRefresh}
             onReturn={handleReturn}
             onSupport={() => onNavigate('support')}
+            rewardValue={activeSession.rewardValue}
           />
         )}
       </AnimatePresence>
@@ -233,6 +248,7 @@ function ActiveSessionView({
   onRefresh,
   onReturn,
   onSupport,
+  rewardValue,
 }: {
   session: {
     sessionCode: string;
@@ -253,6 +269,7 @@ function ActiveSessionView({
   onRefresh: () => void;
   onReturn: () => void;
   onSupport: () => void;
+  rewardValue: number;
 }) {
   const rewardProgress = calculateRewardProgress(session.elapsedMinutes, session.rewardThreshold);
   const isQualified = session.elapsedMinutes >= session.rewardThreshold;
@@ -341,7 +358,7 @@ function ActiveSessionView({
 
           {isQualified && (
             <p className="text-xs text-muted-foreground">
-              Return to claim your {formatCurrency(10)} voucher.
+              Return to claim your {formatCurrency(rewardValue)} voucher.
             </p>
           )}
         </motion.div>
@@ -467,9 +484,9 @@ function ReturningView({
         </motion.div>
 
         <div className="text-center mb-8">
-          <h1 className="text-lg font-medium text-foreground">Processing return</h1>
+          <h1 className="text-lg font-medium text-foreground">Waiting for return</h1>
           <p className="mt-2 text-muted-foreground">
-            Please wait while we verify your power bank has been returned to the station.
+            Insert your power bank fully into any available slot. We will detect the return automatically.
           </p>
         </div>
 
@@ -502,6 +519,7 @@ function ReturningView({
 function CompletedView({
   session,
   qualifiedForReward,
+  rewardValue,
   onViewRewards,
   onStartNew,
 }: {
@@ -515,6 +533,7 @@ function CompletedView({
     startTime?: Date;
   };
   qualifiedForReward: boolean;
+  rewardValue: number;
   onViewRewards: () => void;
   onStartNew: () => void;
 }) {
@@ -608,7 +627,7 @@ function CompletedView({
               </div>
               <div>
                 <p className="text-xs text-primary-foreground/80 uppercase tracking-wide">Reward Unlocked</p>
-                <p className="font-bold text-lg">{formatCurrency(10)} Merch Voucher</p>
+                <p className="font-bold text-lg">{formatCurrency(rewardValue)} Merch Voucher</p>
               </div>
             </div>
             <p className="text-sm text-primary-foreground/80">

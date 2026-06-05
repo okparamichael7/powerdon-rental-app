@@ -10,7 +10,8 @@
     "test:wscharge": "npx tsx --test lib/wscharge/protocol.test.ts lib/wscharge/validation.test.ts",
     "test:security": "npx tsx --test lib/security/session-access.test.ts",
     "test:admin": "npx tsx --test lib/admin/date-range.test.ts",
-    "test": "npm run test:wscharge && npm run test:security && npm run test:admin",
+    "test:pwa": "npx tsx --test lib/pwa/pricing-display.test.ts lib/pwa/charge-estimate-client.test.ts",
+    "test": "npm run test:wscharge && npm run test:security && npm run test:admin && npm run test:pwa",
     "tcp-proxy": "npx tsx server/tcp-proxy.ts"
   },
   "dependencies": {

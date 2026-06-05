@@ -48,6 +48,7 @@ export async function GET(
             depositAmount: campaign ? Number(campaign.deposit_amount) : 25,
             rewardThresholdMinutes: campaign?.reward_threshold_minutes ?? 60,
             rewardDescription: campaign?.reward_description ?? '',
+            rewardValue: campaign ? Number(campaign.reward_value) : 0,
             lastHeartbeat: dbStation.last_heartbeat,
             inventory: dbStation.slots?.map((slot) => ({
               slotNumber: slot.slot_number,

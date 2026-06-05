@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import {
@@ -18,6 +19,7 @@ import { RentalCheckout } from '@/components/stripe/checkout';
 import { isStripeCheckoutEnabled, isStripeMisconfigured } from '@/lib/services/config';
 import { getPwaDataLayer } from '@/lib/data';
 import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token';
+import { formatDailyCapLabel, formatLadderRateLabel, LADDER_PRICING } from '@/lib/pwa/pricing-display';
 
 type RentStep = 'landing' | 'active_warning' | 'info' | 'payment' | 'unlocking' | 'success' | 'error';
 type ErrorType = 'station_unavailable' | 'duplicate_session' | 'payment_failed' | 'network' | 'unlock_failed' | 'general';
@@ -38,7 +40,7 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
   station_unavailable: {
     title: 'Station Unavailable',
     description: 'This charging station is currently offline or under maintenance. Please try a nearby station.',
-    action: 'Find Nearby',
+    action: 'Try Again',
     canRetry: false,
   },
   duplicate_session: {
@@ -74,7 +76,8 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 };
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
-  const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation } = useAppState();
+  const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation } =
+    useAppState();
 
   const [step, setStep] = useState<RentStep>('landing');
   const [isLoading, setIsLoading] = useState(true);
@@ -88,8 +91,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   const [marketingConsent, setMarketingConsent] = useState(user?.marketingConsent || false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Payment state
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'apple_pay' | 'google_pay'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Unlocking state
@@ -223,12 +224,16 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         });
         if (!unlockRes.ok) {
           const unlockBody = await unlockRes.json().catch(() => ({}));
-          console.warn('[Rent] Unlock after Stripe payment:', unlockBody.error || unlockRes.status);
+          setErrorMessage(unlockBody.error || 'Unlock failed after payment');
+          setError('unlock_failed');
+          setStep('error');
+          return;
         }
       }
 
       setUser({ email, name: name || undefined, termsAccepted, marketingConsent });
       const session = getPwaDataLayer().sessionFromCheckoutApi(body.session, currentStation);
+      setAssignedSlot(session.slotNumber);
       setActiveSession(session);
       setUnlockProgress(100);
       setStep('success');
@@ -284,7 +289,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
     setUnlockProgress(100);
 
     if (result.success) {
-      setAssignedSlot(null);
       setStep('success');
     } else {
       setErrorMessage(result.error || 'Failed to start rental');
@@ -435,7 +439,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
                   email={email}
                   name={name || undefined}
                   stationId={currentStation.id}
-                  slotNumber={1}
                   campaignId={currentStation.campaignId}
                   depositAmount={Math.round(currentStation.depositAmount * 100)}
                   onSuccess={handleStripeCheckoutSuccess}
@@ -452,8 +455,6 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             <PaymentStep
               key="payment"
               station={currentStation}
-              paymentMethod={paymentMethod}
-              setPaymentMethod={setPaymentMethod}
               isProcessing={isProcessing}
               onBack={() => setStep('info')}
               onSubmit={handlePayment}
@@ -465,16 +466,18 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           <UnlockingStep
             key="unlocking"
             station={currentStation}
-            assignedSlot={assignedSlot || 4}
+            assignedSlot={activeSession?.slotNumber ?? assignedSlot ?? 1}
             progress={unlockProgress}
           />
         )}
 
-        {step === 'success' && currentStation && (
+        {step === 'success' && currentStation && activeSession && (
           <SuccessStep
             key="success"
             station={currentStation}
-            assignedSlot={assignedSlot || 4}
+            sessionCode={activeSession.sessionCode}
+            assignedSlot={activeSession.slotNumber}
+            startTime={activeSession.startTime}
             onContinue={() => onNavigate('status')}
           />
         )}
@@ -551,7 +554,7 @@ function LandingStep({
   station,
   onStart
 }: {
-  station: { id: string; campaignName: string; hourlyRate: number; depositAmount: number; rewardDescription: string; availableSlots: number };
+  station: { id: string; campaignName: string; hourlyRate: number; dailyCap: number; depositAmount: number; rewardDescription: string; availableSlots: number };
   onStart: () => void;
 }) {
   return (
@@ -598,10 +601,9 @@ function LandingStep({
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Rate</p>
                 <p className="text-xl font-medium text-foreground mt-1">
-                  €1.00
-                  <span className="text-sm font-normal text-muted-foreground">/15min</span>
+                  {formatLadderRateLabel()}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">First 5 min free</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">First {LADDER_PRICING.freeMinutes} min free</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Deposit</p>
@@ -610,7 +612,7 @@ function LandingStep({
               </div>
             </div>
             <div className="text-xs text-muted-foreground border-t border-border/50 pt-3">
-              Max €27.00/day • Tax included
+              Max {formatDailyCapLabel(station.dailyCap)}/day • Tax included
             </div>
           </motion.div>
 
@@ -721,8 +723,8 @@ function InfoStep({
         <div className="flex items-center justify-between py-4 border-b border-border/50">
           <div>
             <p className="text-xs text-muted-foreground">Rate</p>
-            <p className="text-sm font-medium text-foreground">€1.00/15min</p>
-            <p className="text-[10px] text-muted-foreground">First 5 min free</p>
+            <p className="text-sm font-medium text-foreground">{formatLadderRateLabel()}</p>
+            <p className="text-[10px] text-muted-foreground">First {LADDER_PRICING.freeMinutes} min free</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Deposit</p>
@@ -774,9 +776,9 @@ function InfoStep({
               />
               <label htmlFor="terms" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
                 I agree to the{' '}
-                <a href="#" className="text-foreground underline">Terms</a>
+                <Link href="/terms" className="text-foreground underline">Terms</Link>
                 {' '}and{' '}
-                <a href="#" className="text-foreground underline">Privacy Policy</a>
+                <Link href="/privacy" className="text-foreground underline">Privacy Policy</Link>
               </label>
             </div>
             {formErrors.terms && (
@@ -811,18 +813,14 @@ function InfoStep({
   );
 }
 
-// Payment Step Component
+// Payment Step Component (deposit-only mode — server authorizes via /api/rentals/start)
 function PaymentStep({
   station,
-  paymentMethod,
-  setPaymentMethod,
   isProcessing,
   onBack,
   onSubmit,
 }: {
-  station: { depositAmount: number };
-  paymentMethod: 'card' | 'apple_pay' | 'google_pay';
-  setPaymentMethod: (v: 'card' | 'apple_pay' | 'google_pay') => void;
+  station: { depositAmount: number; dailyCap: number };
   isProcessing: boolean;
   onBack: () => void;
   onSubmit: () => void;
@@ -838,92 +836,34 @@ function PaymentStep({
 
       <main className="flex-1 px-5 py-6 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Authorize payment</h1>
+          <h1 className="text-xl font-semibold text-foreground">Authorize deposit</h1>
           <p className="mt-1 text-muted-foreground">
-            A hold will be placed on your card. You&apos;ll only be charged for actual usage.
+            Your rental starts when you confirm. Usage is billed from the deposit hold on return.
           </p>
         </div>
 
         <div className="bg-card rounded-lg border border-border p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Deposit</span>
+            <span className="text-muted-foreground">Deposit hold</span>
             <span className="font-bold text-foreground">{formatCurrency(station.depositAmount)}</span>
           </div>
           <div className="space-y-2 text-xs text-muted-foreground border-t border-border pt-4">
             <div className="flex justify-between">
               <span>Rate</span>
-              <span>€1.00/15min (first 5 min free)</span>
+              <span>{formatLadderRateLabel()} (first {LADDER_PRICING.freeMinutes} min free)</span>
             </div>
             <div className="flex justify-between">
               <span>Daily cap</span>
-              <span>€27.00</span>
+              <span>{formatDailyCapLabel(station.dailyCap)}</span>
             </div>
             <div className="flex justify-between">
               <span>Max rental</span>
-              <span>24 hours</span>
+              <span>{LADDER_PRICING.maxRentalHours} hours</span>
             </div>
             <p className="pt-2">
-              This amount will be held and you&apos;ll only be charged for actual usage. Tax included.
+              You are only charged for actual usage. Unused deposit is refunded after return. Tax included.
             </p>
           </div>
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-foreground uppercase tracking-wide">Payment Method</h2>
-
-          <button
-            onClick={() => setPaymentMethod('apple_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white text-sm font-semibold">
-              Pay
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Apple Pay</p>
-              <p className="text-sm text-muted-foreground">Fast and secure</p>
-            </div>
-            {paymentMethod === 'apple_pay' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setPaymentMethod('google_pay')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-white border border-border rounded-lg flex items-center justify-center text-sm font-semibold">
-              G
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Google Pay</p>
-              <p className="text-sm text-muted-foreground">Fast checkout</p>
-            </div>
-            {paymentMethod === 'google_pay' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setPaymentMethod('card')}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors ${paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-          >
-            <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-              <svg width="20" height="16" viewBox="0 0 20 16" fill="none" className="text-muted-foreground">
-                <rect x="1" y="1" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
-                <path d="M1 5H19" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-foreground">Credit or Debit Card</p>
-              <p className="text-sm text-muted-foreground">Visa, Mastercard, Amex</p>
-            </div>
-            {paymentMethod === 'card' && (
-              <CheckCircleIcon size={20} className="ml-auto text-primary" />
-            )}
-          </button>
         </div>
 
         <div className="pt-4">
@@ -946,7 +886,7 @@ function PaymentStep({
           </Button>
           <p className="text-center text-xs text-muted-foreground mt-3">
             <ShieldCheckIcon size={12} className="inline mr-1" />
-            Secure payment powered by Stripe
+            Deposit authorization processed securely on our servers
           </p>
         </div>
       </main>
@@ -1018,16 +958,17 @@ function UnlockingStep({
 // Success Step Component
 function SuccessStep({
   station,
+  sessionCode,
   assignedSlot,
+  startTime,
   onContinue,
 }: {
-  station: { id: string; campaignName: string };
+  station: { id: string; campaignName: string; rewardDescription: string; rewardThreshold: number };
+  sessionCode: string;
   assignedSlot: number;
+  startTime: Date;
   onContinue: () => void;
 }) {
-  const sessionCode = `VR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-  const startTime = new Date();
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -1087,7 +1028,7 @@ function SuccessStep({
           <div className="flex items-start gap-3">
             <GiftIcon size={20} className="text-primary flex-shrink-0 mt-0.5" />
             <p className="text-sm text-foreground">
-              <span className="font-semibold">Remember:</span> Rent for at least 60 minutes to earn your free merch voucher!
+              <span className="font-semibold">Remember:</span> {station.rewardDescription || `Rent for at least ${station.rewardThreshold ?? 60} minutes to earn your reward.`}
             </p>
           </div>
         </div>

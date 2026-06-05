@@ -19,7 +19,7 @@ export function MobileHeader({
   subtitle,
   showBack = false,
   onBack,
-  showHelp = true,
+  showHelp = false,
   onHelp,
   showSecure = false,
   className,
