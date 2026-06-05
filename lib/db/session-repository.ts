@@ -2,6 +2,7 @@
 import { createServiceClient } from '@/lib/supabase/admin';
 import {
   isSchemaGapError,
+  missingColumnFromError,
   normalizeRewardRow,
   normalizeRewardRows,
   SESSION_SELECT_FULL,
@@ -35,8 +36,19 @@ function omitKeys(
   return next;
 }
 
+function generateSessionCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unknown>[] {
+  const sessionCode = generateSessionCode();
   const full: Record<string, unknown> = {
+    session_code: sessionCode,
     user_id: data.userId,
     campaign_id: data.campaignId,
     pickup_station_id: data.pickupStationId,
@@ -80,6 +92,7 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
       'campaign_id',
     ]),
     {
+      session_code: sessionCode,
       user_id: data.userId,
       pickup_station_id: data.pickupStationId,
       pickup_slot_number: data.pickupSlotNumber,
@@ -87,14 +100,19 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
       deposit_amount: data.depositAmount,
       hourly_rate: data.hourlyRate,
       payment_status: 'pending',
-      metadata: {},
     },
     {
+      session_code: sessionCode,
       user_id: data.userId,
       status: 'pending',
       deposit_amount: data.depositAmount,
       hourly_rate: data.hourlyRate,
-      payment_status: 'pending',
+    },
+    {
+      session_code: sessionCode,
+      user_id: data.userId,
+      deposit_amount: data.depositAmount,
+      hourly_rate: data.hourlyRate,
     },
   ];
 }
@@ -288,24 +306,44 @@ class SessionRepository {
   async create(data: CreateSessionData): Promise<DbRentalSession> {
     const supabase = await createServiceClient();
 
-    const selectAttempts = [
-      'id, session_code, user_id, status, payment_status, deposit_amount, hourly_rate, pickup_station_id, pickup_slot_number, unlock_token, created_at',
-      'id, session_code, user_id, status, payment_status, deposit_amount, hourly_rate, created_at',
-      'id, session_code, user_id, status, created_at',
-    ];
-
     let lastError: { code?: string; message?: string } | null = null;
-    for (const payload of buildSessionInsertPayloads(data)) {
-      for (const select of selectAttempts) {
+    for (const template of buildSessionInsertPayloads(data)) {
+      let payload: Record<string, unknown> = { ...template };
+      let selectCols = ['id', 'session_code', 'user_id', 'status', 'created_at'];
+
+      for (let attempt = 0; attempt < 24; attempt++) {
+        const select = selectCols.join(', ');
         const { data: session, error } = await supabase
           .from('rental_sessions')
           .insert(payload)
           .select(select)
           .single();
 
-        if (!error) return session as DbRentalSession;
+        if (!error) {
+          const row = session as DbRentalSession;
+          if (!row.session_code && row.id) {
+            const { data: codeRow } = await supabase
+              .from('rental_sessions')
+              .select('session_code')
+              .eq('id', row.id)
+              .single();
+            if (codeRow?.session_code) row.session_code = codeRow.session_code;
+          }
+          return row;
+        }
+
         if (!isSchemaGapError(error)) throw error;
         lastError = error;
+
+        const missing = missingColumnFromError(error.message ?? '');
+        if (!missing) break;
+
+        const inPayload = missing in payload;
+        const inSelect = selectCols.includes(missing);
+        if (!inPayload && !inSelect) break;
+
+        if (inPayload) delete payload[missing];
+        if (inSelect) selectCols = selectCols.filter((c) => c !== missing);
       }
     }
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isSchemaGapError, normalizeRewardRow } from './schema-compat'
+import { isSchemaGapError, missingColumnFromError, normalizeRewardRow } from './schema-compat'
 
 describe('isSchemaGapError', () => {
   it('detects missing column errors', () => {
@@ -43,6 +43,17 @@ describe('isSchemaGapError', () => {
   it('returns false for unrelated errors', () => {
     assert.equal(isSchemaGapError({ code: '23505', message: 'duplicate key' }), false)
     assert.equal(isSchemaGapError(null), false)
+  })
+})
+
+describe('missingColumnFromError', () => {
+  it('parses PostgREST schema cache messages', () => {
+    assert.equal(
+      missingColumnFromError(
+        "Could not find the 'unlock_token' column of 'rental_sessions' in the schema cache",
+      ),
+      'unlock_token',
+    )
   })
 })
 

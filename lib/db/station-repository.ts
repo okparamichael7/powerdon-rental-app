@@ -1,5 +1,6 @@
 // Station Repository - Database operations for stations and hardware
 import { createServiceClient } from '@/lib/supabase/admin';
+import { isSchemaGapError } from './schema-compat';
 import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, Json, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
 
 export interface StationWithSlots extends DbStation {
@@ -386,22 +387,31 @@ class StationRepository {
 
   async reserveSlot(stationId: string, slotNumber: number): Promise<boolean> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('station_slots')
-      .update({ status: 'reserved', last_status_change: new Date().toISOString() })
-      .eq('station_id', stationId)
-      .eq('slot_number', slotNumber)
-      .eq('status', 'occupied') // Only reserve if currently occupied
-      .select()
-      .single();
 
-    if (error) {
+    const updates: Record<string, unknown>[] = [
+      { status: 'reserved', last_status_change: new Date().toISOString() },
+      { status: 'reserved' },
+    ];
+
+    let lastError: { code?: string; message?: string } | null = null;
+    for (const patch of updates) {
+      const { data, error } = await supabase
+        .from('station_slots')
+        .update(patch)
+        .eq('station_id', stationId)
+        .eq('slot_number', slotNumber)
+        .eq('status', 'occupied')
+        .select()
+        .single();
+
+      if (!error) return !!data;
       if (error.code === 'PGRST116') return false;
-      throw error;
+      if (!isSchemaGapError(error)) throw error;
+      lastError = error;
     }
 
-    return !!data;
+    if (lastError) throw lastError;
+    return false;
   }
 
   async releaseSlot(stationId: string, slotNumber: number): Promise<void> {

@@ -1,5 +1,16 @@
 import type { DbReward } from './types'
 
+/** Parse missing column name from PostgREST / Postgres schema errors. */
+export function missingColumnFromError(message: string): string | null {
+  const cache = message.match(/Could not find the '([^']+)' column/)
+  if (cache?.[1]) return cache[1]
+  const pg = message.match(/column "([^"]+)" of relation/)
+  if (pg?.[1]) return pg[1]
+  const pg2 = message.match(/column "([^"]+)" does not exist/)
+  if (pg2?.[1]) return pg2[1]
+  return null
+}
+
 /** Detect PostgREST / Postgres errors from an incomplete rental_sessions schema. */
 export function isSchemaGapError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false
