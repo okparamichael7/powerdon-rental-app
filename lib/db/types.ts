@@ -42,9 +42,12 @@ export interface DbCampaign {
 export interface DbStation {
   id: string;
   external_id: string | null;
+  device_id?: string | null;
   iccid: string | null;
   name: string;
   location: string | null;
+  description: string | null;
+  hardware_type: string | null;
   latitude: number | null;
   longitude: number | null;
   status: StationStatus;
@@ -59,6 +62,12 @@ export interface DbStation {
   connection_ip: string | null;
   connection_port: number | null;
   campaign_id: string | null;
+  qr_reference: string | null;
+  external_service_ref: string | null;
+  notes: string | null;
+  archived_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
   settings: Json;
   metadata: Json;
   is_enabled: boolean;
@@ -70,6 +79,7 @@ export interface DbStationSlot {
   id: string;
   station_id: string;
   slot_number: number;
+  label: string | null;
   status: SlotStatus;
   power_bank_id: string | null;
   battery_level: number | null;
@@ -78,6 +88,19 @@ export interface DbStationSlot {
   error_code: string | null;
   error_message: string | null;
   metadata: Json;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbStationMaintenanceRecord {
+  id: string;
+  station_id: string;
+  slot_number: number | null;
+  status: string;
+  title: string;
+  description: string | null;
+  reported_by: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
 }

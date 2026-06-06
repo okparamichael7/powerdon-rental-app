@@ -1,7 +1,7 @@
 import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { apiRequest, isServerReachable, withApiKey } from '../../helpers/api-client'
-import { buildGrantStaffPayload } from '../../fixtures/factories'
+import { buildCreateStaffPayload } from '../../fixtures/factories'
 
 describe('Admin RBAC integration', () => {
   let serverUp = false
@@ -10,11 +10,11 @@ describe('Admin RBAC integration', () => {
     serverUp = await isServerReachable()
   })
 
-  it('operator-only endpoints reject unauthenticated POST staff grant', async (t) => {
+  it('rejects unauthenticated POST staff create', async (t) => {
     if (!serverUp) return t.skip('Server not reachable')
     const { status } = await apiRequest('/api/admin/staff', {
       method: 'POST',
-      body: JSON.stringify(buildGrantStaffPayload()),
+      body: JSON.stringify(buildCreateStaffPayload()),
     })
     assert.equal(status, 401)
   })

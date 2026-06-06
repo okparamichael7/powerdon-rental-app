@@ -33,9 +33,10 @@ import {
 const NAV_ITEMS = [
   { name: 'Overview', href: '/admin', icon: LayoutDashboard, group: 'General' },
   { name: 'Sessions', href: '/admin/sessions', icon: Zap, group: 'Operations' },
-  { name: 'Stations', href: '/admin/stations', icon: Radio, group: 'Operations' },
-  { name: 'Hardware', href: '/admin/hardware', icon: Cpu, group: 'Operations' },
-  { name: 'Ops', href: '/admin/ops', icon: Activity, group: 'Operations' },
+  { name: 'Hardware', href: '/admin/stations', icon: Radio, group: 'Operations' },
+  { name: 'Live Console', href: '/admin/hardware', icon: Cpu, group: 'Operations' },
+  { name: 'Operations Hub', href: '/admin/operations-hub', icon: Activity, group: 'Operations' },
+  { name: 'System Health', href: '/admin/ops', icon: Activity, group: 'Operations' },
   { name: 'Customers', href: '/admin/users', icon: Users, group: 'Customers' },
   { name: 'Leads', href: '/admin/leads', icon: UserCircle, group: 'Customers' },
   { name: 'Support', href: '/admin/support', icon: LifeBuoy, group: 'Customers' },

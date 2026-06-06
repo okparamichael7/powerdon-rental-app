@@ -46,5 +46,6 @@ The `users` table is for renters. Linking staff there would mix billing/analytic
 
 ## Related
 
+- [STAFF_INVITE_SETUP.md](./STAFF_INVITE_SETUP.md) — Supabase URL/SMTP for invite-by-email
 - [LOCAL_SETUP_AND_TESTING.md](./LOCAL_SETUP_AND_TESTING.md)
 - Migration: `supabase/migrations/007_staff_roles.sql`

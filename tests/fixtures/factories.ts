@@ -94,3 +94,24 @@ export function buildGrantStaffPayload(overrides: Record<string, unknown> = {}) 
     ...overrides,
   }
 }
+
+export function buildCreateStaffPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    email: 'newstaff@powerdon.test',
+    provisionMethod: 'password',
+    password: 'SecurePass123',
+    role: 'operator',
+    notes: 'Provisioned from dashboard',
+    ...overrides,
+  }
+}
+
+export function buildInviteStaffPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    email: 'invited@powerdon.test',
+    provisionMethod: 'invite',
+    role: 'operator',
+    notes: 'Invited from dashboard',
+    ...overrides,
+  }
+}

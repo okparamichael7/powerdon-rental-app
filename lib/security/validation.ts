@@ -11,6 +11,14 @@
 import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/observability/logger';
+import { MAX_STATION_SLOTS, MIN_STATION_SLOTS } from '@/lib/hardware/constants';
+import {
+  STAFF_PASSWORD_MAX_LENGTH,
+  STAFF_PASSWORD_MIN_LENGTH,
+  validateStaffPassword,
+} from '@/lib/security/staff-password';
+
+const slotNumberSchema = z.number().int().min(MIN_STATION_SLOTS).max(MAX_STATION_SLOTS);
 
 /**
  * Common validation schemas
@@ -22,8 +30,8 @@ export const schemas = {
   // Station device ID (alphanumeric, 8-32 chars)
   deviceId: z.string().regex(/^[A-Za-z0-9]{8,32}$/, 'Invalid device ID format'),
   
-  // Slot number (1-12)
-  slotNumber: z.number().int().min(1).max(12),
+  // Slot number (1–MAX_STATION_SLOTS)
+  slotNumber: slotNumberSchema,
   
   // Email
   email: z.string().email().max(255),
@@ -61,7 +69,7 @@ export const schemas = {
     phone: z.string().max(30).optional(),
     marketingConsent: z.boolean().optional(),
     campaignId: z.string().uuid().optional(),
-    slotNumber: z.number().int().min(1).max(12).optional(),
+    slotNumber: slotNumberSchema.optional(),
     paymentMethodId: z.string().max(255).optional(),
   }),
 
@@ -70,6 +78,41 @@ export const schemas = {
     role: z.enum(['admin', 'operator']),
     notes: z.string().max(500).optional(),
   }),
+
+  createStaffMember: z
+    .object({
+      email: z.string().email().max(255),
+      provisionMethod: z.enum(['password', 'invite']).default('password'),
+      password: z.string().max(STAFF_PASSWORD_MAX_LENGTH).optional(),
+      role: z.enum(['admin', 'operator']),
+      notes: z.string().max(500).optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.provisionMethod === 'password') {
+        if (!data.password || data.password.length < STAFF_PASSWORD_MIN_LENGTH) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Password must be at least ${STAFF_PASSWORD_MIN_LENGTH} characters`,
+            path: ['password'],
+          })
+          return
+        }
+        const passwordError = validateStaffPassword(data.password)
+        if (passwordError) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: passwordError,
+            path: ['password'],
+          })
+        }
+      } else if (data.password) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Password must not be set when using invite-by-email',
+          path: ['password'],
+        })
+      }
+    }),
 
   supportTicket: z.object({
     email: z.string().email().max(255),
@@ -92,7 +135,7 @@ export const schemas = {
   // Station command request
   stationCommand: z.object({
     command: z.enum(['eject', 'reboot', 'settings', 'inventory']),
-    slotNumber: z.number().int().min(1).max(12).optional(),
+    slotNumber: slotNumberSchema.optional(),
     settings: z.record(z.unknown()).optional(),
   }),
 
@@ -105,12 +148,12 @@ export const schemas = {
       'reboot',
       'query_info',
     ]),
-    slotNumber: z.number().int().min(1).max(12).optional(),
+    slotNumber: slotNumberSchema.optional(),
   }),
 
   unlockRequest: z.object({
     sessionId: z.string().min(1).max(64),
-    slotNumber: z.number().int().min(1).max(12).optional(),
+    slotNumber: slotNumberSchema.optional(),
     unlockToken: z.string().min(8).max(128).optional(),
   }),
 
@@ -177,6 +220,52 @@ export const schemas = {
       location: z.string().max(255).optional(),
     })
     .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  createStation: z.object({
+    name: z.string().min(1).max(120),
+    externalId: z.string().min(4).max(100).regex(/^[A-Za-z0-9_-]+$/, 'Invalid hardware identifier'),
+    hardwareType: z.string().min(1).max(100).optional(),
+    description: z.string().max(2000).optional(),
+    location: z.string().max(500).optional(),
+    totalSlots: z.number().int().min(MIN_STATION_SLOTS).max(MAX_STATION_SLOTS),
+    status: z.enum(['online', 'offline', 'maintenance', 'low_battery', 'error']).optional(),
+    qrReference: z.string().max(500).optional(),
+    externalServiceRef: z.string().max(500).optional(),
+    notes: z.string().max(2000).optional(),
+    campaignId: z.string().uuid().optional(),
+    isEnabled: z.boolean().optional(),
+  }),
+
+  updateStationAdmin: z
+    .object({
+      name: z.string().min(1).max(120).optional(),
+      externalId: z.string().min(4).max(100).regex(/^[A-Za-z0-9_-]+$/).optional(),
+      hardwareType: z.string().min(1).max(100).optional(),
+      description: z.string().max(2000).optional(),
+      location: z.string().max(500).optional(),
+      totalSlots: z.number().int().min(MIN_STATION_SLOTS).max(MAX_STATION_SLOTS).optional(),
+      status: z.enum(['online', 'offline', 'maintenance', 'low_battery', 'error']).optional(),
+      qrReference: z.string().max(500).optional(),
+      externalServiceRef: z.string().max(500).optional(),
+      notes: z.string().max(2000).optional(),
+      campaignId: z.string().uuid().nullable().optional(),
+      isEnabled: z.boolean().optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  updateStationSlot: z
+    .object({
+      label: z.string().max(100).optional(),
+      status: z.enum(['empty', 'occupied', 'reserved', 'error', 'disabled']).optional(),
+      errorMessage: z.string().max(500).optional(),
+    })
+    .refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' }),
+
+  createMaintenanceRecord: z.object({
+    title: z.string().min(1).max(255),
+    description: z.string().max(2000).optional(),
+    slotNumber: slotNumberSchema.optional(),
+  }),
 };
 
 /**

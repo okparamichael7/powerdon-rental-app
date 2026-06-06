@@ -73,6 +73,7 @@ interface HardwareStation {
   signalStrength: number
   iccid: string | null
   firmwareVersion: string | null
+  totalSlots: number
   availableSlots: number
   inventory: {
     slotNumber: number
@@ -412,7 +413,9 @@ export default function HardwarePage() {
 
                   {/* Inventory slots */}
                   <div className="grid grid-cols-4 gap-1.5">
-                    {Array.from({ length: 8 }).map((_, i) => {
+                    {Array.from({
+                      length: station.totalSlots || station.inventory.length || 12,
+                    }).map((_, i) => {
                       const slot = station.inventory.find(s => s.slotNumber === i + 1)
                       return (
                         <button

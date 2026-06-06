@@ -28,6 +28,7 @@ import {
   Cpu,
   CreditCard,
   Activity,
+  Link2,
   UserCircle,
   Shield,
   LogOut,
@@ -58,9 +59,10 @@ const navigationGroups: NavGroup[] = [
     label: 'Operations',
     items: [
       { name: 'Sessions', href: '/admin/sessions', icon: Zap },
-      { name: 'Stations', href: '/admin/stations', icon: Radio },
-      { name: 'Hardware', href: '/admin/hardware', icon: Cpu },
-      { name: 'Ops', href: '/admin/ops', icon: Activity },
+      { name: 'Hardware', href: '/admin/stations', icon: Radio },
+      { name: 'Live Console', href: '/admin/hardware', icon: Cpu },
+      { name: 'Operations Hub', href: '/admin/operations-hub', icon: Link2 },
+      { name: 'System Health', href: '/admin/ops', icon: Activity },
     ],
   },
   {

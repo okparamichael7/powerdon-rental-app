@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimiters, RATE_LIMITS } from '@/lib/security/rate-limit'
 import { authenticate, type AuthContext } from '@/lib/security/auth'
+import {
+  hasPermission,
+  permissionDeniedMessage,
+  type HardwarePermission,
+} from '@/lib/security/permissions'
 
 export type RateLimitKey = keyof typeof rateLimiters
 
@@ -105,4 +110,25 @@ export async function requireServiceOrAdmin(request: NextRequest): Promise<
 
 export function parseSearchParams(request: NextRequest) {
   return request.nextUrl.searchParams
+}
+
+export async function requireHardwarePermission(
+  request: NextRequest,
+  permission: HardwarePermission,
+): Promise<
+  | { ok: true; auth: AuthContext }
+  | { ok: false; response: NextResponse }
+> {
+  const auth = await requireAdminSession(request)
+  if (!auth.ok) return auth
+  if (!hasPermission(auth.auth, permission)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: permissionDeniedMessage(permission), code: 'FORBIDDEN' },
+        { status: 403 },
+      ),
+    }
+  }
+  return auth
 }

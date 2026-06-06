@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminOnly, requireAdminSession } from '@/lib/api/route-helpers'
+import { requireAdminOnly } from '@/lib/api/route-helpers'
 import { staffRoleRepository } from '@/lib/db'
 import { staffAuditRepository } from '@/lib/db/staff-audit-repository'
-import { syncAuthStaffMetadata } from '@/lib/security/auth-metadata-sync'
+import {
+  staffProvisioningService,
+  StaffProvisioningError,
+} from '@/lib/admin/staff-provisioning-service'
 import { validateBody, schemas } from '@/lib/security/validation'
 
 export async function GET(request: NextRequest) {
@@ -22,6 +25,7 @@ export async function GET(request: NextRequest) {
       targetAuthUserId: a.target_auth_user_id,
       actorAuthUserId: a.actor_auth_user_id,
       createdAt: a.created_at,
+      details: a.details,
     })),
     data: staff.map((row) => ({
       id: row.id,
@@ -39,49 +43,57 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdminOnly(request)
   if (!auth.ok) return auth.response
 
-  const validated = await validateBody(request, schemas.grantStaffRole)
+  const validated = await validateBody(request, schemas.createStaffMember)
   if (!validated.success) return validated.error
 
-  const authUser = await staffRoleRepository.findAuthUserByEmail(validated.data.email)
-  if (!authUser) {
+  try {
+    const result = await staffProvisioningService.provision(auth.auth.userId, {
+      email: validated.data.email,
+      provisionMethod: validated.data.provisionMethod,
+      password: validated.data.password,
+      role: validated.data.role,
+      notes: validated.data.notes,
+    })
+
     return NextResponse.json(
       {
-        success: false,
-        error: 'No Supabase Auth user with this email. Create the user under Authentication → Users first.',
+        success: true,
+        data: {
+          id: result.id,
+          authUserId: result.authUserId,
+          email: result.email,
+          role: result.role,
+          grantedAt: result.grantedAt,
+          provisionMethod: result.provisionMethod,
+          authUserCreated: result.authUserCreated,
+          passwordUpdated: result.passwordUpdated,
+          inviteSent: result.inviteSent,
+          existingAccountLinked: result.existingAccountLinked,
+        },
       },
-      { status: 404 },
+      { status: 201 },
+    )
+  } catch (error) {
+    if (error instanceof StaffProvisioningError) {
+      const status =
+        error.code === 'ALREADY_STAFF'
+          ? 409
+          : error.code === 'AUTH_CREATE_FAILED' ||
+              error.code === 'PASSWORD_UPDATE_FAILED' ||
+              error.code === 'INVITE_FAILED'
+            ? 502
+            : error.code === 'INVITE_CONFIG'
+              ? 503
+              : 400
+      return NextResponse.json(
+        { success: false, error: error.message, code: error.code },
+        { status },
+      )
+    }
+    console.error('[Admin] staff provision:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to provision staff member' },
+      { status: 500 },
     )
   }
-
-  const row = await staffRoleRepository.grant({
-    authUserId: authUser.id,
-    email: authUser.email,
-    role: validated.data.role,
-    grantedBy: auth.auth.userId,
-    notes: validated.data.notes,
-  })
-
-  await staffAuditRepository.log({
-    actorAuthUserId: auth.auth.userId,
-    targetAuthUserId: authUser.id,
-    action: 'grant',
-    role: validated.data.role,
-    details: { email: authUser.email },
-  })
-
-  await syncAuthStaffMetadata(authUser.id)
-
-  return NextResponse.json(
-    {
-      success: true,
-      data: {
-        id: row.id,
-        authUserId: row.auth_user_id,
-        email: row.email,
-        role: row.role,
-        grantedAt: row.granted_at,
-      },
-    },
-    { status: 201 },
-  )
 }

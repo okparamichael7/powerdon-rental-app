@@ -1,7 +1,13 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { schemas, sanitizeString, sanitizeObject } from '@/lib/security/validation'
-import { buildRentalStartPayload, buildSupportTicketPayload, buildGrantStaffPayload } from '../../fixtures/factories'
+import {
+  buildRentalStartPayload,
+  buildSupportTicketPayload,
+  buildGrantStaffPayload,
+  buildCreateStaffPayload,
+  buildInviteStaffPayload,
+} from '../../fixtures/factories'
 import { TEST_STATION_ID } from '../../helpers/env'
 
 describe('rentalStartPublic schema', () => {
@@ -33,7 +39,7 @@ describe('rentalStartPublic schema', () => {
 
   it('rejects out-of-range slot numbers', () => {
     const result = schemas.rentalStartPublic.safeParse(
-      buildRentalStartPayload({ slotNumber: 99 }),
+      buildRentalStartPayload({ slotNumber: 101 }),
     )
     assert.equal(result.success, false)
   })
@@ -82,6 +88,39 @@ describe('grantStaffRole schema', () => {
   it('rejects invalid role (privilege escalation attempt)', () => {
     const result = schemas.grantStaffRole.safeParse(
       buildGrantStaffPayload({ role: 'superadmin' }),
+    )
+    assert.equal(result.success, false)
+  })
+})
+
+describe('createStaffMember schema', () => {
+  it('accepts valid staff creation payload', () => {
+    const result = schemas.createStaffMember.safeParse(buildCreateStaffPayload())
+    assert.equal(result.success, true)
+  })
+
+  it('rejects weak passwords', () => {
+    const result = schemas.createStaffMember.safeParse(
+      buildCreateStaffPayload({ password: 'weak' }),
+    )
+    assert.equal(result.success, false)
+  })
+
+  it('rejects invalid email', () => {
+    const result = schemas.createStaffMember.safeParse(
+      buildCreateStaffPayload({ email: 'not-an-email' }),
+    )
+    assert.equal(result.success, false)
+  })
+
+  it('accepts invite payload without password', () => {
+    const result = schemas.createStaffMember.safeParse(buildInviteStaffPayload())
+    assert.equal(result.success, true)
+  })
+
+  it('rejects password on invite payload', () => {
+    const result = schemas.createStaffMember.safeParse(
+      buildInviteStaffPayload({ password: 'SecurePass123' }),
     )
     assert.equal(result.success, false)
   })

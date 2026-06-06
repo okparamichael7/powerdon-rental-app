@@ -1,6 +1,7 @@
 // Station Repository - Database operations for stations and hardware
 import { createServiceClient } from '@/lib/supabase/admin';
 import { isSchemaGapError } from './schema-compat';
+import { slotRemovalBlockers } from '@/lib/admin/slot-safety';
 import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, Json, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
 
 export interface StationWithSlots extends DbStation {
@@ -13,6 +14,8 @@ export interface StationFilters {
   status?: StationStatus[];
   campaignId?: string;
   isEnabled?: boolean;
+  includeArchived?: boolean;
+  hardwareType?: string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -54,6 +57,10 @@ class StationRepository {
       query = query.eq('is_enabled', filters.isEnabled);
     }
 
+    if (filters?.hardwareType) {
+      query = query.eq('hardware_type', filters.hardwareType);
+    }
+
     if (filters?.search) {
       query = query.or(`name.ilike.%${filters.search}%,location.ilike.%${filters.search}%,external_id.ilike.%${filters.search}%`);
     }
@@ -71,12 +78,18 @@ class StationRepository {
     if (error) throw error;
 
     type StationRow = DbStation & { slots?: DbStationSlot[] | null };
-    return ((data || []) as StationRow[]).map((station): StationWithSlots => ({
+    let rows = ((data || []) as StationRow[]).map((station): StationWithSlots => ({
       ...station,
       slots: station.slots || [],
       available_slots: (station.slots || []).filter((s) => s.status === 'occupied').length,
       occupied_slots: (station.slots || []).filter((s) => s.status === 'empty' || s.status === 'reserved').length,
     }));
+
+    if (filters?.includeArchived !== true) {
+      rows = rows.filter((s) => !s.archived_at)
+    }
+
+    return rows;
   }
 
   async getById(id: string): Promise<StationWithSlots | null> {
@@ -210,6 +223,184 @@ class StationRepository {
       .eq('id', id);
 
     if (error) throw error;
+  }
+
+  async createWithSlots(
+    station: Database['public']['Tables']['stations']['Insert'],
+    slotCount: number,
+  ): Promise<DbStation> {
+    const created = await this.create(station);
+    const slots = Array.from({ length: slotCount }, (_, i) => ({
+      station_id: created.id,
+      slot_number: i + 1,
+      status: 'empty' as SlotStatus,
+      is_charging: false,
+      metadata: {},
+    }));
+
+    const supabase = await createServiceClient();
+    const { error: slotsError } = await supabase.from('station_slots').insert(slots);
+    if (slotsError) {
+      await this.delete(created.id);
+      throw slotsError;
+    }
+    return created;
+  }
+
+  async archive(id: string, updatedBy: string): Promise<DbStation> {
+    return this.update(id, {
+      archived_at: new Date().toISOString(),
+      is_enabled: false,
+      status: 'offline',
+      updated_by: updatedBy,
+    });
+  }
+
+  async restore(id: string, updatedBy: string): Promise<DbStation> {
+    return this.update(id, {
+      archived_at: null,
+      is_enabled: true,
+      updated_by: updatedBy,
+    });
+  }
+
+  async addSlots(stationId: string, fromSlot: number, toSlot: number): Promise<number> {
+    const supabase = await createServiceClient();
+    const newSlots = Array.from({ length: toSlot - fromSlot }, (_, i) => ({
+      station_id: stationId,
+      slot_number: fromSlot + i + 1,
+      status: 'empty' as SlotStatus,
+      is_charging: false,
+      metadata: {},
+    }));
+    if (newSlots.length === 0) return 0;
+
+    const { error } = await supabase.from('station_slots').insert(newSlots);
+    if (error) throw error;
+    return newSlots.length;
+  }
+
+  async removeSlotsAbove(stationId: string, maxSlotNumber: number): Promise<number> {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from('station_slots')
+      .delete()
+      .eq('station_id', stationId)
+      .gt('slot_number', maxSlotNumber)
+      .select('id');
+
+    if (error) throw error;
+    return data?.length ?? 0;
+  }
+
+  async getSlotReductionBlockers(stationId: string, newMaxSlot: number): Promise<string[]> {
+    const slots = await this.getSlots(stationId);
+    const toRemove = slots.filter((s) => s.slot_number > newMaxSlot);
+    const blockers: string[] = [];
+
+    for (const slot of toRemove) {
+      const activeOnSlot = await this.countActiveRentalsForSlot(stationId, slot.slot_number);
+      const historical = await this.countHistoricalRentalsForSlot(stationId, slot.slot_number);
+      blockers.push(
+        ...slotRemovalBlockers({
+          slot,
+          activeRentals: activeOnSlot,
+          historicalRentals: historical,
+        }),
+      );
+    }
+
+    return blockers;
+  }
+
+  async countActiveRentals(stationId: string): Promise<number> {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from('rental_sessions')
+      .select('id', { count: 'exact', head: true })
+      .or(`pickup_station_id.eq.${stationId},return_station_id.eq.${stationId}`)
+      .in('status', ['pending', 'active']);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async countActiveRentalsForSlot(stationId: string, slotNumber: number): Promise<number> {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from('rental_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('pickup_station_id', stationId)
+      .eq('pickup_slot_number', slotNumber)
+      .in('status', ['pending', 'active']);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async countHistoricalRentals(stationId: string): Promise<number> {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from('rental_sessions')
+      .select('id', { count: 'exact', head: true })
+      .or(`pickup_station_id.eq.${stationId},return_station_id.eq.${stationId}`)
+      .in('status', ['completed', 'cancelled', 'expired', 'failed']);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async countHistoricalRentalsForSlot(stationId: string, slotNumber: number): Promise<number> {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from('rental_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('pickup_station_id', stationId)
+      .eq('pickup_slot_number', slotNumber);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async listMaintenanceRecords(stationId: string, limit = 20) {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from('station_maintenance_records')
+      .select('*')
+      .eq('station_id', stationId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      if (error.code === '42P01') return [];
+      throw error;
+    }
+    return data ?? [];
+  }
+
+  async createMaintenanceRecord(input: {
+    stationId: string;
+    slotNumber?: number;
+    title: string;
+    description?: string;
+    reportedBy: string;
+  }) {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from('station_maintenance_records')
+      .insert({
+        station_id: input.stationId,
+        slot_number: input.slotNumber ?? null,
+        title: input.title,
+        description: input.description ?? null,
+        reported_by: input.reportedBy,
+        status: 'open',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   // Register a new station from hardware login

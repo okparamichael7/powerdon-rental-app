@@ -8,3 +8,4 @@ export { campaignRepository } from './campaign-repository';
 export { analyticsRepository } from './analytics-repository';
 export { supportRepository } from './support-repository';
 export { staffRoleRepository, type DbStaffRole, type StaffRoleType, type GrantStaffRoleInput } from './staff-role-repository';
+export { hardwareAuditRepository, type DbHardwareAuditLog, type HardwareAuditAction } from './hardware-audit-repository';

@@ -1,20 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import {
-  AdminDrawer,
-  AdminDrawerHeader,
-  AdminDrawerBody,
-  AdminDrawerFooter,
-  AdminDrawerSection,
-  AdminDrawerFieldList,
-  AdminDrawerField,
-  AdminDrawerStatsGrid,
-  AdminDrawerStat,
-  AdminDrawerPanel,
-} from "@/components/admin/admin-drawer"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -22,332 +11,448 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import Link from "next/link"
-import { MapPin, Battery, Wifi, WifiOff, Zap, Clock, AlertTriangle, Cpu } from "lucide-react"
-import { AdminErrorBanner, AdminEmptyState } from "@/components/admin/admin-states"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminFilterBar } from "@/components/admin/admin-filter-bar"
+import { AdminErrorBanner, AdminEmptyState } from "@/components/admin/admin-states"
 import { AdminStatCard, AdminStatGrid } from "@/components/admin/admin-stat-card"
-import { AdminStatGridSkeleton, AdminCardGridSkeleton } from "@/components/admin/admin-skeletons"
+import { AdminTableSkeleton } from "@/components/admin/admin-skeletons"
 import { AdminPaginationBar } from "@/components/admin/admin-pagination-bar"
+import {
+  AdminDataTable,
+  AdminDataTableCard,
+  AdminDataTableHeader,
+  AdminDataTableHead,
+  AdminDataTableRow,
+  AdminDataTableCell,
+} from "@/components/admin/admin-data-table"
+import { TableBody } from "@/components/ui/table"
+import type { StationFormValues } from "@/components/admin/hardware/station-form-dialog"
 import { StatusBadge } from "@/components/volt/status-badge"
-import { useStations, useSessions } from "@/hooks/use-services"
+import { StationFormDialog } from "@/components/admin/hardware/station-form-dialog"
+import { useHardwareAdmin } from "@/hooks/use-hardware-admin"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { useAdminPagination } from "@/hooks/use-admin-pagination"
-import type { Station } from "@/lib/types"
-import { formatDateTime } from "@/lib/utils"
-
-const STATUS_DOT_CLASS: Record<Station["status"], string> = {
-  online: "bg-emerald-500",
-  offline: "bg-muted-foreground/50",
-  maintenance: "bg-amber-500",
-  "low-battery": "bg-red-500",
-}
+import { useStaffRole } from "@/hooks/use-staff-role"
+import { toast } from "@/components/admin/admin-providers"
+import type { AdminHardwareUnit } from "@/lib/mappers/hardware-mappers"
+import {
+  Plus,
+  MoreHorizontal,
+  Cpu,
+  Archive,
+  Trash2,
+  Pencil,
+  ExternalLink,
+  Radio,
+} from "lucide-react"
 
 export default function StationsPage() {
+  const { isAdmin } = useStaffRole()
+  const {
+    loading,
+    error,
+    setError,
+    listHardware,
+    createHardware,
+    updateHardware,
+    archiveHardware,
+    deleteHardware,
+    restoreHardware,
+  } = useHardwareAdmin()
+
+  const [hardware, setHardware] = useState<AdminHardwareUnit[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [showArchived, setShowArchived] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
+  const [formMode, setFormMode] = useState<"create" | "edit">("create")
+  const [editing, setEditing] = useState<AdminHardwareUnit | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "archive" | "delete"
+    unit: AdminHardwareUnit
+  } | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   const debouncedSearch = useDebouncedValue(searchQuery)
   const { page, pageSize, setPage, setPageSize, resetPage } = useAdminPagination()
-  const { data: stations, loading, error, fetchStations, refetch } = useStations()
-  const { data: allSessions, fetchSessions } = useSessions()
+
+  const load = useCallback(async () => {
+    const data = await listHardware({
+      search: debouncedSearch || undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      includeArchived: showArchived,
+    })
+    if (data) setHardware(data)
+  }, [listHardware, debouncedSearch, statusFilter, showArchived])
 
   useEffect(() => {
     resetPage()
-  }, [debouncedSearch, statusFilter, resetPage])
+  }, [debouncedSearch, statusFilter, showArchived, resetPage])
 
   useEffect(() => {
-    const filters: Parameters<typeof fetchStations>[0] = {}
-    if (debouncedSearch) filters.search = debouncedSearch
-    if (statusFilter !== "all") filters.status = [statusFilter as Station["status"]]
-    fetchStations(filters)
-  }, [debouncedSearch, statusFilter, fetchStations])
+    load()
+  }, [load])
 
-  useEffect(() => {
-    if (selectedStation) {
-      fetchSessions({ stationId: selectedStation.id, limit: 5 })
-    }
-  }, [selectedStation?.id, fetchSessions])
-
-  const filteredStations = stations || []
-  const totalStations = filteredStations.length
-  const paginatedStations = filteredStations.slice(
-    (page - 1) * pageSize,
-    page * pageSize,
-  )
-  const stationSessions = selectedStation
-    ? (allSessions?.filter((s) => s.stationId === selectedStation.id).slice(0, 5) || [])
-    : []
+  const paginated = hardware.slice((page - 1) * pageSize, page * pageSize)
 
   const stats = {
-    online: filteredStations.filter((s) => s.status === "online").length,
-    offline: filteredStations.filter((s) => s.status === "offline").length,
-    maintenance: filteredStations.filter((s) => s.status === "maintenance").length,
-    totalSlots: filteredStations.reduce((sum, s) => sum + s.totalSlots, 0),
-    availableSlots: filteredStations.reduce((sum, s) => sum + s.availableSlots, 0),
+    total: hardware.length,
+    online: hardware.filter((h) => h.status === "online" && !h.archivedAt).length,
+    maintenance: hardware.filter((h) => h.status === "maintenance").length,
+    archived: hardware.filter((h) => h.archivedAt).length,
   }
 
-  const activeFilters =
-    statusFilter !== "all"
-      ? [
-          {
-            key: "status",
-            label: `Status: ${statusFilter}`,
-            onRemove: () => setStatusFilter("all"),
-          },
-        ]
-      : []
+  const handleCreate = async (values: StationFormValues) => {
+    const result = await createHardware({
+      name: values.name,
+      externalId: values.externalId,
+      hardwareType: values.hardwareType,
+      description: values.description || undefined,
+      location: values.location || undefined,
+      totalSlots: values.totalSlots,
+      status: values.status,
+      qrReference: values.qrReference || undefined,
+      externalServiceRef: values.externalServiceRef || undefined,
+      notes: values.notes || undefined,
+      isEnabled: values.isEnabled,
+    })
+    if (result.ok) {
+      toast.success("Hardware created")
+      await load()
+      return { ok: true }
+    }
+    return { ok: false, error: result.error }
+  }
 
-  const clearFilters = () => {
-    setSearchQuery("")
-    setStatusFilter("all")
+  const handleEdit = async (values: StationFormValues) => {
+    if (!editing) return { ok: false, error: "No hardware selected" }
+    const result = await updateHardware(editing.id, {
+      name: values.name,
+      hardwareType: values.hardwareType,
+      description: values.description || undefined,
+      location: values.location || undefined,
+      totalSlots: values.totalSlots,
+      status: values.status,
+      qrReference: values.qrReference || undefined,
+      externalServiceRef: values.externalServiceRef || undefined,
+      notes: values.notes || undefined,
+      isEnabled: values.isEnabled,
+    })
+    if (result.ok) {
+      toast.success("Hardware updated")
+      await load()
+      return { ok: true }
+    }
+    return { ok: false, error: result.error, blockers: result.blockers }
+  }
+
+  const runConfirmAction = async () => {
+    if (!confirmAction) return
+    setActionLoading(true)
+    if (confirmAction.type === "archive") {
+      const result = await archiveHardware(confirmAction.unit.id)
+      if (result.ok) {
+        toast.success("Hardware archived")
+        await load()
+      } else {
+        toast.error(result.error || "Archive failed")
+      }
+    } else {
+      const result = await deleteHardware(confirmAction.unit.id)
+      if (result.ok) {
+        toast.success("Hardware removed")
+        await load()
+      } else {
+        const msg =
+          result.blockers?.map((b) => b.message).join("; ") || result.error || "Delete failed"
+        toast.error(msg)
+      }
+    }
+    setActionLoading(false)
+    setConfirmAction(null)
   }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Stations"
-        description="Monitor and manage power bank stations"
+        title="Hardware"
+        description="Manage power bank stations, slots, and availability without using Supabase"
         meta={
-          filteredStations.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {filteredStations.length} stations
-            </p>
+          hardware.length > 0 ? (
+            <p className="text-xs text-muted-foreground">{hardware.length} units</p>
           ) : null
         }
         actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/admin/hardware">
-              <Cpu className="mr-2 size-4" aria-hidden />
-              Hardware Console
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/hardware">
+                <Cpu className="mr-2 size-4" aria-hidden />
+                Live Console
+              </Link>
+            </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setFormMode("create")
+                  setEditing(null)
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="mr-2 size-4" aria-hidden />
+                Add hardware
+              </Button>
+            )}
+          </div>
         }
       />
 
-      {error && <AdminErrorBanner message={error} onRetry={() => refetch()} />}
+      {error && <AdminErrorBanner message={error} onRetry={() => { setError(null); load() }} />}
 
-      {loading ? (
-        <AdminStatGridSkeleton count={4} />
-      ) : (
-        <AdminStatGrid>
-          <AdminStatCard
-            label="Online"
-            value={stats.online}
-            icon={Wifi}
-            trend="positive"
-          />
-          <AdminStatCard label="Offline" value={stats.offline} icon={WifiOff} />
-          <AdminStatCard
-            label="Maintenance"
-            value={stats.maintenance}
-            icon={AlertTriangle}
-            trend="warning"
-          />
-          <AdminStatCard
-            label="Available Slots"
-            value={`${stats.availableSlots}/${stats.totalSlots}`}
-            icon={Battery}
-          />
-        </AdminStatGrid>
-      )}
+      <AdminStatGrid>
+        <AdminStatCard label="Total units" value={stats.total} icon={Radio} />
+        <AdminStatCard label="Online" value={stats.online} trend="positive" />
+        <AdminStatCard label="Maintenance" value={stats.maintenance} trend="warning" />
+        <AdminStatCard label="Archived" value={stats.archived} />
+      </AdminStatGrid>
 
       <AdminFilterBar
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
-        searchPlaceholder="Search stations…"
-        activeFilters={activeFilters}
-        onClearFilters={searchQuery || statusFilter !== "all" ? clearFilters : undefined}
+        searchPlaceholder="Search by name, location, or ID…"
+        onClearFilters={
+          searchQuery || statusFilter !== "all" || showArchived
+            ? () => {
+                setSearchQuery("")
+                setStatusFilter("all")
+                setShowArchived(false)
+              }
+            : undefined
+        }
       >
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="all">All status</SelectItem>
             <SelectItem value="online">Online</SelectItem>
             <SelectItem value="offline">Offline</SelectItem>
             <SelectItem value="maintenance">Maintenance</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant={showArchived ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => setShowArchived((v) => !v)}
+        >
+          {showArchived ? "Showing archived" : "Show archived"}
+        </Button>
       </AdminFilterBar>
 
-      {loading ? (
-        <AdminCardGridSkeleton count={6} />
-      ) : filteredStations.length === 0 ? (
+      {loading && hardware.length === 0 ? (
+        <AdminTableSkeleton rows={8} />
+      ) : hardware.length === 0 ? (
         <AdminEmptyState
-          title="No stations found"
-          description="Stations appear when registered in the database or connected via hardware."
+          title="No hardware units"
+          description="Add your first station here, or wait for hardware to auto-register on connect."
+          action={
+            isAdmin ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setFormMode("create")
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="mr-2 size-4" />
+                Add hardware
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {paginatedStations.map((station) => (
-            <div key={station.id}>
-              <Card
-                className="cursor-pointer transition-all hover:border-primary/20 hover:shadow-md"
-                onClick={() => setSelectedStation(station)}
-              >
-                <CardContent className="p-4">
-                  <div className="mb-3 flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`size-2 rounded-full ${STATUS_DOT_CLASS[station.status]}`}
-                      />
-                      <span className="font-medium text-foreground">{station.name}</span>
-                    </div>
-                    <StatusBadge status={station.status} size="sm" />
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="size-3.5" aria-hidden />
-                      <span className="truncate">{station.location}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Battery className="size-3.5" aria-hidden />
-                        <span>
-                          {station.availableSlots}/{station.totalSlots} available
-                        </span>
+          <AdminDataTableCard>
+            <AdminDataTable>
+              <AdminDataTableHeader>
+                <AdminDataTableRow>
+                  <AdminDataTableHead>Name</AdminDataTableHead>
+                  <AdminDataTableHead>Identifier</AdminDataTableHead>
+                  <AdminDataTableHead>Location</AdminDataTableHead>
+                  <AdminDataTableHead>Status</AdminDataTableHead>
+                  <AdminDataTableHead>Slots</AdminDataTableHead>
+                  <AdminDataTableHead>Type</AdminDataTableHead>
+                  <AdminDataTableHead className="text-right">Actions</AdminDataTableHead>
+                </AdminDataTableRow>
+              </AdminDataTableHeader>
+              <TableBody>
+                {paginated.map((unit) => (
+                  <AdminDataTableRow key={unit.id}>
+                    <AdminDataTableCell>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/admin/stations/${unit.id}`}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {unit.name}
+                        </Link>
+                        {unit.archivedAt && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Archived
+                          </Badge>
+                        )}
                       </div>
-                    </div>
-
-                    <div className="mt-2 flex gap-1">
-                      {Array.from({ length: station.totalSlots }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`h-1.5 flex-1 rounded-full ${
-                            i < station.availableSlots ? "bg-primary" : "bg-muted"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
-                    <span>ID: {station.id}</span>
-                    <span>Battery: {station.batteryLevel}%</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ))}
-        </div>
-        <AdminPaginationBar
-          page={page}
-          pageSize={pageSize}
-          total={totalStations}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
+                    </AdminDataTableCell>
+                    <AdminDataTableCell className="font-mono text-xs text-muted-foreground">
+                      {unit.externalId ?? "—"}
+                    </AdminDataTableCell>
+                    <AdminDataTableCell className="max-w-[180px] truncate text-sm">
+                      {unit.location || "—"}
+                    </AdminDataTableCell>
+                    <AdminDataTableCell>
+                      <StatusBadge status={unit.status as "online"} size="sm" />
+                    </AdminDataTableCell>
+                    <AdminDataTableCell className="text-sm">
+                      {unit.availableSlots}/{unit.totalSlots}
+                    </AdminDataTableCell>
+                    <AdminDataTableCell className="text-xs text-muted-foreground">
+                      {unit.hardwareType?.replace(/_/g, " ") ?? "—"}
+                    </AdminDataTableCell>
+                    <AdminDataTableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-8">
+                            <MoreHorizontal className="size-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/stations/${unit.id}`}>
+                              <ExternalLink className="mr-2 size-4" />
+                              View detail
+                            </Link>
+                          </DropdownMenuItem>
+                          {isAdmin && !unit.archivedAt && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setFormMode("edit")
+                                setEditing(unit)
+                                setFormOpen(true)
+                              }}
+                            >
+                              <Pencil className="mr-2 size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          {isAdmin && unit.archivedAt && (
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                const result = await restoreHardware(unit.id)
+                                if (result.ok) {
+                                  toast.success("Hardware restored")
+                                  await load()
+                                } else {
+                                  toast.error(result.error || "Restore failed")
+                                }
+                              }}
+                            >
+                              Restore
+                            </DropdownMenuItem>
+                          )}
+                          {isAdmin && !unit.archivedAt && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setConfirmAction({ type: "archive", unit })
+                                }
+                              >
+                                <Archive className="mr-2 size-4" />
+                                Archive
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() =>
+                                  setConfirmAction({ type: "delete", unit })
+                                }
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                Remove
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </AdminDataTableCell>
+                  </AdminDataTableRow>
+                ))}
+              </TableBody>
+            </AdminDataTable>
+          </AdminDataTableCard>
+          <AdminPaginationBar
+            page={page}
+            pageSize={pageSize}
+            total={hardware.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
 
-      <AdminDrawer
-        open={!!selectedStation}
-        onOpenChange={(open) => !open && setSelectedStation(null)}
-        size="wide"
+      <StationFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        mode={formMode}
+        initial={editing}
+        onSubmit={formMode === "create" ? handleCreate : handleEdit}
+      />
+
+      <Dialog
+        open={!!confirmAction}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
       >
-        {selectedStation && (
-          <>
-            <AdminDrawerHeader
-              title={
-                <span className="flex items-center gap-3">
-                  <span
-                    className={`size-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASS[selectedStation.status]}`}
-                    aria-hidden
-                  />
-                  {selectedStation.name}
-                </span>
-              }
-              description={selectedStation.location}
-            />
-
-            <AdminDrawerBody>
-              <AdminDrawerStatsGrid>
-                <AdminDrawerStat
-                  label="Status"
-                  value={<StatusBadge status={selectedStation.status} size="sm" />}
-                />
-                <AdminDrawerStat
-                  label="Availability"
-                  value={`${selectedStation.availableSlots}/${selectedStation.totalSlots}`}
-                />
-              </AdminDrawerStatsGrid>
-
-              <AdminDrawerSection title="Station Info" icon={MapPin}>
-                <AdminDrawerFieldList>
-                  <AdminDrawerField label="Location" value={selectedStation.location} />
-                  <AdminDrawerField label="Station ID" value={selectedStation.id} mono />
-                </AdminDrawerFieldList>
-              </AdminDrawerSection>
-
-              <AdminDrawerSection title="Slot Status">
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: selectedStation.totalSlots }).map((_, i) => {
-                    const isAvailable = i < selectedStation.availableSlots
-                    return (
-                      <div
-                        key={i}
-                        className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-xs ${
-                          isAvailable
-                            ? "border-primary/20 bg-primary/10 text-primary"
-                            : "border-border bg-muted/50 text-muted-foreground"
-                        }`}
-                      >
-                        <Battery className="mb-1 size-4" aria-hidden />
-                        <span>Slot {String(i + 1).padStart(2, "0")}</span>
-                        <span className="text-[10px]">{isAvailable ? "Ready" : "In Use"}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </AdminDrawerSection>
-
-              <AdminDrawerSection title="Recent Activity">
-                {stationSessions.length > 0 ? (
-                  <div className="space-y-2">
-                    {stationSessions.map((session) => (
-                      <AdminDrawerPanel key={session.id} className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Zap className="size-4 shrink-0 text-primary" aria-hidden />
-                            <span className="truncate text-sm font-medium">
-                              {session.userEmail}
-                            </span>
-                          </div>
-                          <StatusBadge status={session.status} size="sm" />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="size-3" aria-hidden />
-                            {session.durationMinutes
-                              ? `${session.durationMinutes}m`
-                              : "Active"}
-                          </span>
-                          <span>{formatDateTime(new Date(session.startTime))}</span>
-                        </div>
-                      </AdminDrawerPanel>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No recent activity</p>
-                )}
-              </AdminDrawerSection>
-            </AdminDrawerBody>
-
-            <AdminDrawerFooter>
-              <Button variant="outline" asChild>
-                <Link href="/admin/hardware">Open in Hardware</Link>
-              </Button>
-            </AdminDrawerFooter>
-          </>
-        )}
-      </AdminDrawer>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.type === "archive" ? "Archive hardware?" : "Remove hardware?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.type === "archive"
+                ? `Archive "${confirmAction?.unit.name}"? It will be disabled and hidden from normal operations. Historical data is preserved.`
+                : `Permanently remove "${confirmAction?.unit.name}"? This is only allowed when there are no active or historical rentals. Prefer archive when in doubt.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmAction?.type === "delete" ? "destructive" : "default"}
+              onClick={runConfirmAction}
+              disabled={actionLoading}
+            >
+              {confirmAction?.type === "archive" ? "Archive" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

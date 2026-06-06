@@ -67,6 +67,18 @@ class StaffRoleRepository {
     return count ?? 0
   }
 
+  async countActiveByRole(role: StaffRoleType): Promise<number> {
+    const supabase = await createServiceClient()
+    const { count, error } = await supabase
+      .from('staff_roles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', role)
+      .is('revoked_at', null)
+
+    if (error) throw error
+    return count ?? 0
+  }
+
   async grant(input: GrantStaffRoleInput): Promise<DbStaffRole> {
     const supabase = await createServiceClient()
 

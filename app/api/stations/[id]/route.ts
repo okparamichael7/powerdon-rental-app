@@ -6,6 +6,7 @@ import { stationRepository, campaignRepository } from '@/lib/db';
 import { nullIfEmptyUuid } from '@/lib/db/schema-compat';
 import { enforceRateLimit, requireAdminSession } from '@/lib/api/route-helpers';
 import { validateBody, schemas } from '@/lib/security/validation';
+import { auditAdminHardwareCommand } from '@/lib/admin/hardware-command-audit';
 
 // GET /api/stations/[id] - Get station details (database and/or live hardware)
 export async function GET(
@@ -195,11 +196,27 @@ export async function POST(
     }
 
     if (!result.success) {
+      await auditAdminHardwareCommand({
+        actorUserId: adminGate.auth.userId,
+        stationIdOrExternal: stationId,
+        command,
+        slotNumber,
+        success: false,
+        error: result.error,
+      });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
       );
     }
+
+    await auditAdminHardwareCommand({
+      actorUserId: adminGate.auth.userId,
+      stationIdOrExternal: stationId,
+      command,
+      slotNumber,
+      success: true,
+    });
 
     // Proxy path: inventory response is async via /api/stations/message → DB
     if (command === 'query_inventory' && result.proxyOnly) {

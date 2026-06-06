@@ -28,6 +28,20 @@ export async function DELETE(
     )
   }
 
+  if (active === 'admin') {
+    const adminCount = await staffRoleRepository.countActiveByRole('admin')
+    if (adminCount <= 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cannot revoke the last active admin. Grant another admin first.',
+          code: 'LAST_ADMIN',
+        },
+        { status: 409 },
+      )
+    }
+  }
+
   await staffRoleRepository.revoke(authUserId, auth.auth.userId)
   await staffAuditRepository.log({
     actorAuthUserId: auth.auth.userId,
