@@ -26,7 +26,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { AdminErrorBanner, AdminEmptyState } from "@/components/admin/admin-states"
 import { AdminPageSkeleton } from "@/components/admin/admin-skeletons"
 import { StatusBadge } from "@/components/volt/status-badge"
-import { StationFormDialog } from "@/components/admin/hardware/station-form-dialog"
+import { StationFormDrawer } from "@/components/admin/hardware/station-form-drawer"
 import { useHardwareAdmin } from "@/hooks/use-hardware-admin"
 import { useStaffRole } from "@/hooks/use-staff-role"
 import { toast } from "@/components/admin/admin-providers"
@@ -91,7 +91,7 @@ export default function StationDetailPage() {
   }, [load])
 
   const handleEdit = async (
-    values: import("@/components/admin/hardware/station-form-dialog").StationFormValues,
+    values: import("@/components/admin/hardware/station-form-drawer").StationFormValues,
   ) => {
     const result = await updateHardware(stationId, {
       name: values.name,
@@ -505,7 +505,7 @@ export default function StationDetailPage() {
         </CardContent>
       </Card>
 
-      <StationFormDialog
+      <StationFormDrawer
         open={editOpen}
         onOpenChange={setEditOpen}
         mode="edit"

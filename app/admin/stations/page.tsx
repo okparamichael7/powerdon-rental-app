@@ -41,9 +41,9 @@ import {
   AdminDataTableCell,
 } from "@/components/admin/admin-data-table"
 import { TableBody } from "@/components/ui/table"
-import type { StationFormValues } from "@/components/admin/hardware/station-form-dialog"
+import type { StationFormValues } from "@/components/admin/hardware/station-form-drawer"
 import { StatusBadge } from "@/components/volt/status-badge"
-import { StationFormDialog } from "@/components/admin/hardware/station-form-dialog"
+import { StationFormDrawer } from "@/components/admin/hardware/station-form-drawer"
 import { useHardwareAdmin } from "@/hooks/use-hardware-admin"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { useAdminPagination } from "@/hooks/use-admin-pagination"
@@ -416,7 +416,7 @@ export default function StationsPage() {
         </>
       )}
 
-      <StationFormDialog
+      <StationFormDrawer
         open={formOpen}
         onOpenChange={setFormOpen}
         mode={formMode}
