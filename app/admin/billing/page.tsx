@@ -96,15 +96,20 @@ async function BillingDashboardContent() {
         revenueByStation={report.revenueByStation}
       />
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Recent Transactions</CardTitle>
           <CardDescription>
-            Latest payment activity across all stations
+            {report.recentTransactionsTotal > 0
+              ? `${report.recentTransactionsTotal} payment${report.recentTransactionsTotal === 1 ? '' : 's'} in the last 30 days`
+              : 'Latest payment activity across all stations'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <RecentTransactionsTable transactions={report.recentTransactions} />
+        <CardContent className="p-0">
+          <RecentTransactionsTable
+            transactions={report.recentTransactions}
+            total={report.recentTransactionsTotal}
+          />
         </CardContent>
       </Card>
     </>

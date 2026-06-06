@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useMemo } from 'react'
 import { TableBody } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/stripe/types'
 import { StatusBadge } from '@/components/volt/status-badge'
@@ -11,21 +12,14 @@ import {
   AdminDataTableCell,
   AdminDataTableEmpty,
 } from '@/components/admin/admin-data-table'
+import { AdminPaginationBar } from '@/components/admin/admin-pagination-bar'
+import { useAdminPagination } from '@/hooks/use-admin-pagination'
 import { useTableSort } from '@/hooks/use-table-sort'
-
-interface Transaction {
-  id: string
-  sessionCode: string
-  customerEmail: string
-  amount: number
-  status: string
-  type: string
-  createdAt: string
-  stationName?: string
-}
+import type { RecentTransaction } from '@/lib/billing/recent-transactions'
 
 interface RecentTransactionsTableProps {
-  transactions: Transaction[]
+  transactions: RecentTransaction[]
+  total?: number
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -34,11 +28,17 @@ const TYPE_LABELS: Record<string, string> = {
   lost_device: 'Lost Device',
 }
 
-export function RecentTransactionsTable({ transactions }: RecentTransactionsTableProps) {
-  const rows = transactions.map((tx) => ({
-    ...tx,
-    createdAtSort: tx.createdAt,
-  }))
+export function RecentTransactionsTable({ transactions, total }: RecentTransactionsTableProps) {
+  const { page, pageSize, setPage, setPageSize, resetPage } = useAdminPagination()
+
+  const rows = useMemo(
+    () =>
+      transactions.map((tx) => ({
+        ...tx,
+        createdAtSort: tx.createdAt,
+      })),
+    [transactions],
+  )
 
   const { sorted, sortField, sortOrder, toggleSort, isSorted } = useTableSort(
     rows,
@@ -46,7 +46,18 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
     'desc',
   )
 
-  if (transactions.length === 0) {
+  useEffect(() => {
+    resetPage()
+  }, [sortField, sortOrder, resetPage])
+
+  const transactionTotal = total ?? transactions.length
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return sorted.slice(start, start + pageSize)
+  }, [sorted, page, pageSize])
+
+  if (transactionTotal === 0) {
     return (
       <AdminDataTableEmpty
         title="No transactions found"
@@ -56,62 +67,72 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
   }
 
   return (
-    <AdminDataTable>
-      <AdminDataTableHeader>
-        <AdminDataTableRow>
-          <AdminDataTableHead>Session</AdminDataTableHead>
-          <AdminDataTableHead>Customer</AdminDataTableHead>
-          <AdminDataTableHead
-            sortable
-            sorted={isSorted('amount') ? sortOrder : false}
-            onSort={() => toggleSort('amount')}
-          >
-            Amount
-          </AdminDataTableHead>
-          <AdminDataTableHead>Status</AdminDataTableHead>
-          <AdminDataTableHead>Type</AdminDataTableHead>
-          <AdminDataTableHead
-            sortable
-            sorted={isSorted('createdAtSort') ? sortOrder : false}
-            onSort={() => toggleSort('createdAtSort')}
-          >
-            Date
-          </AdminDataTableHead>
-        </AdminDataTableRow>
-      </AdminDataTableHeader>
-      <TableBody>
-        {sorted.map((tx) => (
-          <AdminDataTableRow key={tx.id}>
-            <AdminDataTableCell>
-              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{tx.sessionCode}</code>
-            </AdminDataTableCell>
-            <AdminDataTableCell>
-              <span className="inline-block max-w-[200px] truncate text-muted-foreground">
-                {tx.customerEmail}
-              </span>
-            </AdminDataTableCell>
-            <AdminDataTableCell className="font-medium tabular-nums">
-              {formatCurrency(tx.amount)}
-            </AdminDataTableCell>
-            <AdminDataTableCell>
-              <StatusBadge status={tx.status} size="sm" />
-            </AdminDataTableCell>
-            <AdminDataTableCell>
-              <span className="text-xs text-muted-foreground">
-                {TYPE_LABELS[tx.type] ?? tx.type}
-              </span>
-            </AdminDataTableCell>
-            <AdminDataTableCell className="text-muted-foreground">
-              {new Date(tx.createdAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </AdminDataTableCell>
+    <>
+      <AdminDataTable>
+        <AdminDataTableHeader>
+          <AdminDataTableRow>
+            <AdminDataTableHead>Session</AdminDataTableHead>
+            <AdminDataTableHead>Customer</AdminDataTableHead>
+            <AdminDataTableHead
+              sortable
+              sorted={isSorted('amount') ? sortOrder : false}
+              onSort={() => toggleSort('amount')}
+            >
+              Amount
+            </AdminDataTableHead>
+            <AdminDataTableHead>Status</AdminDataTableHead>
+            <AdminDataTableHead>Type</AdminDataTableHead>
+            <AdminDataTableHead
+              sortable
+              sorted={isSorted('createdAtSort') ? sortOrder : false}
+              onSort={() => toggleSort('createdAtSort')}
+            >
+              Date
+            </AdminDataTableHead>
           </AdminDataTableRow>
-        ))}
-      </TableBody>
-    </AdminDataTable>
+        </AdminDataTableHeader>
+        <TableBody>
+          {paginatedRows.map((tx) => (
+            <AdminDataTableRow key={tx.id}>
+              <AdminDataTableCell>
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{tx.sessionCode}</code>
+              </AdminDataTableCell>
+              <AdminDataTableCell>
+                <span className="inline-block max-w-[200px] truncate text-muted-foreground">
+                  {tx.customerEmail}
+                </span>
+              </AdminDataTableCell>
+              <AdminDataTableCell className="font-medium tabular-nums">
+                {formatCurrency(tx.amount)}
+              </AdminDataTableCell>
+              <AdminDataTableCell>
+                <StatusBadge status={tx.status} size="sm" />
+              </AdminDataTableCell>
+              <AdminDataTableCell>
+                <span className="text-xs text-muted-foreground">
+                  {TYPE_LABELS[tx.type] ?? tx.type}
+                </span>
+              </AdminDataTableCell>
+              <AdminDataTableCell className="text-muted-foreground">
+                {new Date(tx.createdAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </AdminDataTableCell>
+            </AdminDataTableRow>
+          ))}
+        </TableBody>
+      </AdminDataTable>
+
+      <AdminPaginationBar
+        page={page}
+        pageSize={pageSize}
+        total={transactionTotal}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+    </>
   )
 }

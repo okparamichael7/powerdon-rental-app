@@ -6,6 +6,10 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import type { DbRentalSession } from '@/lib/db/types'
 import { logger } from '@/lib/observability/logger'
 import { formatCurrency } from '@/lib/stripe/types'
+import {
+  mapPaymentIntentsToRecentTransactions,
+  type RecentTransaction,
+} from '@/lib/billing/recent-transactions'
 
 // =============================================================================
 // BILLING REPORT TYPES
@@ -22,17 +26,6 @@ export interface BillingMetrics {
   averageTransactionAmount: number
   disputeCount: number
   disputeAmount: number
-}
-
-export interface RecentTransaction {
-  id: string
-  sessionCode: string
-  customerEmail: string
-  amount: number
-  status: string
-  type: string
-  createdAt: string
-  stationName?: string
 }
 
 export interface RevenueByDay {
@@ -52,6 +45,7 @@ export interface RevenueByStation {
 export interface BillingReport {
   metrics: BillingMetrics
   recentTransactions: RecentTransaction[]
+  recentTransactionsTotal: number
   revenueByDay: RevenueByDay[]
   revenueByStation: RevenueByStation[]
   disputes: Array<{
@@ -97,7 +91,6 @@ export async function getBillingOverview(
     let authorizedPending = 0
 
     const revenueByDayMap = new Map<string, { revenue: number; refunds: number; transactions: number }>()
-    const recentTransactions: RecentTransaction[] = []
 
     for (const pi of paymentIntents) {
       const date = new Date(pi.created * 1000).toISOString().split('T')[0]
@@ -118,20 +111,9 @@ export async function getBillingOverview(
       } else if (pi.status === 'canceled') {
         failedTransactions++
       }
-
-      // Add to recent transactions (limit to 50)
-      if (recentTransactions.length < 50) {
-        recentTransactions.push({
-          id: pi.id,
-          sessionCode: pi.metadata.session_id || 'N/A',
-          customerEmail: pi.receipt_email || 'N/A',
-          amount: pi.amount_received || pi.amount,
-          status: pi.status,
-          type: pi.metadata.type || 'rental_deposit',
-          createdAt: new Date(pi.created * 1000).toISOString(),
-        })
-      }
     }
+
+    const recentTransactions = mapPaymentIntentsToRecentTransactions(paymentIntents)
 
     // Process refunds
     for (const refund of refunds) {
@@ -181,6 +163,7 @@ export async function getBillingOverview(
     return {
       metrics,
       recentTransactions,
+      recentTransactionsTotal: recentTransactions.length,
       revenueByDay,
       revenueByStation: dbMetrics.revenueByStation,
       disputes: processedDisputes,
