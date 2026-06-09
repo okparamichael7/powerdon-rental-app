@@ -1,6 +1,6 @@
 // Station Repository - Database operations for stations and hardware
 import { createServiceClient } from '@/lib/supabase/admin';
-import { isSchemaGapError } from './schema-compat';
+import { isSchemaGapError, mutateWithSchemaFallback } from './schema-compat';
 import { slotRemovalBlockers } from '@/lib/admin/slot-safety';
 import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, Json, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
 
@@ -142,29 +142,35 @@ class StationRepository {
 
   async create(station: Database['public']['Tables']['stations']['Insert']): Promise<DbStation> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('stations')
-      .insert(station)
-      .select()
-      .single();
 
-    if (error) throw error;
-    return data;
+    return mutateWithSchemaFallback(
+      station as Record<string, unknown>,
+      async (payload) => {
+        const { data, error } = await supabase
+          .from('stations')
+          .insert(payload)
+          .select()
+          .single();
+        return { data, error };
+      },
+    );
   }
 
   async update(id: string, updates: Database['public']['Tables']['stations']['Update']): Promise<DbStation> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('stations')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
 
-    if (error) throw error;
-    return data;
+    return mutateWithSchemaFallback(
+      updates as Record<string, unknown>,
+      async (payload) => {
+        const { data, error } = await supabase
+          .from('stations')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        return { data, error };
+      },
+    );
   }
 
   async updateByExternalId(externalId: string, updates: Database['public']['Tables']['stations']['Update']): Promise<DbStation> {

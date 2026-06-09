@@ -1,9 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  compactRecord,
   isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
+  mutateWithSchemaFallback,
   normalizeRewardRow,
   stripEmptyUuidFields,
 } from './schema-compat'
@@ -79,6 +81,70 @@ describe('isInvalidUuidInputError', () => {
       }),
       true,
     )
+  })
+})
+
+describe('compactRecord', () => {
+  it('omits null and undefined keys', () => {
+    assert.deepEqual(
+      compactRecord({
+        name: 'Cabinet A',
+        location: null,
+        description: undefined,
+        total_slots: 12,
+      }),
+      { name: 'Cabinet A', total_slots: 12 },
+    )
+  })
+})
+
+describe('mutateWithSchemaFallback', () => {
+  it('drops unknown columns and retries', async () => {
+    let attempts = 0
+    const result = await mutateWithSchemaFallback(
+      { name: 'Cabinet A', location: 'Lobby', total_slots: 8 },
+      async (payload) => {
+        attempts++
+        if ('location' in payload) {
+          return {
+            data: null,
+            error: {
+              code: 'PGRST204',
+              message: "Could not find the 'location' column of 'stations' in the schema cache",
+            },
+          }
+        }
+        return { data: { id: 'station-1', ...payload }, error: null }
+      },
+    )
+
+    assert.equal(attempts, 2)
+    assert.equal(result.id, 'station-1')
+    assert.equal('location' in result, false)
+  })
+
+  it('strips invalid created_by FK and retries', async () => {
+    let attempts = 0
+    const result = await mutateWithSchemaFallback(
+      { name: 'Cabinet B', created_by: 'bad-user', updated_by: 'bad-user' },
+      async (payload) => {
+        attempts++
+        if ('created_by' in payload) {
+          return {
+            data: null,
+            error: {
+              code: '23503',
+              message: 'insert violates foreign key constraint "stations_created_by_fkey"',
+            },
+          }
+        }
+        return { data: { id: 'station-2', ...payload }, error: null }
+      },
+    )
+
+    assert.equal(attempts, 2)
+    assert.equal(result.id, 'station-2')
+    assert.equal('created_by' in result, false)
   })
 })
 

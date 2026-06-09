@@ -5,6 +5,36 @@ import { hardwareAdminService, HardwareAdminError } from '@/lib/admin/hardware-a
 import { mapAdminHardwareFromDb } from '@/lib/mappers/hardware-mappers'
 import { validateBody, schemas } from '@/lib/security/validation'
 import type { StationStatus } from '@/lib/db/types'
+import { isSchemaGapError } from '@/lib/db/schema-compat'
+
+function mapHardwareMutationError(error: unknown): HardwareAdminError | null {
+  if (!(error && typeof error === 'object')) return null
+  const e = error as { code?: string; message?: string }
+  const message = e.message ?? ''
+
+  if (e.code === '23505' || message.toLowerCase().includes('duplicate key')) {
+    return new HardwareAdminError(
+      'DUPLICATE_EXTERNAL_ID',
+      'A station with this identifier already exists',
+    )
+  }
+
+  if (message.includes('value too long')) {
+    return new HardwareAdminError(
+      'IDENTIFIER_TOO_LONG',
+      'Hardware identifier is too long. Use a shorter serial or IMEI (32 characters max on this database).',
+    )
+  }
+
+  if (isSchemaGapError(e)) {
+    return new HardwareAdminError(
+      'SCHEMA_OUT_OF_DATE',
+      'Database schema is missing required columns. Apply pending Supabase migrations (019+).',
+    )
+  }
+
+  return null
+}
 
 function appOrigin(): string {
   return (
@@ -81,10 +111,18 @@ export async function POST(request: NextRequest) {
       data: mapAdminHardwareFromDb(full, appOrigin()),
     })
   } catch (error) {
-    if (error instanceof HardwareAdminError) {
+    const mapped =
+      error instanceof HardwareAdminError ? error : mapHardwareMutationError(error)
+    if (mapped) {
+      const status =
+        mapped.code === 'DUPLICATE_EXTERNAL_ID'
+          ? 409
+          : mapped.code === 'SCHEMA_OUT_OF_DATE'
+            ? 503
+            : 400
       return NextResponse.json(
-        { success: false, error: error.message, code: error.code },
-        { status: error.code === 'DUPLICATE_EXTERNAL_ID' ? 409 : 400 },
+        { success: false, error: mapped.message, code: mapped.code },
+        { status },
       )
     }
     console.error('[Admin] station create:', error)

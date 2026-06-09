@@ -114,3 +114,71 @@ export function normalizeRewardRow(row: Record<string, unknown>): DbReward {
 export function normalizeRewardRows(rows: Record<string, unknown>[] | null): DbReward[] {
   return (rows ?? []).map(normalizeRewardRow)
 }
+
+/** Omit null/undefined keys so PostgREST does not reference absent columns. */
+export function compactRecord(payload: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== null && value !== undefined) {
+      next[key] = value
+    }
+  }
+  return next
+}
+
+const FK_STRIP_KEYS = new Set(['created_by', 'updated_by', 'actor_auth_user_id', 'campaign_id'])
+
+function shouldStripForFkViolation(message: string, key: string): boolean {
+  if (!FK_STRIP_KEYS.has(key)) return false
+  const lower = message.toLowerCase()
+  return lower.includes(key) || lower.includes(key.replace(/_/g, ''))
+}
+
+type DbMutationError = { code?: string; message?: string } | null
+
+/**
+ * Retry inserts/updates on partial schemas: drop unknown columns and optional FK fields.
+ */
+export async function mutateWithSchemaFallback<T>(
+  initialPayload: Record<string, unknown>,
+  run: (payload: Record<string, unknown>) => Promise<{ data: T | null; error: DbMutationError }>,
+  maxAttempts = 24,
+): Promise<T> {
+  let payload = compactRecord(initialPayload)
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data, error } = await run(payload)
+    if (!error) {
+      if (data == null) {
+        throw new Error('Database mutation succeeded without returning a row')
+      }
+      return data
+    }
+
+    if (error.code === '23505') throw error
+
+    if (isSchemaGapError(error)) {
+      const col = missingColumnFromError(error.message ?? '')
+      if (col && col in payload) {
+        delete payload[col]
+        continue
+      }
+    }
+
+    if (error.code === '23503') {
+      const msg = error.message ?? ''
+      let stripped = false
+      for (const key of FK_STRIP_KEYS) {
+        if (key in payload && shouldStripForFkViolation(msg, key)) {
+          delete payload[key]
+          stripped = true
+        }
+      }
+      if (stripped) continue
+    }
+
+    throw error
+  }
+
+  throw new Error('Database mutation exceeded schema fallback retries')
+}

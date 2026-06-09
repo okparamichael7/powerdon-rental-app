@@ -1,4 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/admin'
+import { logger } from '@/lib/observability/logger'
+import { isSchemaGapError } from '@/lib/db/schema-compat'
 
 export type HardwareAuditAction =
   | 'hardware.create'
@@ -33,14 +35,26 @@ class HardwareAuditRepository {
     details?: Record<string, unknown>
   }): Promise<void> {
     const supabase = await createServiceClient()
-    const { error } = await supabase.from('hardware_audit_log').insert({
-      actor_auth_user_id: input.actorAuthUserId,
-      station_id: input.stationId ?? null,
-      slot_number: input.slotNumber ?? null,
+    const row: Record<string, unknown> = {
       action: input.action,
       details: input.details ?? {},
-    })
-    if (error) throw error
+    }
+    if (input.actorAuthUserId) row.actor_auth_user_id = input.actorAuthUserId
+    if (input.stationId) row.station_id = input.stationId
+    if (input.slotNumber != null) row.slot_number = input.slotNumber
+
+    const { error } = await supabase.from('hardware_audit_log').insert(row)
+    if (error) {
+      if (isSchemaGapError(error)) {
+        logger.warn('hardware_audit_log unavailable; skipping audit entry', {
+          action: input.action,
+          code: error.code,
+          message: error.message,
+        })
+        return
+      }
+      throw error
+    }
   }
 
   async listByStation(stationId: string, limit = 50): Promise<DbHardwareAuditLog[]> {

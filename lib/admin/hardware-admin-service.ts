@@ -1,6 +1,7 @@
 import { stationRepository } from '@/lib/db/station-repository'
 import { sessionRepository } from '@/lib/db/session-repository'
 import { hardwareAuditRepository } from '@/lib/db/hardware-audit-repository'
+import { compactRecord } from '@/lib/db/schema-compat'
 import type { DbStation, DbStationSlot, SlotStatus, StationStatus } from '@/lib/db/types'
 
 export interface CreateHardwareInput {
@@ -58,25 +59,25 @@ export class HardwareAdminService {
     }
 
     const station = await stationRepository.createWithSlots(
-      {
+      compactRecord({
         external_id: input.externalId,
         device_id: input.externalId,
         name: input.name,
-        location: input.location ?? null,
-        description: input.description ?? null,
+        location: input.location,
+        description: input.description,
         hardware_type: input.hardwareType ?? 'power_bank_cabinet',
         status: input.status ?? 'offline',
         total_slots: input.totalSlots,
-        qr_reference: input.qrReference ?? null,
-        external_service_ref: input.externalServiceRef ?? null,
-        notes: input.notes ?? null,
-        campaign_id: input.campaignId ?? null,
+        qr_reference: input.qrReference,
+        external_service_ref: input.externalServiceRef,
+        notes: input.notes,
+        campaign_id: input.campaignId,
         is_enabled: input.isEnabled ?? true,
         created_by: actorId,
         updated_by: actorId,
         settings: {},
         metadata: {},
-      } as Parameters<typeof stationRepository.createWithSlots>[0],
+      }) as Parameters<typeof stationRepository.createWithSlots>[0],
       input.totalSlots,
     )
 
