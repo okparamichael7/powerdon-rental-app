@@ -307,7 +307,7 @@ export default function HardwarePage() {
         </Alert>
       )}
 
-      <AdminStatGrid columns={4}>
+      <AdminStatGrid columns={4} className="items-start">
         <AdminStatCard label="Connected" value={stats.totalConnected} icon={Cpu} />
         <AdminStatCard label="Online" value={stats.online} icon={Wifi} trend="positive" />
         <AdminStatCard label="Offline" value={stats.offline} icon={WifiOff} />
@@ -346,11 +346,11 @@ export default function HardwarePage() {
         </Card>
       ) : !stationsError ? (
         <>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid auto-rows-min items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {paginatedStations.map((station) => (
               <Card
                 key={station.stationId}
-                className={`transition-all ${station.isOnline ? 'hover:shadow-md hover:border-primary/20' : 'opacity-75'}`}
+                className={`h-fit w-full self-start transition-all ${station.isOnline ? 'hover:shadow-md hover:border-primary/20' : 'opacity-75'}`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">

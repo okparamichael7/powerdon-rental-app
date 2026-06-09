@@ -64,9 +64,9 @@ export function AdminChartSkeleton({ className }: { className?: string }) {
 
 export function AdminCardGridSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid auto-rows-min items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: count }).map((_, i) => (
-        <Card key={i}>
+        <Card key={i} className="h-fit w-full self-start">
           <CardContent className="space-y-3 p-6">
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-3 w-1/2" />
