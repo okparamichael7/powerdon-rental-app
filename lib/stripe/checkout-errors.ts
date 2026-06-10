@@ -13,5 +13,8 @@ export function formatStripeCheckoutError(message: string): string {
   if (lower.includes('session not found')) {
     return 'Your rental session could not be found. Please go back and start checkout again.'
   }
+  if (lower.includes('failed to get session')) {
+    return 'We could not load your rental status after payment. Please refresh and try again.'
+  }
   return message
 }

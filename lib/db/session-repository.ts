@@ -268,6 +268,7 @@ class SessionRepository {
       `${SESSION_SELECT_FULL}, events:session_events(*)`,
       `${SESSION_SELECT_MINIMAL}, events:session_events(*)`,
       SESSION_SELECT_MINIMAL,
+      '*',
     ];
 
     let lastError: { code?: string; message?: string } | null = null;
@@ -294,7 +295,8 @@ class SessionRepository {
 
   async getByCode(code: string): Promise<SessionWithRelations | null> {
     const supabase = await createServiceClient();
-    return this.getOneWithSchemaFallback(supabase, 'session_code', code);
+    const normalized = code.trim().toUpperCase();
+    return this.getOneWithSchemaFallback(supabase, 'session_code', normalized);
   }
 
   async getActiveByUserId(userId: string): Promise<SessionWithRelations | null> {
@@ -504,15 +506,23 @@ class SessionRepository {
 
   async getEvents(sessionId: string): Promise<DbSessionEvent[]> {
     const supabase = await createServiceClient();
-    
-    const { data, error } = await supabase
-      .from('session_events')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase
+        .from('session_events')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (isSchemaGapError(error)) return [];
+        throw error;
+      }
+      return data || [];
+    } catch (error) {
+      if (isSchemaGapError(error as { code?: string; message?: string })) return [];
+      throw error;
+    }
   }
 
   // ============================================================================

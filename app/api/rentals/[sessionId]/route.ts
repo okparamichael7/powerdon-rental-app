@@ -59,7 +59,15 @@ export const GET = withPublicApi(async (
       currentCharge = estimateRentalChargeEur(currentDurationMinutes);
     }
 
-    const events = await sessionRepository.getEvents(session.id);
+    let events: Awaited<ReturnType<typeof sessionRepository.getEvents>> = [];
+    try {
+      events = await sessionRepository.getEvents(session.id);
+    } catch (eventError) {
+      console.warn('[API] Session events unavailable', {
+        sessionId: session.id,
+        error: eventError instanceof Error ? eventError.message : String(eventError),
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -119,9 +127,10 @@ export const GET = withPublicApi(async (
       },
     });
   } catch (error) {
-    console.error('[API] Error getting session:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[API] Error getting session:', { message, error });
     return NextResponse.json(
-      { success: false, error: 'Failed to get session' },
+      { success: false, error: 'Failed to get session', code: 'SESSION_LOOKUP_ERROR' },
       { status: 500 }
     );
   }

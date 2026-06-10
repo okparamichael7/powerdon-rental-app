@@ -205,9 +205,8 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
       if (unlockToken && sessionId) {
         saveSessionToken(sessionId, unlockToken, sessionCode);
       }
-      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionCode)}`, {
-        headers: rentalSessionAuthHeaders(sessionId ?? sessionCode, sessionCode),
-      });
+      const normalizedCode = sessionCode.trim().toUpperCase();
+      const res = await fetch(`/api/rentals/${encodeURIComponent(normalizedCode)}`);
       const body = await res.json();
       if (!res.ok || !body.success) {
         setErrorMessage(body.error || 'Failed to confirm payment');
