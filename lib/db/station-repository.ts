@@ -1,5 +1,6 @@
 // Station Repository - Database operations for stations and hardware
 import { createServiceClient } from '@/lib/supabase/admin';
+import { powerBankRepository } from './power-bank-repository';
 import {
   countWithSessionStatusFallback,
   isInvalidUuidInputError,
@@ -575,11 +576,26 @@ class StationRepository {
     }
 
     for (const slot of inventory) {
+      let powerBankDbId: string | null = null
+      if (slot.status === 'occupied' && slot.powerBankId) {
+        powerBankDbId = await powerBankRepository.resolveDbPowerBankId(
+          slot.powerBankId,
+          {
+            stationId,
+            slotNumber: slot.slotNumber,
+            batteryLevel: slot.batteryLevel,
+          },
+        )
+      }
+
       await this.updateSlot(stationId, slot.slotNumber, {
         status: slot.status,
         battery_level: slot.batteryLevel,
-        power_bank_id: slot.powerBankId,
+        power_bank_id: powerBankDbId,
         is_charging: slot.isCharging,
+        metadata: slot.powerBankId
+          ? { terminal_external_id: slot.powerBankId }
+          : undefined,
       });
     }
 

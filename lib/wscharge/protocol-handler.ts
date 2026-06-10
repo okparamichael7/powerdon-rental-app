@@ -9,7 +9,7 @@ import {
   incrementWsChargeMetric,
   recordWsChargeLatency,
 } from './metrics'
-import { stationRepository, sessionRepository, rewardRepository } from '@/lib/db'
+import { stationRepository, sessionRepository, rewardRepository, powerBankRepository } from '@/lib/db'
 import { isStationUuid, resolveDbStationId } from '@/lib/db/station-resolve'
 import type { SlotStatus, Json } from '@/lib/db/types'
 import { borrowResultLabel } from '@/lib/rental/borrow-result-label'
@@ -454,7 +454,13 @@ async function processBorrowResult(
   }
 
   if (success) {
-    await sessionRepository.startSession(session.id, terminalId)
+    const powerBankDbId = terminalId
+      ? await powerBankRepository.resolveDbPowerBankId(terminalId, {
+          stationId,
+          slotNumber,
+        })
+      : null
+    await sessionRepository.startSession(session.id, powerBankDbId ?? undefined)
     await stationRepository.updateSlot(stationId, slotNumber, {
       status: 'empty',
       power_bank_id: null,
@@ -528,7 +534,13 @@ async function processForceEjectResult(
   if (!session) return
 
   const terminalId = ejectResponse.terminalId
-  await sessionRepository.startSession(session.id, terminalId)
+  const powerBankDbId = terminalId
+    ? await powerBankRepository.resolveDbPowerBankId(terminalId, {
+        stationId,
+        slotNumber: ejectResponse.slotNumber,
+      })
+    : null
+  await sessionRepository.startSession(session.id, powerBankDbId ?? undefined)
   await stationRepository.updateSlot(stationId, ejectResponse.slotNumber, {
     status: 'empty',
     power_bank_id: null,
@@ -559,21 +571,30 @@ async function processReturn(
 
   const { slotNumber, terminalId, batteryLevel } = returnMsg
 
+  const powerBankDbId = terminalId
+    ? await powerBankRepository.resolveDbPowerBankId(terminalId, {
+        stationId,
+        slotNumber,
+        batteryLevel,
+      })
+    : null
+
   await stationRepository.updateSlot(stationId, slotNumber, {
     status: 'occupied',
-    power_bank_id: terminalId,
+    power_bank_id: powerBankDbId,
     battery_level: batteryLevel,
     is_charging: true,
+    metadata: terminalId ? { terminal_external_id: terminalId } : undefined,
   })
 
-  if (!terminalId) return
+  if (!terminalId || !powerBankDbId) return
 
   const activeSessions = await sessionRepository.getAll({
     status: ['active'],
     limit: 100,
   })
 
-  const session = activeSessions.find((s) => s.power_bank_id === terminalId)
+  const session = activeSessions.find((s) => s.power_bank_id === powerBankDbId)
   if (!session) return
 
   const startedAt = session.started_at

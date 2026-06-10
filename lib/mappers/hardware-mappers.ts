@@ -67,13 +67,18 @@ export function mapAdminHardwareFromDb(
   }
 }
 
+function slotTerminalId(slot: DbStationSlot): string | null {
+  const meta = slot.metadata as { terminal_external_id?: string } | null
+  return meta?.terminal_external_id ?? slot.power_bank_id
+}
+
 export function mapAdminSlotFromDb(slot: DbStationSlot): AdminHardwareSlot {
   return {
     id: slot.id,
     slotNumber: slot.slot_number,
     label: slot.label ?? null,
     status: slot.status,
-    powerBankId: slot.power_bank_id,
+    powerBankId: slotTerminalId(slot),
     batteryLevel: slot.battery_level,
     isCharging: slot.is_charging,
     errorMessage: slot.error_message,

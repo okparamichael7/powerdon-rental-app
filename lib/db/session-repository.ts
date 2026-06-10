@@ -429,10 +429,13 @@ class SessionRepository {
   }
 
   async startSession(id: string, powerBankId?: string): Promise<DbRentalSession> {
+    const resolvedPowerBankId = powerBankId
+      ? nullIfEmptyUuid(powerBankId) ?? undefined
+      : undefined
     return this.update(id, {
       status: 'active',
       started_at: new Date().toISOString(),
-      power_bank_id: powerBankId,
+      power_bank_id: resolvedPowerBankId,
       payment_status: 'authorized',
     });
   }

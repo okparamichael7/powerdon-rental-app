@@ -19,8 +19,14 @@ function mapDbInventory(dbStation: NonNullable<Awaited<ReturnType<typeof loadDbS
   const occupied = dbStation.slots.filter((s) => s.status === 'occupied');
   const inventory = occupied.map((slot) => ({
     slotNumber: slot.slot_number,
-    terminalId: slot.power_bank_id ?? '',
-    formattedTerminalId: slot.power_bank_id ?? '',
+    terminalId:
+      (slot.metadata as { terminal_external_id?: string } | null)?.terminal_external_id
+      ?? slot.power_bank_id
+      ?? '',
+    formattedTerminalId:
+      (slot.metadata as { terminal_external_id?: string } | null)?.terminal_external_id
+      ?? slot.power_bank_id
+      ?? '',
     batteryLevel: slot.battery_level ?? 0,
     batteryLevelRaw: slot.battery_level,
   }));
