@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { stationRepository } from './station-repository';
 import {
+  filterLegacySessionStatuses,
+  isInvalidEnumInputError,
   isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
@@ -175,14 +177,18 @@ class SessionRepository {
   async getAll(filters?: SessionFilters): Promise<SessionWithRelations[]> {
     const supabase = await createServiceClient();
 
-    const applyFilters = (select: string, includeStationFilter: boolean) => {
+    const applyFilters = (
+      select: string,
+      includeStationFilter: boolean,
+      statuses: string[] | undefined,
+    ) => {
       let query = supabase
         .from('rental_sessions')
         .select(select)
         .order('created_at', { ascending: false });
 
-      if (filters?.status && filters.status.length > 0) {
-        query = query.in('status', filters.status);
+      if (statuses && statuses.length > 0) {
+        query = query.in('status', statuses);
       }
 
       if (filters?.userId) {
@@ -229,11 +235,25 @@ class SessionRepository {
     ];
 
     let lastError: { code?: string; message?: string } | null = null;
+    const statusAttempts = filters?.status?.length
+      ? filters.status.includes('expired')
+        ? [filters.status, filterLegacySessionStatuses(filters.status)]
+        : [filters.status]
+      : [undefined];
+
     for (const attempt of attempts) {
-      const { data, error } = await applyFilters(attempt.select, attempt.stationFilter);
-      if (!error) return data || [];
-      if (!isSchemaGapError(error)) throw error;
-      lastError = error;
+      for (const statuses of statusAttempts) {
+        if (statuses && statuses.length === 0) continue;
+        const { data, error } = await applyFilters(attempt.select, attempt.stationFilter, statuses);
+        if (!error) return data || [];
+        if (isInvalidEnumInputError(error)) {
+          lastError = error;
+          continue;
+        }
+        if (!isSchemaGapError(error)) throw error;
+        lastError = error;
+        break;
+      }
     }
 
     throw lastError ?? new Error('Failed to load sessions');

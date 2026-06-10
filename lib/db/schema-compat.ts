@@ -35,6 +35,19 @@ export function isInvalidUuidInputError(error: { code?: string; message?: string
   return (error.message ?? '').includes('invalid input syntax for type uuid')
 }
 
+/** Legacy DBs may omit enum variants (e.g. session_status without expired). */
+export function isInvalidEnumInputError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code !== '22P02') return false
+  const msg = error.message ?? ''
+  return msg.includes('invalid input value for enum') || msg.includes('enum')
+}
+
+/** Drop enum values that legacy schemas often lack. */
+export function filterLegacySessionStatuses(statuses: string[]): string[] {
+  return statuses.filter((s) => s !== 'expired')
+}
+
 /** Parse missing column name from PostgREST / Postgres schema errors. */
 export function missingColumnFromError(message: string): string | null {
   const cache = message.match(/Could not find the '([^']+)' column/)
@@ -62,8 +75,8 @@ export function isSchemaGapError(error: { code?: string; message?: string } | nu
 export const SESSION_SELECT_FULL = `
   *,
   user:users(*),
-  pickup_station:stations!pickup_station_id(id, name, location),
-  return_station:stations!return_station_id(id, name, location),
+  pickup_station:stations!pickup_station_id(id, name),
+  return_station:stations!return_station_id(id, name),
   reward:rewards!session_id(code, id, status)
 `
 

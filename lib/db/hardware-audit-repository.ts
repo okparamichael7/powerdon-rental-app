@@ -66,7 +66,10 @@ class HardwareAuditRepository {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (error) throw error
+    if (error) {
+      if (isSchemaGapError(error)) return []
+      throw error
+    }
     return (data ?? []) as DbHardwareAuditLog[]
   }
 
@@ -78,7 +81,10 @@ class HardwareAuditRepository {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (error) throw error
+    if (error) {
+      if (isSchemaGapError(error)) return []
+      throw error
+    }
     return (data ?? []) as DbHardwareAuditLog[]
   }
 }

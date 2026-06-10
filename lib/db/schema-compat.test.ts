@@ -2,6 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   compactRecord,
+  filterLegacySessionStatuses,
+  isInvalidEnumInputError,
   isInvalidUuidInputError,
   isSchemaGapError,
   missingColumnFromError,
@@ -69,6 +71,27 @@ describe('stripEmptyUuidFields', () => {
     assert.equal('campaign_id' in payload, false)
     assert.equal('power_bank_id' in payload, false)
     assert.equal('reward_id' in payload, false)
+  })
+})
+
+describe('isInvalidEnumInputError', () => {
+  it('detects invalid session_status enum values', () => {
+    assert.equal(
+      isInvalidEnumInputError({
+        code: '22P02',
+        message: 'invalid input value for enum session_status: "expired"',
+      }),
+      true,
+    )
+  })
+})
+
+describe('filterLegacySessionStatuses', () => {
+  it('removes expired for legacy databases', () => {
+    assert.deepEqual(
+      filterLegacySessionStatuses(['completed', 'expired', 'failed']),
+      ['completed', 'failed'],
+    )
   })
 })
 

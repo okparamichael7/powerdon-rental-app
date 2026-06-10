@@ -378,7 +378,7 @@ class StationRepository {
       .limit(limit);
 
     if (error) {
-      if (error.code === '42P01') return [];
+      if (error.code === '42P01' || isSchemaGapError(error)) return [];
       throw error;
     }
     return data ?? [];
