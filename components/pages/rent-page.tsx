@@ -84,7 +84,7 @@ const errorConfigs: Record<ErrorType, ErrorConfig> = {
 const btnClass = PWA_BTN_CLASS;
 
 export function RentPage({ isOnline, onNavigate }: RentPageProps) {
-  const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation } =
+  const { activeSession, currentStation, user, startRental, setUser, setActiveSession, loadStation, syncActiveSession } =
     useAppState();
 
   const [step, setStep] = useState<RentStep>('landing');
@@ -135,9 +135,13 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         return;
       }
 
-      // Check for active session
+      // Check for active session (do not override checkout success/unlock flow)
       if (activeSession) {
-        setStep('active_warning');
+        setStep((current) =>
+          current === 'success' || current === 'unlocking' || current === 'payment'
+            ? current
+            : 'active_warning',
+        );
         setIsLoading(false);
         return;
       }
@@ -222,21 +226,36 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         currentStation &&
         ['pending', 'active'].includes(body.session?.status)
       ) {
-        const unlockRes = await fetch(`/api/stations/${currentStation.id}/unlock`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...rentalSessionAuthHeaders(sessionId, sessionCode),
-          },
-          body: JSON.stringify({
-            sessionId,
-            unlockToken,
-            slotNumber: body.session?.pickupSlotNumber,
-          }),
-        });
-        if (!unlockRes.ok) {
+        let unlockFailed = false;
+        let unlockError = 'Unlock failed after payment';
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const unlockRes = await fetch(`/api/stations/${currentStation.id}/unlock`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...rentalSessionAuthHeaders(sessionId, sessionCode),
+            },
+            body: JSON.stringify({
+              sessionId: sessionId || normalizedCode,
+              unlockToken,
+              slotNumber: body.session?.pickupSlotNumber,
+            }),
+          });
+          if (unlockRes.ok) {
+            unlockFailed = false;
+            break;
+          }
           const unlockBody = await unlockRes.json().catch(() => ({}));
-          setErrorMessage(unlockBody.error || 'Unlock failed after payment');
+          unlockError = unlockBody.error || unlockError;
+          if (unlockBody.code === 'PAYMENT_REQUIRED' && attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
+          unlockFailed = true;
+          break;
+        }
+        if (unlockFailed) {
+          setErrorMessage(unlockError);
           setError('unlock_failed');
           setStep('error');
           return;
@@ -365,7 +384,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   if (step === 'active_warning') {
     return (
       <ActiveWarningStep
-        onViewRental={() => onNavigate('status')}
+        onViewRental={async () => {
+          await syncActiveSession();
+          onNavigate('status');
+        }}
         onContinueAnyway={() => setStep('landing')}
       />
     );
@@ -459,7 +481,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         sessionCode={activeSession.sessionCode}
         assignedSlot={activeSession.slotNumber}
         startTime={activeSession.startTime}
-        onContinue={() => onNavigate('status')}
+        onContinue={async () => {
+          await syncActiveSession();
+          onNavigate('status');
+        }}
       />
     );
   }

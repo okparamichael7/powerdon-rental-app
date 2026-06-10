@@ -53,8 +53,11 @@ export function RentalCheckout({
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
   const initKeyRef = useRef<string | null>(null)
+  const completedRef = useRef(false)
 
   useEffect(() => {
+    if (completedRef.current) return
+
     if (!publishableKey) {
       const message = 'Stripe publishable key is not configured'
       setError(message)
@@ -133,6 +136,7 @@ export function RentalCheckout({
       )
       
       if (status.status === 'completed') {
+        completedRef.current = true
         onSuccess?.(sessionCode, unlockToken ?? undefined, sessionId ?? undefined)
         return
       }

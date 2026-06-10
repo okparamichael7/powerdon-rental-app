@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { sessionRepository, stationRepository } from '@/lib/db';
+import { resolveDbStationId } from '@/lib/db/station-resolve';
 import { withPublicApi } from '@/lib/api/public-route';
 import { authorizeSessionAccess } from '@/lib/security/session-access';
 import { validateBody, schemas } from '@/lib/security/validation';
@@ -21,10 +22,7 @@ export const POST = withPublicApi(async (
 
     const { slotNumber, sessionId, unlockToken } = validated.data;
 
-    let session = await sessionRepository.getById(sessionId);
-    if (!session) {
-      session = await sessionRepository.getByCode(sessionId);
-    }
+    const session = await sessionRepository.getByIdOrCode(sessionId);
     if (!session) {
       return NextResponse.json(
         { success: false, error: 'Session not found' },
@@ -55,14 +53,22 @@ export const POST = withPublicApi(async (
       );
     }
 
-    if (session.pickup_station_id !== stationId) {
+    const dbStationId = await resolveDbStationId(stationId);
+    if (!dbStationId) {
+      return NextResponse.json(
+        { success: false, error: 'Station not found' },
+        { status: 404 }
+      );
+    }
+
+    if (session.pickup_station_id !== dbStationId) {
       return NextResponse.json(
         { success: false, error: 'Session does not belong to this station' },
         { status: 400 }
       );
     }
 
-    const dbStation = await stationRepository.getById(stationId);
+    const dbStation = await stationRepository.getById(dbStationId);
     if (!dbStation?.external_id) {
       return NextResponse.json(
         { success: false, error: 'Station hardware not configured' },
@@ -142,7 +148,7 @@ export const POST = withPublicApi(async (
       return NextResponse.json({
         success: true,
         data: {
-          stationId,
+          stationId: dbStationId,
           sessionId: session.id,
           slotNumber: targetSlot,
           terminalId: dbSlot.power_bank_id ?? '',
@@ -172,7 +178,7 @@ export const POST = withPublicApi(async (
     return NextResponse.json({
       success: true,
       data: {
-        stationId,
+        stationId: dbStationId,
         sessionId: session.id,
         slotNumber: borrowResponse.slotNumber,
         terminalId: borrowResponse.terminalId,

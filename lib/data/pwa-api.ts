@@ -1,6 +1,12 @@
 import type { ActiveSession, StationInfo, UserInfo, UserReward } from '@/lib/session-store'
 import { saveSessionToken, rentalSessionAuthHeaders } from '@/lib/client/session-token'
 
+export type SessionSyncResult = {
+  active: ActiveSession | null
+  terminal?: boolean
+  notFound?: boolean
+}
+
 export async function loadStationFromApi(stationId: string): Promise<{ success: boolean; station?: StationInfo; error?: string }> {
   try {
     const res = await fetch(`/api/stations/${stationId}?source=database`)
@@ -33,45 +39,64 @@ export async function loadStationFromApi(stationId: string): Promise<{ success: 
   }
 }
 
+const TERMINAL_RENTAL_STATUSES = new Set(['completed', 'cancelled', 'expired'])
+
+function mapApiSessionToActive(
+  session: Record<string, unknown>,
+  station: StationInfo,
+): ActiveSession {
+  const dbStatus = String(session.status ?? 'pending')
+  const startedAt = session.startedAt ? new Date(String(session.startedAt)) : new Date()
+  let uiStatus: ActiveSession['status'] = 'active'
+  if (dbStatus === 'pending') uiStatus = 'unlocking'
+  else if (dbStatus === 'failed') uiStatus = 'failed'
+
+  return {
+    id: String(session.id),
+    sessionCode: String(session.sessionCode),
+    stationId: station.id,
+    stationName: station.name,
+    slotNumber: Number(session.pickupSlotNumber ?? 0),
+    startTime: startedAt,
+    elapsedMinutes: Number(session.currentDurationMinutes ?? 0),
+    hourlyRate: Number(session.hourlyRate ?? station.hourlyRate),
+    dailyCap: Number(session.dailyCap ?? station.dailyCap),
+    depositAmount: Number(session.depositAmount ?? station.depositAmount),
+    currentCharge: Number(session.currentCharge ?? 0),
+    rewardThreshold: Number(session.rewardThresholdMinutes ?? station.rewardThreshold),
+    rewardDescription: station.rewardDescription,
+    rewardValue: station.rewardValue,
+    campaignId: station.campaignId,
+    campaignName: station.campaignName,
+    status: uiStatus,
+    lastSyncTime: new Date(),
+  }
+}
+
 export async function syncSessionFromApi(
   sessionId: string,
   station: StationInfo,
   sessionCode?: string,
-): Promise<{ active: ActiveSession | null; terminal?: boolean }> {
+): Promise<SessionSyncResult> {
   try {
-    const lookupKey = sessionCode ?? sessionId
+    const lookupKey = (sessionCode?.trim().toUpperCase() || sessionId).trim()
     const res = await fetch(`/api/rentals/${encodeURIComponent(lookupKey)}`, {
       headers: rentalSessionAuthHeaders(sessionId, sessionCode),
     })
     const body = await res.json()
     if (!body.success || !body.session) {
-      return { active: null, terminal: body.error === 'Session not found' }
+      return {
+        active: null,
+        terminal: false,
+        notFound: res.status === 404 || body.error === 'Session not found',
+      }
     }
-    if (['completed', 'cancelled', 'expired', 'failed'].includes(body.session.status)) {
+    const dbStatus = String(body.session.status)
+    if (TERMINAL_RENTAL_STATUSES.has(dbStatus)) {
       return { active: null, terminal: true }
     }
-    const startedAt = body.session.startedAt ? new Date(String(body.session.startedAt)) : new Date()
     return {
-      active: {
-        id: String(body.session.id),
-        sessionCode: String(body.session.sessionCode),
-        stationId: station.id,
-        stationName: station.name,
-        slotNumber: Number(body.session.pickupSlotNumber ?? 0),
-        startTime: startedAt,
-        elapsedMinutes: Number(body.session.currentDurationMinutes ?? 0),
-        hourlyRate: Number(body.session.hourlyRate ?? station.hourlyRate),
-        dailyCap: Number(body.session.dailyCap ?? station.dailyCap),
-        depositAmount: Number(body.session.depositAmount ?? station.depositAmount),
-        currentCharge: Number(body.session.currentCharge ?? 0),
-        rewardThreshold: Number(body.session.rewardThresholdMinutes ?? station.rewardThreshold),
-        rewardDescription: station.rewardDescription,
-        rewardValue: station.rewardValue,
-        campaignId: station.campaignId,
-        campaignName: station.campaignName,
-        status: body.session.status === 'pending' ? 'unlocking' : 'active',
-        lastSyncTime: new Date(),
-      },
+      active: mapApiSessionToActive(body.session as Record<string, unknown>, station),
     }
   } catch {
     return { active: null }
@@ -300,25 +325,11 @@ export function sessionFromCheckoutApi(
   session: Record<string, unknown>,
   station: StationInfo,
 ): ActiveSession {
-  const startedAt = session.startedAt ? new Date(String(session.startedAt)) : new Date()
-  return {
-    id: String(session.id),
-    sessionCode: String(session.sessionCode),
-    stationId: (session.pickupStation as { id?: string } | null)?.id ?? station.id,
-    stationName: (session.pickupStation as { name?: string } | null)?.name ?? station.name,
-    slotNumber: Number(session.pickupSlotNumber ?? 1),
-    startTime: startedAt,
-    elapsedMinutes: Number(session.currentDurationMinutes ?? 0),
-    hourlyRate: Number(session.hourlyRate ?? station.hourlyRate),
-    dailyCap: Number(session.dailyCap ?? station.dailyCap),
-    depositAmount: Number(session.depositAmount ?? station.depositAmount),
-    currentCharge: Number(session.currentCharge ?? 0),
-    rewardThreshold: station.rewardThreshold,
-    rewardDescription: station.rewardDescription,
-    rewardValue: station.rewardValue,
-    campaignId: station.campaignId,
-    campaignName: station.campaignName,
-    status: session.status === 'active' ? 'active' : 'unlocking',
-    lastSyncTime: new Date(),
-  }
+  return mapApiSessionToActive(
+    {
+      ...session,
+      pickupSlotNumber: session.pickupSlotNumber ?? 1,
+    },
+    station,
+  )
 }

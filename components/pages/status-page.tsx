@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MobileHeader } from '@/components/volt/mobile-header';
 import {
   PwaScreen,
@@ -44,7 +44,12 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   const [returnComplete, setReturnComplete] = useState(false);
   const [qualifiedForReward, setQualifiedForReward] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [initialSyncDone, setInitialSyncDone] = useState(!!activeSession);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void syncActiveSession().finally(() => setInitialSyncDone(true));
+  }, [syncActiveSession]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -110,6 +115,19 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   };
 
   if (!activeSession && !returnComplete) {
+    if (!initialSyncDone) {
+      return (
+        <PwaScreen>
+          <PwaCenteredState
+            icon={<PowerBankIcon size={26} className="text-muted-foreground" />}
+            title="Loading Rental"
+            description="Checking your rental status…"
+          >
+            <Spinner className="h-6 w-6" />
+          </PwaCenteredState>
+        </PwaScreen>
+      );
+    }
     return (
       <PwaScreen>
         <NoSessionView

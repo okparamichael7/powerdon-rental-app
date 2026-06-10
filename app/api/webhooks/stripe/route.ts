@@ -5,6 +5,7 @@ import { logger } from '@/lib/observability/logger'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { alertManager } from '@/lib/ops/alerting'
 import { enforceRateLimit } from '@/lib/api/route-helpers'
+import { sessionRepository } from '@/lib/db'
 import { dispatchBorrowBySessionCode } from '@/lib/rental/dispatch-borrow'
 import {
   recordStripeWebhookEvent,
@@ -18,6 +19,7 @@ import {
   mapPaymentIntentCanceledUpdate,
   mapPaymentIntentFailedUpdate,
   mapPaymentIntentSucceededUpdate,
+  shouldApplyPaymentIntentCanceledUpdate,
 } from '@/lib/stripe/webhook-state-mappers'
 
 // Webhook secret from environment
@@ -258,6 +260,20 @@ async function handlePaymentIntentCanceled(
   }
 
   try {
+    const session = await sessionRepository.getByCode(sessionId)
+    if (
+      session &&
+      !shouldApplyPaymentIntentCanceledUpdate(session, paymentIntent.id)
+    ) {
+      logger.info('Ignored stale payment_intent.canceled for session', {
+        sessionId,
+        paymentIntentId: paymentIntent.id,
+        activePaymentIntentId: session.payment_intent_id,
+        paymentStatus: session.payment_status,
+      })
+      return { success: true, message: 'Stale payment cancellation ignored' }
+    }
+
     const updated = await updateRentalSessionFromWebhook(sessionId, mapped.rentalSession)
     if (!updated.ok) {
       logger.error('Failed to update session on payment cancellation', { error: updated.error, sessionId })

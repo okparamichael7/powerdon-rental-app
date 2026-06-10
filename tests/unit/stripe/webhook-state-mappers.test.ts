@@ -9,6 +9,7 @@ import {
   mapCheckoutSessionCompletedUpdate,
   mapCheckoutSessionExpiredUpdate,
   mapChargeRefundedUpdate,
+  shouldApplyPaymentIntentCanceledUpdate,
 } from '@/lib/stripe/webhook-state-mappers'
 
 describe('extractSessionCode', () => {
@@ -102,6 +103,44 @@ describe('mapChargeRefundedUpdate', () => {
     assert.equal(mapped.paymentIntentId, 'pi_test')
     assert.equal(mapped.rentalSession.payment_status, 'refunded')
     assert.equal(mapped.rentalSession.amount_refunded, 28)
+  })
+})
+
+describe('shouldApplyPaymentIntentCanceledUpdate', () => {
+  it('ignores cancel for a superseded payment intent when session is authorized', () => {
+    const apply = shouldApplyPaymentIntentCanceledUpdate(
+      {
+        payment_status: 'authorized',
+        payment_intent_id: 'pi_live',
+        status: 'pending',
+      },
+      'pi_old',
+    )
+    assert.equal(apply, false)
+  })
+
+  it('applies cancel when it targets the active payment intent', () => {
+    const apply = shouldApplyPaymentIntentCanceledUpdate(
+      {
+        payment_status: 'authorized',
+        payment_intent_id: 'pi_live',
+        status: 'pending',
+      },
+      'pi_live',
+    )
+    assert.equal(apply, true)
+  })
+
+  it('never downgrades captured rentals', () => {
+    const apply = shouldApplyPaymentIntentCanceledUpdate(
+      {
+        payment_status: 'captured',
+        payment_intent_id: 'pi_live',
+        status: 'active',
+      },
+      'pi_live',
+    )
+    assert.equal(apply, false)
   })
 })
 

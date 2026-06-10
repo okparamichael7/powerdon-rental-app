@@ -124,17 +124,59 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const storedSession = getStoredItem<ActiveSession>(STORAGE_KEYS.session);
     const sessionId = storedSession?.id ?? getStoredItem<string>(STORAGE_KEYS.sessionId);
     if (!sessionId) return;
-    const station = currentStation;
+
+    let station = currentStation;
+    if (!station && storedSession?.stationId) {
+      const stationResult = await getPwaDataLayer().loadStationFromApi(storedSession.stationId);
+      if (stationResult.success && stationResult.station) {
+        station = stationResult.station;
+        setCurrentStation(stationResult.station);
+        setStoredItem(STORAGE_KEYS.stationId, stationResult.station.id);
+      } else {
+        station = {
+          id: storedSession.stationId,
+          name: storedSession.stationName,
+          location: '',
+          status: 'online',
+          availableSlots: 0,
+          totalSlots: 12,
+          campaignId: storedSession.campaignId,
+          campaignName: storedSession.campaignName,
+          hourlyRate: storedSession.hourlyRate,
+          dailyCap: storedSession.dailyCap,
+          depositAmount: storedSession.depositAmount,
+          rewardThreshold: storedSession.rewardThreshold,
+          rewardDescription: storedSession.rewardDescription,
+          rewardValue: storedSession.rewardValue,
+        };
+      }
+    }
     if (!station) return;
+
     const syncResult = await getPwaDataLayer().syncSessionFromApi(
       sessionId,
       station,
       storedSession?.sessionCode,
     );
-    if ('terminal' in syncResult && syncResult.terminal && !syncResult.active) {
-      setActiveSession(null);
-    } else if (syncResult.active) {
+
+    if (syncResult.active) {
       setActiveSession(syncResult.active);
+      return;
+    }
+
+    if (syncResult.terminal) {
+      setActiveSession(null);
+      return;
+    }
+
+    // Transient API miss right after checkout — keep local session for a short grace window.
+    if (syncResult.notFound && storedSession) {
+      const lastSyncMs = storedSession.lastSyncTime
+        ? new Date(storedSession.lastSyncTime).getTime()
+        : Date.now();
+      const ageMs = Number.isFinite(lastSyncMs) ? Date.now() - lastSyncMs : 0;
+      if (ageMs < 5 * 60 * 1000) return;
+      setActiveSession(null);
     }
   }, [currentStation, setActiveSession]);
 

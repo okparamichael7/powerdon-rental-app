@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import type { PaymentStatus, SessionStatus } from '@/lib/db/types'
+import type { DbRentalSession, PaymentStatus, SessionStatus } from '@/lib/db/types'
 
 export type WebhookSessionUpdate = {
   sessionCode: string | null
@@ -54,6 +54,32 @@ export function mapPaymentIntentFailedUpdate(
       },
     },
   }
+}
+
+/**
+ * Ignore cancellation webhooks for superseded payment intents (e.g. checkout retries)
+ * so an authorized rental is not downgraded to cancelled.
+ */
+export function shouldApplyPaymentIntentCanceledUpdate(
+  session: Pick<DbRentalSession, 'payment_status' | 'payment_intent_id' | 'status'>,
+  canceledPaymentIntentId: string,
+): boolean {
+  if (
+    session.payment_intent_id &&
+    session.payment_intent_id !== canceledPaymentIntentId
+  ) {
+    return false
+  }
+
+  if (session.payment_status === 'captured') {
+    return false
+  }
+
+  if (session.status === 'active') {
+    return session.payment_intent_id === canceledPaymentIntentId
+  }
+
+  return true
 }
 
 export function mapPaymentIntentCanceledUpdate(

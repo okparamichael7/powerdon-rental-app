@@ -11,6 +11,7 @@ import { DEFAULT_PRICING, generateIdempotencyKey } from '@/lib/stripe/types'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { userRepository, sessionRepository, stationRepository } from '@/lib/db'
 import { prepareRentalStart, loadCampaignPricing } from '@/lib/rental/start-orchestrator'
+import { dispatchBorrowBySessionCode } from '@/lib/rental/dispatch-borrow'
 import type { DbUser, DbRentalSession } from '@/lib/db/types'
 import { getErrorDetails, getErrorMessage } from '@/lib/errors/get-error-message'
 import { logger } from '@/lib/observability/logger'
@@ -197,6 +198,13 @@ export async function getCheckoutStatus(sessionCode: string, checkoutSessionId?:
     }
 
     if (isCheckoutPaymentComplete(session)) {
+      const borrow = await dispatchBorrowBySessionCode(sessionCode)
+      if (!borrow.success && !borrow.skipped) {
+        logger.warn('Borrow dispatch on completed checkout failed', {
+          sessionCode,
+          error: borrow.error,
+        })
+      }
       return { status: 'completed' as const, paymentStatus: session.payment_status }
     }
 
@@ -235,6 +243,15 @@ export async function getCheckoutStatus(sessionCode: string, checkoutSessionId?:
               source: 'checkout_status_sync',
             },
           })
+
+          const borrow = await dispatchBorrowBySessionCode(sessionCode)
+          if (!borrow.success && !borrow.skipped) {
+            logger.warn('Borrow dispatch after checkout sync failed', {
+              sessionCode,
+              error: borrow.error,
+            })
+          }
+
           return { status: 'completed' as const, paymentStatus: 'authorized' as const }
         }
       } catch (syncError) {
