@@ -589,6 +589,54 @@ npm run build  # pass
 
 ---
 
+## Round 13 — WsCharge product SN vs UUID (`22P02`) (strict)
+
+**Scope:** Vercel log `[API] Error processing WsCharge message: invalid input syntax for type uuid: "5753424156100007"` — cabinet product serial passed to Postgres UUID columns.  
+**Build/tests (Round 13 final):** `npm run test:unit` **196/196** pass, `npm run build` pass.
+
+### Round 13 — Pre-remediation audit
+
+| # | Finding | Pre status | Evidence / gap |
+|---|---------|------------|----------------|
+| R13-1 | WsCharge ingress 500 on heartbeat/inventory/return/borrow | **Still Open** | `message/route.ts:35-40` top-level catch; product SN in `stationId` body from TCP proxy |
+| R13-2 | `getById` throws `22P02` for non-UUID strings | **Still Open** | `station-repository.ts:108` `.eq('id', id)` with no guard |
+| R13-3 | `resolveDbStationId` called `getById` before external lookup | **Still Open** | `hardware-command-audit.ts` — same `22P02` risk for product SN |
+| R13-4 | Protocol handler used product SN on UUID columns | **Still Open** | `updateHeartbeat`, `updateSlot`, `getAll({ stationId })` via unresolved `dbStationId` |
+| R13-5 | Station GET/inventory tried `getById` before `getByExternalId` | **Partially Resolved** | `stations/[id]/route.ts`, `inventory/route.ts` — threw before fallback |
+| R13-6 | Single DB failure aborted entire WsCharge frame | **Partially Resolved** | Uncaught throws in heartbeat/return/borrow paths |
+
+### Round 13 — Remediation
+
+| Item | Change |
+|------|--------|
+| R13-1–4 | `lib/db/station-resolve.ts` — `isStationUuid`, `resolveDbStationId` (UUID-only `getById`) |
+| R13-2 | `station-repository.ts:getById` — `isInvalidUuidInputError` → `null` |
+| R13-3 | `hardware-command-audit.ts` — import shared `resolveDbStationId` |
+| R13-4 | `protocol-handler.ts` — `ensureDbStationId`; guards in `processReturn` / `processBorrowResult` |
+| R13-5 | `stations/[id]/route.ts`, `inventory/route.ts` — `resolveDbStationId` before load |
+| R13-6 | try/catch on heartbeat, inventory, return, borrow DB blocks — log + continue |
+| R13-7 | `lib/db/station-resolve.test.ts` — rejects `5753424156100007` as non-UUID |
+
+### Round 13 — Final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| R13-1 | WsCharge `22P02` 500 for product SN `5753424156100007` | **Fully Resolved** | `ensureDbStationId` + `resolveDbStationId`; no UUID query with SN |
+| R13-2 | `getById` throws on cabinet serial | **Fully Resolved** | `station-repository.ts:113-114` |
+| R13-3 | Admin audit `resolveDbStationId` unsafe | **Fully Resolved** | `station-resolve.ts:15-25`; re-export from `hardware-command-audit.ts` |
+| R13-4 | Heartbeat DB update with wrong id type | **Fully Resolved** | `protocol-handler.ts:157-165` |
+| R13-5 | Inventory/return/borrow slot updates | **Fully Resolved** | `protocol-handler.ts:177-280`; `isStationUuid` guards at `:423`, `:492` |
+| R13-6 | Frame-level 500 on partial DB failure | **Fully Resolved** | try/catch heartbeat/inventory/return/borrow; route still returns 200 + responses |
+| R13-7 | Station API SN lookup | **Fully Resolved** | `inventory/route.ts:11-14`; `stations/[id]/route.ts:25-26`, `:223-224` |
+| R13-8 | R12 checkout/session items regressed | **Fully Resolved** | No edits to `rent-page.tsx`, `rentals/[sessionId]/route.ts`, `checkout-errors.ts` |
+| R13-9 | Unlock/start routes SN-only lookup | **Deferred** | `unlock/route.ts:65`, `rentals/start/route.ts:25` still `getById` only — safe (null not throw); PWA uses DB UUID |
+
+**Round 13 summary:** 8 Fully Resolved, 0 Partially Resolved, 0 Still Open, 1 Deferred.
+
+**Operator:** After deploy, confirm `stations.external_id = '5753424156100007'` exists (login auto-registers). Heartbeats should update `last_heartbeat` without Vercel 500s.
+
+---
+
 ## Historical rounds (Rounds 3–7)
 
 Earlier remediation rounds (enterprise security, admin dashboard, C3 UUID guard, staff roles) are documented above. Round 7 admin final: 41 Fully Resolved, 5 Partially Resolved, 0 Still Open. Round 8 completes PWA customer app production readiness.

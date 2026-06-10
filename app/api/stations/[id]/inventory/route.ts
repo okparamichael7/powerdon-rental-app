@@ -6,13 +6,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository } from '@/lib/db';
+import { resolveDbStationId } from '@/lib/db/station-resolve';
 import { withPublicApi } from '@/lib/api/public-route';
 
 async function loadDbStation(stationId: string) {
-  return (
-    (await stationRepository.getById(stationId)) ??
-    (await stationRepository.getByExternalId(stationId))
-  );
+  const dbId = await resolveDbStationId(stationId);
+  if (!dbId) return null;
+  return stationRepository.getById(dbId);
 }
 
 function mapDbInventory(dbStation: NonNullable<Awaited<ReturnType<typeof loadDbStation>>>) {

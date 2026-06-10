@@ -4,6 +4,7 @@ import { stationManager } from '@/lib/wscharge';
 import * as protocol from '@/lib/wscharge/protocol';
 import { stationRepository, campaignRepository } from '@/lib/db';
 import { nullIfEmptyUuid } from '@/lib/db/schema-compat';
+import { resolveDbStationId } from '@/lib/db/station-resolve';
 import { enforceRateLimit, requireAdminSession } from '@/lib/api/route-helpers';
 import { validateBody, schemas } from '@/lib/security/validation';
 import { auditAdminHardwareCommand } from '@/lib/admin/hardware-command-audit';
@@ -21,10 +22,8 @@ export async function GET(
 
   try {
     if (source === 'database' || source === 'both') {
-      let dbStation = await stationRepository.getById(stationId);
-      if (!dbStation) {
-        dbStation = await stationRepository.getByExternalId(stationId);
-      }
+      const dbStationId = await resolveDbStationId(stationId);
+      const dbStation = dbStationId ? await stationRepository.getById(dbStationId) : null;
       if (dbStation) {
         const memoryStation = stationManager.getStation(stationId) ||
           (dbStation.external_id ? stationManager.getStation(dbStation.external_id) : undefined);
@@ -221,9 +220,8 @@ export async function POST(
     // Proxy path: inventory response is async via /api/stations/message → DB
     if (command === 'query_inventory' && result.proxyOnly) {
       await new Promise((r) => setTimeout(r, 3000));
-      const dbStation =
-        (await stationRepository.getById(stationId)) ??
-        (await stationRepository.getByExternalId(stationId));
+      const refreshedId = await resolveDbStationId(stationId);
+      const dbStation = refreshedId ? await stationRepository.getById(refreshedId) : null;
       const occupied =
         dbStation?.slots?.filter((s) => s.status === 'occupied') ?? [];
       return NextResponse.json({

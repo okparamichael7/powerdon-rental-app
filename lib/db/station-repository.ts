@@ -2,6 +2,7 @@
 import { createServiceClient } from '@/lib/supabase/admin';
 import {
   countWithSessionStatusFallback,
+  isInvalidUuidInputError,
   isSchemaGapError,
   mutateWithSchemaFallback,
 } from './schema-compat';
@@ -110,6 +111,7 @@ class StationRepository {
 
     if (error) {
       if (error.code === 'PGRST116') return null;
+      if (isInvalidUuidInputError(error)) return null;
       throw error;
     }
 

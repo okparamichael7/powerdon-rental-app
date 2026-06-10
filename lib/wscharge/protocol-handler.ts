@@ -10,6 +10,7 @@ import {
   recordWsChargeLatency,
 } from './metrics'
 import { stationRepository, sessionRepository, rewardRepository } from '@/lib/db'
+import { isStationUuid, resolveDbStationId } from '@/lib/db/station-resolve'
 import type { SlotStatus, Json } from '@/lib/db/types'
 
 function toJson(value: unknown): Json {
@@ -39,6 +40,17 @@ export interface ProcessWsChargeResult {
   responses: WsChargeResponseItem[]
   remainingBytes: string | null
   error?: string
+}
+
+/** Map in-memory product SN / proxy stationId to a database stations.id UUID. */
+async function ensureDbStationId(
+  dbStationId: string | null,
+  connectionKey: string | undefined,
+): Promise<string | null> {
+  if (dbStationId && isStationUuid(dbStationId)) return dbStationId
+  const lookupKey = connectionKey?.trim()
+  if (!lookupKey) return null
+  return resolveDbStationId(lookupKey)
 }
 
 async function logEventSafe(
@@ -142,14 +154,15 @@ export async function processWsChargeHex(
       case protocol.CommandCode.HEARTBEAT: {
         if (!currentStationId) break
         responseBuffer = stationManager.handleHeartbeat(currentStationId)
-        if (!dbStationId && currentStationId) {
-          const row = await stationRepository.getByExternalId(currentStationId)
-          dbStationId = row?.id ?? null
-        }
+        dbStationId = await ensureDbStationId(dbStationId, currentStationId)
         if (dbStationId) {
-          await stationRepository.updateHeartbeat(dbStationId, {
-            connectionIp: remoteAddress,
-          })
+          try {
+            await stationRepository.updateHeartbeat(dbStationId, {
+              connectionIp: remoteAddress,
+            })
+          } catch (err) {
+            console.error('[WsCharge] Heartbeat DB update failed:', err)
+          }
         }
         responseData = { stationId: currentStationId, action: 'heartbeat' }
         break
@@ -161,10 +174,7 @@ export async function processWsChargeHex(
         if (!inventoryResponse) break
         stationManager.handleInventoryResponse(currentStationId, inventoryResponse)
 
-        if (!dbStationId && currentStationId) {
-          const row = await stationRepository.getByExternalId(currentStationId)
-          dbStationId = row?.id ?? null
-        }
+        dbStationId = await ensureDbStationId(dbStationId, currentStationId)
 
         if (dbStationId && inventoryResponse.slots) {
           const inventory = inventoryResponse.slots.map((slot) => ({
@@ -176,21 +186,25 @@ export async function processWsChargeHex(
             powerBankId: slot.terminalId || undefined,
             isCharging: false,
           }))
-          await stationRepository.updateInventory(dbStationId, inventory)
-          await logEventSafe(
-            {
-              station_id: dbStationId,
-              event_type: 'inventory',
-              direction: 'inbound',
-              raw_data: frameHex,
-              parsed_data: toJson({ slotCount: inventoryResponse.slots.length }),
-            },
-            hardwareEventIdempotencyKey({
-              stationExternalId: currentStationId,
-              eventType: 'inventory',
-              messageHex: frameHex,
-            })
-          )
+          try {
+            await stationRepository.updateInventory(dbStationId, inventory)
+            await logEventSafe(
+              {
+                station_id: dbStationId,
+                event_type: 'inventory',
+                direction: 'inbound',
+                raw_data: frameHex,
+                parsed_data: toJson({ slotCount: inventoryResponse.slots.length }),
+              },
+              hardwareEventIdempotencyKey({
+                stationExternalId: currentStationId,
+                eventType: 'inventory',
+                messageHex: frameHex,
+              })
+            )
+          } catch (err) {
+            console.error('[WsCharge] Inventory DB update failed:', err)
+          }
         }
 
         responseData = {
@@ -207,27 +221,28 @@ export async function processWsChargeHex(
         if (!returnMsg) break
         responseBuffer = stationManager.handleReturn(currentStationId, returnMsg)
 
-        if (!dbStationId && currentStationId) {
-          const row = await stationRepository.getByExternalId(currentStationId)
-          dbStationId = row?.id ?? null
-        }
+        dbStationId = await ensureDbStationId(dbStationId, currentStationId)
 
         if (dbStationId) {
-          await processReturn(dbStationId, returnMsg)
-          await logEventSafe(
-            {
-              station_id: dbStationId,
-              event_type: 'return',
-              direction: 'inbound',
-              raw_data: frameHex,
-              parsed_data: toJson(returnMsg),
-            },
-            hardwareEventIdempotencyKey({
-              stationExternalId: currentStationId,
-              eventType: 'return',
-              messageHex: frameHex,
-            })
-          )
+          try {
+            await processReturn(dbStationId, returnMsg)
+            await logEventSafe(
+              {
+                station_id: dbStationId,
+                event_type: 'return',
+                direction: 'inbound',
+                raw_data: frameHex,
+                parsed_data: toJson(returnMsg),
+              },
+              hardwareEventIdempotencyKey({
+                stationExternalId: currentStationId,
+                eventType: 'return',
+                messageHex: frameHex,
+              })
+            )
+          } catch (err) {
+            console.error('[WsCharge] Return processing failed:', err)
+          }
         }
 
         responseData = {
@@ -245,27 +260,28 @@ export async function processWsChargeHex(
         if (!borrowResponse) break
         stationManager.handleBorrowResponse(currentStationId, borrowResponse)
 
-        if (!dbStationId && currentStationId) {
-          const row = await stationRepository.getByExternalId(currentStationId)
-          dbStationId = row?.id ?? null
-        }
+        dbStationId = await ensureDbStationId(dbStationId, currentStationId)
 
         if (dbStationId) {
-          await processBorrowResult(dbStationId, borrowResponse)
-          await logEventSafe(
-            {
-              station_id: dbStationId,
-              event_type: 'borrow',
-              direction: 'inbound',
-              raw_data: frameHex,
-              parsed_data: toJson(borrowResponse),
-            },
-            hardwareEventIdempotencyKey({
-              stationExternalId: currentStationId,
-              eventType: 'borrow',
-              messageHex: frameHex,
-            })
-          )
+          try {
+            await processBorrowResult(dbStationId, borrowResponse)
+            await logEventSafe(
+              {
+                station_id: dbStationId,
+                event_type: 'borrow',
+                direction: 'inbound',
+                raw_data: frameHex,
+                parsed_data: toJson(borrowResponse),
+              },
+              hardwareEventIdempotencyKey({
+                stationExternalId: currentStationId,
+                eventType: 'borrow',
+                messageHex: frameHex,
+              })
+            )
+          } catch (err) {
+            console.error('[WsCharge] Borrow processing failed:', err)
+          }
         }
 
         responseData = {
@@ -288,10 +304,7 @@ export async function processWsChargeHex(
         if (!ejectResponse) break
         stationManager.handleForceEjectResponse(currentStationId, ejectResponse)
 
-        if (!dbStationId && currentStationId) {
-          const row = await stationRepository.getByExternalId(currentStationId)
-          dbStationId = row?.id ?? null
-        }
+        dbStationId = await ensureDbStationId(dbStationId, currentStationId)
 
         if (dbStationId) {
           await logEventSafe(
@@ -407,6 +420,11 @@ async function processBorrowResult(
     orderNumber?: string
   }
 ) {
+  if (!isStationUuid(stationId)) {
+    console.warn('[Borrow] Skipping session match — expected DB station UUID, got:', stationId)
+    return
+  }
+
   const success = borrowResponse.result === protocol.BorrowResult.SUCCESS
   const { slotNumber, terminalId } = borrowResponse
 
@@ -471,6 +489,11 @@ async function processReturn(
     batteryLevel?: number
   }
 ) {
+  if (!isStationUuid(stationId)) {
+    console.warn('[Return] Skipping DB update — expected DB station UUID, got:', stationId)
+    return
+  }
+
   const { slotNumber, terminalId, batteryLevel } = returnMsg
 
   await stationRepository.updateSlot(stationId, slotNumber, {
