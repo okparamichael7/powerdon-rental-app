@@ -10,6 +10,10 @@ import { withPublicApi } from '@/lib/api/public-route';
 import { authorizeSessionAccess } from '@/lib/security/session-access';
 import { validateBody, schemas } from '@/lib/security/validation';
 import { canDispatchHardwareToStation } from '@/lib/rental/hardware-dispatch-guard';
+import {
+  refreshCabinetInventory,
+  resolvePickupSlot,
+} from '@/lib/rental/inventory-sync';
 
 export const POST = withPublicApi(async (
   request: NextRequest,
@@ -85,29 +89,24 @@ export const POST = withPublicApi(async (
       );
     }
 
-    let targetSlot: number;
-    if (typeof slotNumber === 'number') {
-      targetSlot = slotNumber;
-    } else if (session.pickup_slot_number) {
-      targetSlot = session.pickup_slot_number;
-    } else {
-      const availableSlot = await stationRepository.getAvailableSlot(stationId);
-      if (!availableSlot) {
-        return NextResponse.json(
-          { success: false, error: 'No power banks available' },
-          { status: 409 }
-        );
-      }
-      targetSlot = availableSlot.slot_number;
-    }
+    await refreshCabinetInventory(dbStationId, dbStation.external_id);
 
-    const dbSlot = dbStation.slots.find((s) => s.slot_number === targetSlot);
-    if (!dbSlot || !['occupied', 'reserved'].includes(dbSlot.status)) {
+    const preferredSlot =
+      typeof slotNumber === 'number' ? slotNumber : session.pickup_slot_number;
+    const targetSlot = await resolvePickupSlot(dbStationId, preferredSlot);
+    if (!targetSlot) {
       return NextResponse.json(
-        { success: false, error: 'Slot not available' },
+        { success: false, error: 'No power banks available in cabinet inventory', code: 'NO_INVENTORY' },
         { status: 409 }
       );
     }
+
+    if (targetSlot !== session.pickup_slot_number) {
+      await sessionRepository.update(session.id, { pickup_slot_number: targetSlot });
+    }
+
+    const refreshedStation = await stationRepository.getById(dbStationId);
+    const dbSlot = refreshedStation?.slots.find((s) => s.slot_number === targetSlot);
 
     const payload = Buffer.alloc(1);
     payload.writeUInt8(targetSlot, 0);
@@ -153,9 +152,9 @@ export const POST = withPublicApi(async (
           stationId: dbStationId,
           sessionId: session.id,
           slotNumber: targetSlot,
-          terminalId: dbSlot.power_bank_id ?? '',
-          batteryLevel: dbSlot.battery_level ?? 0,
-          formattedTerminalId: dbSlot.power_bank_id ?? '',
+          terminalId: dbSlot?.power_bank_id ?? '',
+          batteryLevel: dbSlot?.battery_level ?? 0,
+          formattedTerminalId: dbSlot?.power_bank_id ?? '',
           unlockedAt: new Date().toISOString(),
           proxyDispatched: true,
         },
@@ -175,7 +174,7 @@ export const POST = withPublicApi(async (
       );
     }
 
-    const batteryLevel = dbSlot.battery_level ?? 0;
+    const batteryLevel = dbSlot?.battery_level ?? 0;
 
     return NextResponse.json({
       success: true,

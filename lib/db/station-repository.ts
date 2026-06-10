@@ -551,8 +551,29 @@ class StationRepository {
     isCharging?: boolean;
   }>): Promise<void> {
     const supabase = await createServiceClient();
-    
-    // Update each slot
+
+    const occupiedInReport = new Set(
+      inventory
+        .filter((slot) => slot.status === 'occupied')
+        .map((slot) => slot.slotNumber),
+    );
+
+    const { data: existingSlots } = await supabase
+      .from('station_slots')
+      .select('slot_number, status')
+      .eq('station_id', stationId);
+
+    for (const row of existingSlots ?? []) {
+      if (row.status === 'reserved') continue;
+      if (!occupiedInReport.has(row.slot_number)) {
+        await this.updateSlot(stationId, row.slot_number, {
+          status: 'empty',
+          power_bank_id: null,
+          battery_level: 0,
+        });
+      }
+    }
+
     for (const slot of inventory) {
       await this.updateSlot(stationId, slot.slotNumber, {
         status: slot.status,

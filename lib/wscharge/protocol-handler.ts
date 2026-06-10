@@ -12,6 +12,8 @@ import {
 import { stationRepository, sessionRepository, rewardRepository } from '@/lib/db'
 import { isStationUuid, resolveDbStationId } from '@/lib/db/station-resolve'
 import type { SlotStatus, Json } from '@/lib/db/types'
+import { borrowResultLabel } from '@/lib/rental/borrow-result-label'
+import { dispatchForceEjectForSlot } from '@/lib/rental/inventory-sync'
 
 function toJson(value: unknown): Json {
   return JSON.parse(JSON.stringify(value)) as Json
@@ -321,6 +323,7 @@ export async function processWsChargeHex(
               messageHex: frameHex,
             })
           )
+          await processForceEjectResult(dbStationId, ejectResponse)
         }
 
         responseData = {
@@ -463,11 +466,12 @@ async function processBorrowResult(
     })
   } else {
     await stationRepository.updateSlot(stationId, slotNumber, {
-      status: 'occupied',
+      status: 'empty',
+      power_bank_id: null,
     })
     await sessionRepository.addEvent(session.id, {
       type: 'error',
-      description: `Failed to unlock slot ${slotNumber}: error code ${borrowResponse.result}`,
+      description: `Failed to unlock slot ${slotNumber}: ${borrowResultLabel(borrowResponse.result)}`,
       metadata: {
         slotNumber,
         errorCode: borrowResponse.result,
@@ -481,7 +485,63 @@ async function processBorrowResult(
       slotNumber,
       borrowResult: borrowResponse.result,
     })
+
+    const station = await stationRepository.getById(stationId)
+    if (station?.external_id) {
+      await dispatchForceEjectForSlot(
+        stationId,
+        station.external_id,
+        slotNumber,
+        session.id,
+        'borrow-failure-fallback',
+      )
+    }
   }
+}
+
+async function processForceEjectResult(
+  stationId: string,
+  ejectResponse: {
+    slotNumber: number
+    result: number
+    terminalId?: string
+  },
+) {
+  if (!isStationUuid(stationId)) return
+  if (ejectResponse.result !== protocol.BorrowResult.SUCCESS) return
+
+  const sessions = await sessionRepository.getAll({
+    stationId,
+    status: ['pending'],
+    limit: 20,
+  })
+
+  const matching = sessions
+    .filter(
+      (s) => s.pickup_station_id === stationId && s.pickup_slot_number === ejectResponse.slotNumber,
+    )
+    .sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )
+
+  const session = matching[0]
+  if (!session) return
+
+  const terminalId = ejectResponse.terminalId
+  await sessionRepository.startSession(session.id, terminalId)
+  await stationRepository.updateSlot(stationId, ejectResponse.slotNumber, {
+    status: 'empty',
+    power_bank_id: null,
+  })
+  await sessionRepository.addEvent(session.id, {
+    type: 'pickup',
+    description: `Power bank ${terminalId || 'unknown'} ejected from slot ${ejectResponse.slotNumber} (force eject)`,
+    metadata: {
+      slotNumber: ejectResponse.slotNumber,
+      powerBankId: terminalId,
+      source: 'force_eject_fallback',
+    },
+  })
 }
 
 async function processReturn(

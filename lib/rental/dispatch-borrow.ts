@@ -8,6 +8,10 @@ import {
   canDispatchHardwareToStation,
   shouldSkipBorrowDispatch,
 } from '@/lib/rental/hardware-dispatch-guard'
+import {
+  refreshCabinetInventory,
+  resolvePickupSlot,
+} from '@/lib/rental/inventory-sync'
 
 export interface DispatchBorrowResult {
   success: boolean
@@ -51,9 +55,24 @@ export async function dispatchBorrowForSession(
     return { success: true, skipped: true }
   }
 
-  const slot = session.pickup_slot_number
+  await refreshCabinetInventory(station.id, productSn)
+
+  const slot = await resolvePickupSlot(station.id, session.pickup_slot_number)
   if (!slot) {
-    return { success: false, error: 'No pickup slot on session' }
+    return { success: false, error: 'No power banks available in cabinet inventory' }
+  }
+
+  if (slot !== session.pickup_slot_number) {
+    await sessionRepository.update(session.id, { pickup_slot_number: slot })
+    await sessionRepository.addEvent(session.id, {
+      type: 'admin',
+      description: `Pickup slot reassigned from ${session.pickup_slot_number ?? '?'} to ${slot} after inventory sync`,
+      metadata: {
+        previousSlot: session.pickup_slot_number,
+        slotNumber: slot,
+        source: 'dispatch-borrow',
+      },
+    })
   }
 
   try {
