@@ -311,6 +311,9 @@ class StationConnectionManager {
       case protocol.CommandCode.REMOTE_REBOOT:
         commandBuffer = protocol.buildRemoteRebootCommand();
         break;
+      case protocol.CommandCode.STACKED_FULL_EJECT:
+        commandBuffer = protocol.buildStackedFullEjectCommand();
+        break;
       default:
         return { success: false, error: 'Unknown command', commandBuffer: Buffer.alloc(0) };
     }
@@ -370,6 +373,103 @@ class StationConnectionManager {
         }
       });
     });
+  }
+
+  /**
+   * Eject all power banks — sends both protocol variants:
+   * - §3.7 standard cabinets: 0x80 with slot 0x00
+   * - §3.8 stacked cabinets (2022+): 0x81 with empty payload
+   */
+  async sendFullEject(stationId: string): Promise<{
+    success: boolean;
+    error?: string;
+    commandBuffer: Buffer;
+    dispatched?: boolean;
+    proxyOnly?: boolean;
+    variants?: Array<'standard' | 'stacked'>;
+  }> {
+    const productSn = await this.resolveProductSn(stationId);
+    const standardBuffer = protocol.buildFullEjectCommand();
+    const stackedBuffer = protocol.buildStackedFullEjectCommand();
+    const frames: Array<{ variant: 'standard' | 'stacked'; buffer: Buffer }> = [
+      { variant: 'standard', buffer: standardBuffer },
+      { variant: 'stacked', buffer: stackedBuffer },
+    ];
+
+    const { proxyUrl } = getWsChargeConfig();
+    const connection = this.connections.get(productSn);
+    const useProxy = (!connection || !connection.isOnline) && Boolean(proxyUrl);
+
+    const dispatchFrames = async (): Promise<{
+      success: boolean;
+      error?: string;
+      variants: Array<'standard' | 'stacked'>;
+      proxyOnly: boolean;
+    }> => {
+      const sent: Array<'standard' | 'stacked'> = [];
+      let lastError: string | undefined;
+
+      for (let i = 0; i < frames.length; i++) {
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        const dispatch = await dispatchCommandToTcpProxy(productSn, frames[i].buffer);
+        if (dispatch.dispatched) {
+          sent.push(frames[i].variant);
+        } else {
+          lastError = dispatch.error;
+        }
+      }
+
+      return {
+        success: sent.length > 0,
+        error: lastError,
+        variants: sent,
+        proxyOnly: true,
+      };
+    };
+
+    if (useProxy) {
+      const outcome = await dispatchFrames();
+      if (!outcome.success) {
+        return {
+          success: false,
+          error: outcome.error || 'Station not connected',
+          commandBuffer: standardBuffer,
+        };
+      }
+      return {
+        success: true,
+        commandBuffer: standardBuffer,
+        dispatched: true,
+        proxyOnly: true,
+        variants: outcome.variants,
+      };
+    }
+
+    const standard = await this.sendCommand(stationId, protocol.CommandCode.FORCE_EJECT);
+    await new Promise((r) => setTimeout(r, 400));
+    const stacked = await this.sendCommand(stationId, protocol.CommandCode.STACKED_FULL_EJECT);
+
+    const sent: Array<'standard' | 'stacked'> = [];
+    if (standard.success) sent.push('standard');
+    if (stacked.success) sent.push('stacked');
+
+    if (sent.length === 0) {
+      return {
+        success: false,
+        error: standard.error || stacked.error || 'Station not connected',
+        commandBuffer: standardBuffer,
+      };
+    }
+
+    return {
+      success: true,
+      commandBuffer: standardBuffer,
+      dispatched: true,
+      proxyOnly: Boolean(standard.proxyOnly || stacked.proxyOnly),
+      variants: sent,
+    };
   }
 
   // Resolve pending command

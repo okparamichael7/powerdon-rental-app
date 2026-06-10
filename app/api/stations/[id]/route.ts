@@ -166,12 +166,17 @@ export async function POST(
         );
         break;
 
-      case 'full_eject':
-        result = await stationManager.sendCommand(
-          stationId, 
-          protocol.CommandCode.FORCE_EJECT
-        );
+      case 'full_eject': {
+        const fullEject = await stationManager.sendFullEject(stationId);
+        result = {
+          success: fullEject.success,
+          error: fullEject.error,
+          commandBuffer: fullEject.commandBuffer,
+          proxyOnly: fullEject.proxyOnly,
+          data: fullEject.variants ? { variants: fullEject.variants } : undefined,
+        };
         break;
+      }
 
       case 'reboot':
         result = await stationManager.sendCommand(

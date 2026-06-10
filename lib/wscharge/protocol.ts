@@ -312,11 +312,16 @@ export function buildForceEjectCommand(slotNumber: number): Buffer {
   return buildMessage(CommandCode.FORCE_EJECT, payload);
 }
 
-// Build full eject command (slot 0x00 = all slots)
+// Build full eject command (slot 0x00 = all slots, protocol §3.7)
 export function buildFullEjectCommand(): Buffer {
   const payload = Buffer.alloc(1);
   payload.writeUInt8(0x00, 0);
   return buildMessage(CommandCode.FORCE_EJECT, payload);
+}
+
+/** Stacked-cabinet full eject (protocol §3.8, command 0x81, no slot payload). */
+export function buildStackedFullEjectCommand(): Buffer {
+  return buildMessage(CommandCode.STACKED_FULL_EJECT);
 }
 
 // Parse force eject response

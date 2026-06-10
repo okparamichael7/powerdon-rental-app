@@ -12,6 +12,8 @@ import {
   buildLoginResponse,
   buildHeartbeatResponse,
   buildBorrowCommand,
+  buildFullEjectCommand,
+  buildStackedFullEjectCommand,
   parseBorrowResponse,
   buildReturnResponse,
   parseReturnMessage,
@@ -105,5 +107,13 @@ describe('WsCharge v5.8P protocol', () => {
   it('maps battery levels to percent', () => {
     assert.equal(batteryLevelToPercent(BatteryLevel.LEVEL_100), 100)
     assert.equal(batteryLevelToPercent(BatteryLevel.LEVEL_20), 20)
+  })
+
+  it('builds standard full eject frame (protocol 3.7.3)', () => {
+    assert.equal(buildFullEjectCommand().toString('hex'), '00088001001122334400')
+  })
+
+  it('builds stacked full eject frame (protocol 3.8.3)', () => {
+    assert.equal(buildStackedFullEjectCommand().toString('hex'), '000781010011223344')
   })
 })

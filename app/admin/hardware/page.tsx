@@ -178,7 +178,14 @@ export default function HardwarePage() {
       const result = await response.json()
       
       if (result.success) {
-        setCommandStatus({ type: 'success', message: `${command} command completed successfully` })
+        const variantNote =
+          command === 'full_eject' && result.data?.variants?.length
+            ? ` (${result.data.variants.join(' + ')} protocol)`
+            : ''
+        setCommandStatus({
+          type: 'success',
+          message: `${command} command sent successfully${variantNote}`,
+        })
         await mutate('/api/stations')
         return { success: true, data: result.data }
       } else {

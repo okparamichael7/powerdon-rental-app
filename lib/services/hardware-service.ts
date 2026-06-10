@@ -233,23 +233,8 @@ class HardwareService implements IHardwareService {
     });
   }
 
-  async fullEject(stationId: string): Promise<ApiResponse<{ ejectedSlots: number }>> {
-    const station = stationManager.getStation(stationId);
-    
-    if (!station || !station.isOnline) {
-      return createErrorResponse(
-        ErrorCodes.STATION_OFFLINE,
-        'Station is not online'
-      );
-    }
-
-    const slotCount = station.inventory.length;
-    
-    // Send full eject command (slot 0x00)
-    const result = await stationManager.sendCommand(
-      stationId,
-      protocol.CommandCode.FORCE_EJECT
-    );
+  async fullEject(stationId: string): Promise<ApiResponse<{ ejectedSlots: number; variants?: string[] }>> {
+    const result = await stationManager.sendFullEject(stationId);
 
     if (!result.success) {
       return createErrorResponse(
@@ -258,8 +243,12 @@ class HardwareService implements IHardwareService {
       );
     }
 
+    const station = stationManager.getStation(stationId);
+    const slotCount = station?.inventory.length ?? 0;
+
     return createSuccessResponse({
       ejectedSlots: slotCount,
+      variants: result.variants,
     });
   }
 
