@@ -7,6 +7,45 @@ export type SessionSyncResult = {
   notFound?: boolean
 }
 
+export async function fetchRentalSessionByCode(
+  sessionCode: string,
+): Promise<{ success: boolean; session?: Record<string, unknown>; error?: string }> {
+  const normalizedCode = sessionCode.trim().toUpperCase()
+  try {
+    const res = await fetch(`/api/rentals/${encodeURIComponent(normalizedCode)}`)
+    const body = await res.json()
+    if (!res.ok || !body.success || !body.session) {
+      return { success: false, error: body.error || 'Session not found' }
+    }
+    return { success: true, session: body.session as Record<string, unknown> }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+/** Wait for checkout borrow dispatch + cabinet pickup to mark the session active. */
+export async function pollRentalSessionAfterCheckout(
+  sessionCode: string,
+  options?: { maxAttempts?: number; intervalMs?: number },
+): Promise<Record<string, unknown> | null> {
+  const maxAttempts = options?.maxAttempts ?? 20
+  const intervalMs = options?.intervalMs ?? 1000
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await fetchRentalSessionByCode(sessionCode)
+    if (result.success && result.session) {
+      const status = String(result.session.status ?? 'pending')
+      if (status === 'active' || status === 'failed') {
+        return result.session
+      }
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+  return null
+}
+
 export async function loadStationFromApi(stationId: string): Promise<{ success: boolean; station?: StationInfo; error?: string }> {
   try {
     const res = await fetch(`/api/stations/${stationId}?source=database`)

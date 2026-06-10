@@ -58,6 +58,22 @@ export const POST = withPublicApi(async (
       );
     }
 
+    if (session.status === 'active') {
+      return NextResponse.json({
+        success: true,
+        data: {
+          stationId: session.pickup_station_id,
+          sessionId: session.id,
+          slotNumber: session.pickup_slot_number,
+          terminalId: '',
+          batteryLevel: 0,
+          formattedTerminalId: '',
+          unlockedAt: session.started_at ?? new Date().toISOString(),
+          alreadyActive: true,
+        },
+      });
+    }
+
     const dbStationId = await resolveDbStationId(stationId);
     if (!dbStationId) {
       return NextResponse.json(

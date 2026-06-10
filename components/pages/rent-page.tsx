@@ -210,21 +210,29 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
         saveSessionToken(sessionId, unlockToken, sessionCode);
       }
       const normalizedCode = sessionCode.trim().toUpperCase();
-      const res = await fetch(`/api/rentals/${encodeURIComponent(normalizedCode)}`);
-      const body = await res.json();
-      if (!res.ok || !body.success) {
-        setErrorMessage(body.error || 'Failed to confirm payment');
+      const pwaApi = getPwaDataLayer();
+      const initial = await pwaApi.fetchRentalSessionByCode(normalizedCode);
+      if (!initial.success || !initial.session) {
+        setErrorMessage(initial.error || 'Failed to confirm payment');
         setError('payment_failed');
         setStep('error');
         return;
       }
 
+      let sessionSnapshot = initial.session;
       setUnlockProgress(60);
+
+      if (sessionSnapshot.status !== 'active') {
+        setUnlockProgress(75);
+        const polled = await pwaApi.pollRentalSessionAfterCheckout(normalizedCode);
+        if (polled) sessionSnapshot = polled;
+      }
+
       if (
+        sessionSnapshot.status === 'pending' &&
         unlockToken &&
         sessionId &&
-        currentStation &&
-        ['pending', 'active'].includes(body.session?.status)
+        currentStation
       ) {
         let unlockFailed = false;
         let unlockError = 'Unlock failed after payment';
@@ -238,7 +246,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
             body: JSON.stringify({
               sessionId: sessionId || normalizedCode,
               unlockToken,
-              slotNumber: body.session?.pickupSlotNumber,
+              slotNumber: sessionSnapshot.pickupSlotNumber,
             }),
           });
           if (unlockRes.ok) {
@@ -255,15 +263,32 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           break;
         }
         if (unlockFailed) {
-          setErrorMessage(unlockError);
-          setError('unlock_failed');
-          setStep('error');
-          return;
+          const refreshed = await pwaApi.fetchRentalSessionByCode(normalizedCode);
+          if (refreshed.success && refreshed.session?.status === 'active') {
+            sessionSnapshot = refreshed.session;
+          } else {
+            setErrorMessage(unlockError);
+            setError('unlock_failed');
+            setStep('error');
+            return;
+          }
+        } else {
+          const refreshed = await pwaApi.fetchRentalSessionByCode(normalizedCode);
+          if (refreshed.success && refreshed.session) {
+            sessionSnapshot = refreshed.session;
+          }
         }
       }
 
+      if (sessionSnapshot.status === 'failed') {
+        setErrorMessage('Power bank release failed. Please try again or contact support.');
+        setError('unlock_failed');
+        setStep('error');
+        return;
+      }
+
       setUser({ email, name: name || undefined, termsAccepted, marketingConsent });
-      const session = getPwaDataLayer().sessionFromCheckoutApi(body.session, currentStation);
+      const session = pwaApi.sessionFromCheckoutApi(sessionSnapshot, currentStation);
       setAssignedSlot(session.slotNumber);
       setActiveSession(session);
       setUnlockProgress(100);

@@ -83,28 +83,30 @@ function buildSessionInsertPayloads(data: CreateSessionData): Record<string, unk
   if (campaignId) full.campaign_id = campaignId;
   if (powerBankId) full.power_bank_id = powerBankId;
 
-  // Prefer payloads without unlock_token first (common on partial DBs before migration 014).
+  const withoutUnlockToken = omitKeys(full, ['unlock_token', 'unlock_token_expires_at'])
+  const trimmedFull = omitKeys(full, [
+      'unlock_token',
+      'unlock_token_expires_at',
+      'reward_status',
+      'reward_threshold_minutes',
+      'reward_qualified',
+      'payment_authorization_id',
+    ])
+  const trimmedMore = omitKeys(full, [
+    'unlock_token',
+    'unlock_token_expires_at',
+    'reward_status',
+    'reward_threshold_minutes',
+    'reward_qualified',
+    'payment_authorization_id',
+    'daily_cap',
+    'campaign_id',
+  ])
+  // When unlock_token is provided, try persisting it first; fall back for partial DBs.
   const templates = [
-    omitKeys(full, ['unlock_token', 'unlock_token_expires_at']),
-    full,
-    omitKeys(full, [
-      'unlock_token',
-      'unlock_token_expires_at',
-      'reward_status',
-      'reward_threshold_minutes',
-      'reward_qualified',
-      'payment_authorization_id',
-    ]),
-    omitKeys(full, [
-      'unlock_token',
-      'unlock_token_expires_at',
-      'reward_status',
-      'reward_threshold_minutes',
-      'reward_qualified',
-      'payment_authorization_id',
-      'daily_cap',
-      'campaign_id',
-    ]),
+    ...(data.unlockToken ? [full, withoutUnlockToken] : [withoutUnlockToken, full]),
+    trimmedFull,
+    trimmedMore,
     {
       session_code: sessionCode,
       user_id: data.userId,

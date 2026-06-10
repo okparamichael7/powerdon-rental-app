@@ -60,7 +60,8 @@ export async function prepareRentalStart(
 
   try {
     const session = await sessionRepository.create(createData)
-    return { session, unlockToken, targetSlot: input.slotNumber }
+    const persistedUnlockToken = await sessionRepository.ensureUnlockToken(session.id)
+    return { session, unlockToken: persistedUnlockToken, targetSlot: input.slotNumber }
   } catch (error) {
     await stationRepository.updateSlot(input.stationId, input.slotNumber, { status: 'occupied' })
     throw error
