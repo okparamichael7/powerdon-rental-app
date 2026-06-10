@@ -1,6 +1,7 @@
 // Session Repository - Database operations for rental sessions
 import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/admin';
+import { isSessionCode, isSessionUuid } from '@/lib/security/session-access';
 import { stationRepository } from './station-repository';
 import {
   filterLegacySessionStatuses,
@@ -281,6 +282,7 @@ class SessionRepository {
 
       if (!error) return data;
       if (error.code === 'PGRST116') return null;
+      if (column === 'id' && isInvalidUuidInputError(error)) return null;
       if (!isSchemaGapError(error)) throw error;
       lastError = error;
     }
@@ -289,6 +291,7 @@ class SessionRepository {
   }
 
   async getById(id: string): Promise<SessionWithRelations | null> {
+    if (!isSessionUuid(id.trim())) return null;
     const supabase = await createServiceClient();
     return this.getOneWithSchemaFallback(supabase, 'id', id);
   }
@@ -297,6 +300,19 @@ class SessionRepository {
     const supabase = await createServiceClient();
     const normalized = code.trim().toUpperCase();
     return this.getOneWithSchemaFallback(supabase, 'session_code', normalized);
+  }
+
+  /** Resolve by session code (e.g. TDNHNNCX) or rental_sessions.id UUID without 22P02. */
+  async getByIdOrCode(identifier: string): Promise<SessionWithRelations | null> {
+    const key = identifier.trim();
+    if (!key) return null;
+    if (isSessionCode(key)) {
+      return this.getByCode(key);
+    }
+    if (isSessionUuid(key)) {
+      return this.getById(key);
+    }
+    return (await this.getByCode(key)) ?? (await this.getById(key));
   }
 
   async getActiveByUserId(userId: string): Promise<SessionWithRelations | null> {

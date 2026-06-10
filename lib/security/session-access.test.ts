@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { denyUuidLookupWithoutAuth, isSessionUuid, verifyUnlockToken } from './session-access'
+import {
+  denyUuidLookupWithoutAuth,
+  isSessionCode,
+  isSessionUuid,
+  verifyUnlockToken,
+} from './session-access'
 
 describe('verifyUnlockToken', () => {
   it('accepts matching non-expired token', () => {
@@ -28,6 +33,13 @@ describe('verifyUnlockToken', () => {
   it('rejects missing token', () => {
     const ok = verifyUnlockToken({ unlock_token: 'abc123', unlock_token_expires_at: null }, null)
     assert.equal(ok, false)
+  })
+})
+
+describe('session identifier shapes', () => {
+  it('treats TDNHNNCX as session code not UUID', () => {
+    assert.equal(isSessionCode('TDNHNNCX'), true)
+    assert.equal(isSessionUuid('TDNHNNCX'), false)
   })
 })
 

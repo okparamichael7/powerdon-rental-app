@@ -14,10 +14,7 @@ export const POST = withPublicApi(async (
 ) => {
   try {
     const { sessionId: sessionIdParam } = await context!.params;
-    let session = await sessionRepository.getById(sessionIdParam);
-    if (!session) {
-      session = await sessionRepository.getByCode(sessionIdParam);
-    }
+    const session = await sessionRepository.getByIdOrCode(sessionIdParam);
 
     if (!session) {
       return NextResponse.json(

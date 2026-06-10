@@ -20,10 +20,7 @@ export const GET = withPublicApi(async (
   try {
     const { sessionId } = await context!.params;
 
-    let session = await sessionRepository.getById(sessionId);
-    if (!session) {
-      session = await sessionRepository.getByCode(sessionId);
-    }
+    const session = await sessionRepository.getByIdOrCode(sessionId);
 
     if (!session) {
       return NextResponse.json(
