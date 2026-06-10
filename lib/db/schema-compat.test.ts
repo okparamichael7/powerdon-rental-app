@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   compactRecord,
+  countWithSessionStatusFallback,
   filterLegacySessionStatuses,
   isInvalidEnumInputError,
   isInvalidUuidInputError,
@@ -92,6 +93,31 @@ describe('filterLegacySessionStatuses', () => {
       filterLegacySessionStatuses(['completed', 'expired', 'failed']),
       ['completed', 'failed'],
     )
+  })
+})
+
+describe('countWithSessionStatusFallback', () => {
+  it('retries without expired after enum rejection', async () => {
+    let attempts = 0
+    const count = await countWithSessionStatusFallback(
+      ['completed', 'expired', 'failed'],
+      async (statuses) => {
+        attempts++
+        if (statuses.includes('expired')) {
+          return {
+            count: null,
+            error: {
+              code: '22P02',
+              message: 'invalid input value for enum session_status: "expired"',
+            },
+          }
+        }
+        return { count: 3, error: null }
+      },
+    )
+
+    assert.equal(attempts, 2)
+    assert.equal(count, 3)
   })
 })
 

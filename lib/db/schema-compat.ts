@@ -48,6 +48,33 @@ export function filterLegacySessionStatuses(statuses: string[]): string[] {
   return statuses.filter((s) => s !== 'expired')
 }
 
+type CountQueryError = { code?: string; message?: string } | null
+
+/** Retry count queries when legacy session_status omits enum variants like expired. */
+export async function countWithSessionStatusFallback(
+  statuses: string[],
+  run: (statuses: string[]) => Promise<{ count: number | null; error: CountQueryError }>,
+): Promise<number> {
+  const attempts = statuses.includes('expired')
+    ? [statuses, filterLegacySessionStatuses(statuses)]
+    : [statuses]
+
+  let lastError: CountQueryError = null
+  for (const attempt of attempts) {
+    if (attempt.length === 0) continue
+    const { count, error } = await run(attempt)
+    if (!error) return count ?? 0
+    if (isInvalidEnumInputError(error)) {
+      lastError = error
+      continue
+    }
+    throw error
+  }
+
+  if (lastError) throw lastError
+  return 0
+}
+
 /** Parse missing column name from PostgREST / Postgres schema errors. */
 export function missingColumnFromError(message: string): string | null {
   const cache = message.match(/Could not find the '([^']+)' column/)

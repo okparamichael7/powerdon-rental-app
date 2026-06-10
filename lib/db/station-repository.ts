@@ -1,6 +1,10 @@
 // Station Repository - Database operations for stations and hardware
 import { createServiceClient } from '@/lib/supabase/admin';
-import { isSchemaGapError, mutateWithSchemaFallback } from './schema-compat';
+import {
+  countWithSessionStatusFallback,
+  isSchemaGapError,
+  mutateWithSchemaFallback,
+} from './schema-compat';
 import { slotRemovalBlockers } from '@/lib/admin/slot-safety';
 import type { Database, DbStation, DbStationSlot, DbHardwareCommand, DbHardwareEvent, Json, StationStatus, SlotStatus, CommandStatus, CommandType } from './types';
 
@@ -346,14 +350,15 @@ class StationRepository {
 
   async countHistoricalRentals(stationId: string): Promise<number> {
     const supabase = await createServiceClient();
-    const { count, error } = await supabase
-      .from('rental_sessions')
-      .select('id', { count: 'exact', head: true })
-      .or(`pickup_station_id.eq.${stationId},return_station_id.eq.${stationId}`)
-      .in('status', ['completed', 'cancelled', 'expired', 'failed']);
-
-    if (error) throw error;
-    return count ?? 0;
+    return countWithSessionStatusFallback(
+      ['completed', 'cancelled', 'expired', 'failed'],
+      async (statuses) =>
+        supabase
+          .from('rental_sessions')
+          .select('id', { count: 'exact', head: true })
+          .or(`pickup_station_id.eq.${stationId},return_station_id.eq.${stationId}`)
+          .in('status', statuses),
+    );
   }
 
   async countHistoricalRentalsForSlot(stationId: string, slotNumber: number): Promise<number> {
