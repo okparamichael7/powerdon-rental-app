@@ -9,6 +9,7 @@ import { resolveDbStationId } from '@/lib/db/station-resolve';
 import { withPublicApi } from '@/lib/api/public-route';
 import { authorizeSessionAccess } from '@/lib/security/session-access';
 import { validateBody, schemas } from '@/lib/security/validation';
+import { canDispatchHardwareToStation } from '@/lib/rental/hardware-dispatch-guard';
 
 export const POST = withPublicApi(async (
   request: NextRequest,
@@ -76,9 +77,10 @@ export const POST = withPublicApi(async (
       );
     }
 
-    if (dbStation.status !== 'online') {
+    const dispatchGuard = canDispatchHardwareToStation(dbStation);
+    if (!dispatchGuard.allowed) {
       return NextResponse.json(
-        { success: false, error: 'Station not connected' },
+        { success: false, error: dispatchGuard.error || 'Station not connected', code: 'STATION_OFFLINE' },
         { status: 503 }
       );
     }

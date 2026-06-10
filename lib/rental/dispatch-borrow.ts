@@ -4,6 +4,10 @@ import { sessionRepository, stationRepository } from '@/lib/db'
 import { stationManager } from '@/lib/wscharge'
 import * as protocol from '@/lib/wscharge/protocol'
 import { logger } from '@/lib/observability/logger'
+import {
+  canDispatchHardwareToStation,
+  shouldSkipBorrowDispatch,
+} from '@/lib/rental/hardware-dispatch-guard'
 
 export interface DispatchBorrowResult {
   success: boolean
@@ -28,16 +32,22 @@ export async function dispatchBorrowForSession(
   }
 
   const station = await stationRepository.getById(session.pickup_station_id)
-  if (!station?.external_id) {
+  if (!station) {
+    return { success: false, error: 'Station not found' }
+  }
+
+  const dispatchGuard = canDispatchHardwareToStation(station)
+  if (!dispatchGuard.allowed) {
+    return { success: false, error: dispatchGuard.error }
+  }
+
+  const productSn = station.external_id
+  if (!productSn) {
     return { success: false, error: 'Station has no hardware external_id' }
   }
 
-  if (station.status !== 'online') {
-    return { success: false, error: 'Station offline' }
-  }
-
   const events = await sessionRepository.getEvents(session.id)
-  if (events.some((e) => e.event_type === 'unlock')) {
+  if (shouldSkipBorrowDispatch(session, events)) {
     return { success: true, skipped: true }
   }
 
@@ -50,7 +60,7 @@ export async function dispatchBorrowForSession(
     const payload = Buffer.alloc(1)
     payload.writeUInt8(slot, 0)
     const result = await stationManager.sendCommand(
-      station.external_id,
+      productSn,
       protocol.CommandCode.BORROW_POWERBANK,
       payload,
     )

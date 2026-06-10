@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { useAppState } from '@/lib/app-state';
+import { rentalSessionAuthHeaders } from '@/lib/client/session-token';
 import { getPwaDataLayer } from '@/lib/data';
 import { formatDuration, formatCurrency, calculateCharge, calculateRewardProgress } from '@/lib/session-store';
 import { formatTime } from '@/lib/utils';
@@ -45,11 +46,41 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
   const [qualifiedForReward, setQualifiedForReward] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [initialSyncDone, setInitialSyncDone] = useState(!!activeSession);
+  const [isRetryingEject, setIsRetryingEject] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void syncActiveSession().finally(() => setInitialSyncDone(true));
   }, [syncActiveSession]);
+
+  const handleRetryEject = async () => {
+    if (!activeSession) return;
+    setIsRetryingEject(true);
+    setError(null);
+    try {
+      const unlockRes = await fetch(`/api/stations/${activeSession.stationId}/unlock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...rentalSessionAuthHeaders(activeSession.id, activeSession.sessionCode),
+        },
+        body: JSON.stringify({
+          sessionId: activeSession.sessionCode,
+          slotNumber: activeSession.slotNumber,
+        }),
+      });
+      if (!unlockRes.ok) {
+        const body = await unlockRes.json().catch(() => ({}));
+        setError(body.error || 'Could not release power bank. Try again or contact support.');
+        return;
+      }
+      await syncActiveSession();
+    } catch {
+      setError('Could not reach the station. Check your connection and try again.');
+    } finally {
+      setIsRetryingEject(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -189,7 +220,9 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
           session={activeSession}
           isOnline={isOnline}
           isRefreshing={isRefreshing}
+          isRetryingEject={isRetryingEject}
           onRefresh={handleRefresh}
+          onRetryEject={handleRetryEject}
           onReturn={handleReturn}
           onSupport={() => onNavigate('support')}
           rewardValue={activeSession.rewardValue}
@@ -243,7 +276,9 @@ function ActiveSessionView({
   session,
   isOnline,
   isRefreshing,
+  isRetryingEject,
   onRefresh,
+  onRetryEject,
   onReturn,
   onSupport,
   rewardValue,
@@ -260,15 +295,19 @@ function ActiveSessionView({
     depositAmount: number;
     rewardThreshold: number;
     campaignName: string;
+    status?: string;
     lastSyncTime?: Date;
   };
   isOnline: boolean;
   isRefreshing: boolean;
+  isRetryingEject: boolean;
   onRefresh: () => void;
+  onRetryEject: () => void;
   onReturn: () => void;
   onSupport: () => void;
   rewardValue: number;
 }) {
+  const isUnlocking = session.status === 'unlocking';
   const rewardProgress = calculateRewardProgress(session.elapsedMinutes, session.rewardThreshold);
   const isQualified = session.elapsedMinutes >= session.rewardThreshold;
   const currentCharge = calculateCharge(session.elapsedMinutes, session.hourlyRate, session.dailyCap);
@@ -279,13 +318,21 @@ function ActiveSessionView({
     <>
       <MobileHeader
         stationContext={{ eventName: session.campaignName, stationId: session.stationId }}
-        statusBadge="Active"
+        statusBadge={isUnlocking ? 'Unlocking' : 'Active'}
         statusBadgeVariant="active"
         showHelp
         onHelp={onSupport}
       />
 
       <PwaBody scroll className="gap-3 py-2">
+        {isUnlocking && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <Spinner className="h-4 w-4 text-amber-700" />
+            <p className="text-xs text-amber-900">
+              Releasing power bank from slot {session.slotNumber}. If it does not eject, tap Retry below.
+            </p>
+          </div>
+        )}
         {!isOnline && (
           <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
             <XCircleIcon size={14} className="shrink-0 text-muted-foreground" />
@@ -351,11 +398,30 @@ function ActiveSessionView({
       </PwaBody>
 
       <PwaActionBar>
-        <Button onClick={onReturn} className={PWA_BTN_CLASS}>
-          Return Power Bank
-        </Button>
+        {isUnlocking ? (
+          <Button
+            onClick={onRetryEject}
+            disabled={isRetryingEject}
+            className={PWA_BTN_CLASS}
+          >
+            {isRetryingEject ? (
+              <>
+                <Spinner className="h-4 w-4" />
+                Releasing…
+              </>
+            ) : (
+              'Retry Release'
+            )}
+          </Button>
+        ) : (
+          <Button onClick={onReturn} className={PWA_BTN_CLASS}>
+            Return Power Bank
+          </Button>
+        )}
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          Return at any station to end rental
+          {isUnlocking
+            ? 'Payment confirmed — waiting for the cabinet to eject your power bank'
+            : 'Return at any station to end rental'}
         </p>
       </PwaActionBar>
     </>

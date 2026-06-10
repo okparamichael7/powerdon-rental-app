@@ -462,21 +462,24 @@ async function processBorrowResult(
       metadata: { slotNumber, powerBankId: terminalId },
     })
   } else {
-    await sessionRepository.update(session.id, {
-      status: 'failed',
-      payment_status: 'cancelled',
-      metadata: {
-        failureReason: 'hardware_unlock_failed',
-        borrowResult: borrowResponse.result,
-      },
-    })
     await stationRepository.updateSlot(stationId, slotNumber, {
       status: 'occupied',
     })
     await sessionRepository.addEvent(session.id, {
       type: 'error',
       description: `Failed to unlock slot ${slotNumber}: error code ${borrowResponse.result}`,
-      metadata: { slotNumber, errorCode: borrowResponse.result },
+      metadata: {
+        slotNumber,
+        errorCode: borrowResponse.result,
+        failureReason: 'hardware_unlock_failed',
+        retryable: true,
+      },
+    })
+    console.warn('[Borrow] Cabinet rejected unlock:', {
+      sessionId: session.id,
+      stationId,
+      slotNumber,
+      borrowResult: borrowResponse.result,
     })
   }
 }
