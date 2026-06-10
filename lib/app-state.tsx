@@ -121,11 +121,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncActiveSession = useCallback(async () => {
-    const sessionId = getStoredItem<string>(STORAGE_KEYS.sessionId);
+    const storedSession = getStoredItem<ActiveSession>(STORAGE_KEYS.session);
+    const sessionId = storedSession?.id ?? getStoredItem<string>(STORAGE_KEYS.sessionId);
     if (!sessionId) return;
     const station = currentStation;
     if (!station) return;
-    const syncResult = await getPwaDataLayer().syncSessionFromApi(sessionId, station);
+    const syncResult = await getPwaDataLayer().syncSessionFromApi(
+      sessionId,
+      station,
+      storedSession?.sessionCode,
+    );
     if ('terminal' in syncResult && syncResult.terminal && !syncResult.active) {
       setActiveSession(null);
     } else if (syncResult.active) {
@@ -238,8 +243,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const cancelRental = useCallback(async () => {
     const sessionId = activeSession?.id ?? getStoredItem<string>(STORAGE_KEYS.sessionId);
+    const sessionCode = activeSession?.sessionCode;
     if (sessionId) {
-      await getPwaDataLayer().cancelRentalFromApi(sessionId);
+      await getPwaDataLayer().cancelRentalFromApi(sessionId, sessionCode);
     }
     setActiveSession(null);
     setCompletedSession(null);

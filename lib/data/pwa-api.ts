@@ -1,5 +1,5 @@
 import type { ActiveSession, StationInfo, UserInfo, UserReward } from '@/lib/session-store'
-import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token'
+import { saveSessionToken, rentalSessionAuthHeaders } from '@/lib/client/session-token'
 
 export async function loadStationFromApi(stationId: string): Promise<{ success: boolean; station?: StationInfo; error?: string }> {
   try {
@@ -36,10 +36,12 @@ export async function loadStationFromApi(stationId: string): Promise<{ success: 
 export async function syncSessionFromApi(
   sessionId: string,
   station: StationInfo,
+  sessionCode?: string,
 ): Promise<{ active: ActiveSession | null; terminal?: boolean }> {
   try {
-    const res = await fetch(`/api/rentals/${sessionId}`, {
-      headers: sessionAuthHeaders(sessionId),
+    const lookupKey = sessionCode ?? sessionId
+    const res = await fetch(`/api/rentals/${encodeURIComponent(lookupKey)}`, {
+      headers: rentalSessionAuthHeaders(sessionId, sessionCode),
     })
     const body = await res.json()
     if (!body.success || !body.session) {
@@ -99,7 +101,7 @@ export async function startRentalFromApi(
       return { success: false, error: body.error || 'Failed to start rental' }
     }
     if (body.session.unlockToken && body.session.id) {
-      saveSessionToken(body.session.id, body.session.unlockToken)
+      saveSessionToken(body.session.id, body.session.unlockToken, body.session.sessionCode)
     }
 
     const session: ActiveSession = {
@@ -132,8 +134,9 @@ export async function completeRentalFromApi(
   session: ActiveSession,
   station: StationInfo | null,
 ): Promise<{ success: boolean; qualifiedForReward: boolean; reward?: UserReward }> {
-  const res = await fetch(`/api/rentals/${session.id}`, {
-    headers: sessionAuthHeaders(session.id),
+  const lookupKey = session.sessionCode || session.id
+  const res = await fetch(`/api/rentals/${encodeURIComponent(lookupKey)}`, {
+    headers: rentalSessionAuthHeaders(session.id, session.sessionCode),
   })
   const body = await res.json()
   if (!res.ok || !body.success || !body.session) {
@@ -164,12 +167,15 @@ export async function completeRentalFromApi(
   return { success: true, qualifiedForReward: qualified, reward }
 }
 
-export async function cancelRentalFromApi(sessionId: string): Promise<void> {
+export async function cancelRentalFromApi(
+  sessionId: string,
+  sessionCode?: string,
+): Promise<void> {
   await fetch(`/api/rentals/${sessionId}/cancel`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...sessionAuthHeaders(sessionId),
+      ...rentalSessionAuthHeaders(sessionId, sessionCode),
     },
   })
 }
@@ -224,15 +230,17 @@ export async function lookupSessionByCode(
 
 export async function waitForSessionCompletion(
   sessionId: string,
-  options?: { intervalMs?: number; maxAttempts?: number },
+  options?: { intervalMs?: number; maxAttempts?: number; sessionCode?: string },
 ): Promise<{ completed: boolean; timedOut?: boolean }> {
   const intervalMs = options?.intervalMs ?? 3000
   const maxAttempts = options?.maxAttempts ?? 100
+  const sessionCode = options?.sessionCode
+  const lookupKey = sessionCode ?? sessionId
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionId)}`, {
-        headers: sessionAuthHeaders(sessionId),
+      const res = await fetch(`/api/rentals/${encodeURIComponent(lookupKey)}`, {
+        headers: rentalSessionAuthHeaders(sessionId, sessionCode),
       })
       const body = await res.json()
       if (body.success && body.session) {

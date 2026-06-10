@@ -490,6 +490,59 @@ npm run build  # pass
 
 ---
 
+## Round 11 — Stripe checkout + unlock remediation (strict)
+
+**Scope:** Production errors — Payment Failed (`Session not found`), Unlock Failed (`Station not connected`), Stripe `consumer_verification_code_invalid`.  
+**Build/tests (Round 11 final):** `npm run test` pass, `npm run build` pass.
+
+### Round 11 — Pre-remediation audit
+
+| # | Finding | Pre status | Evidence / gap |
+|---|---------|------------|----------------|
+| R11-1 | Post-checkout rental lookup used UUID without token → `Session not found` | **Partially Resolved** | `rent-page.tsx` used `sessionId \|\| sessionCode` for `/api/rentals/` |
+| R11-2 | Unlock API required in-memory TCP on Vercel | **Partially Resolved** | `unlock/route.ts:74-79` `getStation().isOnline` before proxy dispatch |
+| R11-3 | Webhook delay left `payment_status` pending after Stripe UI complete | **Partially Resolved** | `getCheckoutStatus` polled DB only; no Stripe sync |
+| R11-4 | Stripe `embedded` ui_mode deprecated | **Fully Resolved** | `payment-service.ts` `embedded_page` (commit `87d8d71`) |
+| R11-5 | Duplicate open session on checkout retry | **Fully Resolved** | `stripe.ts` pending reuse/abandon (commit `87d8d71`) |
+| R11-6 | Webhook DB writes used invalid columns | **Fully Resolved** | `webhook-state-mappers.ts`, `webhook-persistence.ts` (commit `87d8d71`) |
+| R11-7 | Bank verification code surfaced as raw Stripe JSON | **Partially Resolved** | `checkout-errors.ts` added; no unit test initially |
+| R11-8 | PWA status sync still used UUID-only rental lookup | **Still Open** | `pwa-api.ts:syncSessionFromApi` UUID path |
+| R11-9 | Unlock allowed without payment when `payment_intent_id` null | **Still Open** | `unlock/route.ts` gated only when PI id present |
+| R11-10 | Stripe sync missed string `payment_intent` refs | **Still Open** | `getCheckoutStatus` required expanded PI object |
+
+### Round 11 — Remediation
+
+| Item | Change |
+|------|--------|
+| R11-1 | `rent-page.tsx` — `/api/rentals/{sessionCode}` + `rentalSessionAuthHeaders` |
+| R11-2 | `unlock/route.ts` — DB `stations.status === 'online'`, `sendCommand` + `proxyOnly` success path |
+| R11-3 | `getCheckoutStatus(sessionCode, checkoutSessionId?)` — Stripe checkout sync fallback, 30 poll attempts |
+| R11-7 | `tests/unit/stripe/checkout-errors.test.ts` |
+| R11-8 | `pwa-api.ts`, `app-state.tsx` — session code lookup + `rentalSessionAuthHeaders` |
+| R11-9 | `unlock/route.ts` — require `authorized`/`captured` when `STRIPE_SECRET_KEY` set |
+| R11-10 | `getCheckoutStatus` — `getPaymentIntent()` when PI id is string reference |
+
+### Round 11 — Final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| R11-1 | Post-checkout `Session not found` | **Fully Resolved** | `rent-page.tsx:208-210` session code lookup; `rentalSessionAuthHeaders` |
+| R11-2 | Unlock `Station not connected` on Vercel | **Fully Resolved** | `unlock/route.ts:74-155` DB online + `sendCommand` proxy path |
+| R11-3 | Payment pending after Stripe UI complete | **Fully Resolved** | `stripe.ts:getCheckoutStatus` Stripe sync; `checkout.tsx:30` poll 30× |
+| R11-4 | Stripe `embedded` deprecated | **Fully Resolved** | `lib/stripe/payment-service.ts:381` `embedded_page` |
+| R11-5 | One open session per user conflict | **Fully Resolved** | `app/actions/stripe.ts` reuse/abandon pending |
+| R11-6 | Webhook rental session update failures | **Fully Resolved** | `webhook-state-mappers.ts`, `webhook-persistence.ts` |
+| R11-7 | Opaque Stripe verification errors | **Fully Resolved** | `checkout-errors.ts`, `checkout-errors.test.ts` |
+| R11-8 | PWA session sync UUID-only | **Fully Resolved** | `pwa-api.ts:syncSessionFromApi`, `app-state.tsx:123-131` |
+| R11-9 | Unlock without authorized payment | **Fully Resolved** | `unlock/route.ts:40-49` |
+| R11-10 | Checkout sync string PI reference | **Fully Resolved** | `stripe.ts:getCheckoutStatus` + `getPaymentIntent` |
+| R11-11 | Cabinet TCP offline on Hetzner proxy | **Not Actionable** | Requires live hardware + proxy connection |
+| R11-12 | User enters wrong bank OTP | **Not Actionable** | User input; mapped to friendly message (R11-7) |
+
+**Round 11 summary:** 10 Fully Resolved, 0 Partially Resolved, 0 Still Open, 2 Not Actionable.
+
+---
+
 ## Historical rounds (Rounds 3–7)
 
 Earlier remediation rounds (enterprise security, admin dashboard, C3 UUID guard, staff roles) are documented above. Round 7 admin final: 41 Fully Resolved, 5 Partially Resolved, 0 Still Open. Round 8 completes PWA customer app production readiness.

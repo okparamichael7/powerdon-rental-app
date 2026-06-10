@@ -17,7 +17,8 @@ import { formatTime } from '@/lib/utils';
 import { RentalCheckout } from '@/components/stripe/checkout';
 import { isStripeCheckoutEnabled, isStripeMisconfigured } from '@/lib/services/config';
 import { getPwaDataLayer } from '@/lib/data';
-import { saveSessionToken, sessionAuthHeaders } from '@/lib/client/session-token';
+import { saveSessionToken, rentalSessionAuthHeaders } from '@/lib/client/session-token';
+import { formatStripeCheckoutError } from '@/lib/stripe/checkout-errors';
 import { formatDailyCapLabel, formatLadderRateLabel, LADDER_PRICING } from '@/lib/pwa/pricing-display';
 import {
   PwaScreen, PwaBody, PwaScrollBody, PwaActionBar,
@@ -185,7 +186,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
   };
 
   const handleStripeCheckoutError = useCallback((msg: string) => {
-    setErrorMessage(msg);
+    setErrorMessage(formatStripeCheckoutError(msg));
     setError('payment_failed');
     setStep('error');
   }, []);
@@ -202,11 +203,10 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
 
     try {
       if (unlockToken && sessionId) {
-        saveSessionToken(sessionId, unlockToken);
+        saveSessionToken(sessionId, unlockToken, sessionCode);
       }
-      const lookupId = sessionId || sessionCode;
-      const res = await fetch(`/api/rentals/${encodeURIComponent(lookupId)}`, {
-        headers: sessionAuthHeaders(sessionId || sessionCode),
+      const res = await fetch(`/api/rentals/${encodeURIComponent(sessionCode)}`, {
+        headers: rentalSessionAuthHeaders(sessionId ?? sessionCode, sessionCode),
       });
       const body = await res.json();
       if (!res.ok || !body.success) {
@@ -227,7 +227,7 @@ export function RentPage({ isOnline, onNavigate }: RentPageProps) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...sessionAuthHeaders(sessionId),
+            ...rentalSessionAuthHeaders(sessionId, sessionCode),
           },
           body: JSON.stringify({
             sessionId,

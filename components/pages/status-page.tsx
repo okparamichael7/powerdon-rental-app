@@ -73,6 +73,7 @@ export function StatusPage({ isOnline, onNavigate }: StatusPageProps) {
       const wait = await getPwaDataLayer().waitForSessionCompletion(activeSession.id, {
         intervalMs: 3000,
         maxAttempts: 100,
+        sessionCode: activeSession.sessionCode,
       });
 
       clearInterval(progressInterval);

@@ -38,7 +38,7 @@ export async function completeRentalFromApi(session: ActiveSession) {
   return { success: true as const, qualifiedForReward: qualified, reward }
 }
 
-export async function cancelRentalFromApi(_sessionId: string) {
+export async function cancelRentalFromApi(_sessionId: string, _sessionCode?: string) {
   /* no-op */
 }
 

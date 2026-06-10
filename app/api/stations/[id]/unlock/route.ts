@@ -39,7 +39,6 @@ export const POST = withPublicApi(async (
 
     if (
       process.env.STRIPE_SECRET_KEY &&
-      session.payment_intent_id &&
       session.payment_status !== 'authorized' &&
       session.payment_status !== 'captured'
     ) {
@@ -71,8 +70,7 @@ export const POST = withPublicApi(async (
       );
     }
 
-    const connection = stationManager.getStation(dbStation.external_id);
-    if (!connection || !connection.isOnline) {
+    if (dbStation.status !== 'online') {
       return NextResponse.json(
         { success: false, error: 'Station not connected' },
         { status: 503 }
@@ -85,18 +83,18 @@ export const POST = withPublicApi(async (
     } else if (session.pickup_slot_number) {
       targetSlot = session.pickup_slot_number;
     } else {
-      const bestSlot = stationManager.getBestAvailableSlot(dbStation.external_id);
-      if (!bestSlot) {
+      const availableSlot = await stationRepository.getAvailableSlot(stationId);
+      if (!availableSlot) {
         return NextResponse.json(
           { success: false, error: 'No power banks available' },
           { status: 409 }
         );
       }
-      targetSlot = bestSlot.slotNumber;
+      targetSlot = availableSlot.slot_number;
     }
 
-    const slotInfo = connection.inventory.find(s => s.slotNumber === targetSlot);
-    if (!slotInfo) {
+    const dbSlot = dbStation.slots.find((s) => s.slot_number === targetSlot);
+    if (!dbSlot || !['occupied', 'reserved'].includes(dbSlot.status)) {
       return NextResponse.json(
         { success: false, error: 'Slot not available' },
         { status: 409 }
@@ -119,8 +117,41 @@ export const POST = withPublicApi(async (
           error: result.error || 'Failed to unlock power bank',
           code: 'UNLOCK_FAILED',
         },
-        { status: 500 }
+        { status: result.error?.includes('not connected') ? 503 : 500 }
       );
+    }
+
+    if (result.proxyOnly || !result.data) {
+      await stationRepository.createCommand({
+        station_id: dbStation.id,
+        command_type: 'borrow',
+        slot_number: targetSlot,
+        payload: { sessionCode: session.session_code },
+        status: 'sent',
+        priority: 1,
+        session_id: session.id,
+        metadata: { source: 'unlock-api', proxyOnly: true },
+      });
+
+      await sessionRepository.addEvent(session.id, {
+        type: 'unlock',
+        description: `Unlock command dispatched for slot ${targetSlot}`,
+        metadata: { slotNumber: targetSlot, source: 'unlock-api', proxyOnly: true },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          stationId,
+          sessionId: session.id,
+          slotNumber: targetSlot,
+          terminalId: dbSlot.power_bank_id ?? '',
+          batteryLevel: dbSlot.battery_level ?? 0,
+          formattedTerminalId: dbSlot.power_bank_id ?? '',
+          unlockedAt: new Date().toISOString(),
+          proxyDispatched: true,
+        },
+      });
     }
 
     const borrowResponse = result.data;
@@ -136,7 +167,7 @@ export const POST = withPublicApi(async (
       );
     }
 
-    const batteryLevel = slotInfo.batteryLevel;
+    const batteryLevel = dbSlot.battery_level ?? 0;
 
     return NextResponse.json({
       success: true,

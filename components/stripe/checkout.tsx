@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js'
 
 import { startRentalCheckout, getCheckoutStatus, type StartRentalCheckoutParams } from '@/app/actions/stripe'
 import { getErrorMessage } from '@/lib/errors/get-error-message'
+import { formatStripeCheckoutError } from '@/lib/stripe/checkout-errors'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -46,6 +47,7 @@ export function RentalCheckout({
   const [sessionCode, setSessionCode] = useState<string | null>(null)
   const [unlockToken, setUnlockToken] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const onErrorRef = useRef(onError)
@@ -88,6 +90,7 @@ export function RentalCheckout({
           setSessionCode(result.sessionCode)
           if (result.unlockToken) setUnlockToken(result.unlockToken)
           if (result.sessionId) setSessionId(result.sessionId)
+          if (result.checkoutSessionId) setCheckoutSessionId(result.checkoutSessionId)
         } else {
           const message =
             result.error ||
@@ -120,11 +123,14 @@ export function RentalCheckout({
     if (!sessionCode) return
 
     // Poll for status
-    const maxAttempts = 10
+    const maxAttempts = 30
     let attempt = 0
     
     while (attempt < maxAttempts) {
-      const status = await getCheckoutStatus(sessionCode)
+      const status = await getCheckoutStatus(
+        sessionCode,
+        checkoutSessionId ?? undefined,
+      )
       
       if (status.status === 'completed') {
         onSuccess?.(sessionCode, unlockToken ?? undefined, sessionId ?? undefined)
@@ -132,7 +138,7 @@ export function RentalCheckout({
       }
       
       if (status.status === 'failed' || status.status === 'expired') {
-        onError?.(status.error || 'Payment failed')
+        onError?.(formatStripeCheckoutError(status.error || 'Payment failed'))
         return
       }
       
@@ -142,7 +148,7 @@ export function RentalCheckout({
     }
     
     onError?.('Timeout waiting for payment confirmation')
-  }, [sessionCode, unlockToken, sessionId, onSuccess, onError])
+  }, [sessionCode, checkoutSessionId, unlockToken, sessionId, onSuccess, onError])
 
   if (loading) {
     return (

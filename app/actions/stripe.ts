@@ -1,6 +1,12 @@
 'use server'
 
-import { createCheckoutSession, getOrCreateCustomer, getCheckoutSession } from '@/lib/stripe/payment-service'
+import {
+  createCheckoutSession,
+  getOrCreateCustomer,
+  getCheckoutSession,
+  getPaymentIntent,
+} from '@/lib/stripe/payment-service'
+import { updateRentalSessionFromWebhook } from '@/lib/stripe/webhook-persistence'
 import { DEFAULT_PRICING, generateIdempotencyKey } from '@/lib/stripe/types'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { userRepository, sessionRepository, stationRepository } from '@/lib/db'
@@ -22,6 +28,7 @@ export interface StartRentalCheckoutResult {
   clientSecret?: string
   sessionCode?: string
   sessionId?: string
+  checkoutSessionId?: string
   unlockToken?: string
   error?: string
 }
@@ -154,6 +161,7 @@ export async function startRentalCheckout(
       clientSecret: checkoutResult.clientSecret,
       sessionCode,
       sessionId: createdSession.id,
+      checkoutSessionId: checkoutResult.sessionId,
       unlockToken,
     }
   } catch (error) {
@@ -172,7 +180,15 @@ export async function startRentalCheckout(
   }
 }
 
-export async function getCheckoutStatus(sessionCode: string) {
+function isCheckoutPaymentComplete(session: DbRentalSession): boolean {
+  return (
+    session.status === 'active' ||
+    session.payment_status === 'authorized' ||
+    session.payment_status === 'captured'
+  )
+}
+
+export async function getCheckoutStatus(sessionCode: string, checkoutSessionId?: string) {
   try {
     const session = await sessionRepository.getByCode(sessionCode)
 
@@ -180,9 +196,56 @@ export async function getCheckoutStatus(sessionCode: string) {
       return { status: 'failed' as const, error: 'Session not found' }
     }
 
-    if (session.status === 'active' || session.payment_status === 'authorized') {
+    if (isCheckoutPaymentComplete(session)) {
       return { status: 'completed' as const, paymentStatus: session.payment_status }
     }
+
+    if (
+      checkoutSessionId &&
+      process.env.STRIPE_SECRET_KEY &&
+      session.payment_status === 'pending'
+    ) {
+      try {
+        const checkout = await getCheckoutSession(checkoutSessionId)
+        const paymentIntentId =
+          typeof checkout.payment_intent === 'string'
+            ? checkout.payment_intent
+            : checkout.payment_intent?.id
+        let piStatus =
+          typeof checkout.payment_intent === 'string'
+            ? undefined
+            : checkout.payment_intent?.status
+
+        if (paymentIntentId && !piStatus) {
+          const paymentIntent = await getPaymentIntent(paymentIntentId)
+          piStatus = paymentIntent.status
+        }
+
+        if (
+          checkout.status === 'complete' &&
+          paymentIntentId &&
+          (piStatus === 'requires_capture' || piStatus === 'succeeded')
+        ) {
+          await updateRentalSessionFromWebhook(sessionCode, {
+            payment_status: 'authorized',
+            payment_intent_id: paymentIntentId,
+            metadata: {
+              checkout_session_id: checkout.id,
+              payment_confirmed_at: new Date().toISOString(),
+              source: 'checkout_status_sync',
+            },
+          })
+          return { status: 'completed' as const, paymentStatus: 'authorized' as const }
+        }
+      } catch (syncError) {
+        logger.warn('Checkout status Stripe sync failed', {
+          sessionCode,
+          checkoutSessionId,
+          error: syncError instanceof Error ? syncError.message : String(syncError),
+        })
+      }
+    }
+
     if (session.status === 'failed' || session.payment_status === 'failed') {
       return { status: 'failed' as const, paymentStatus: session.payment_status }
     }
