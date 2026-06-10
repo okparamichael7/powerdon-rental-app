@@ -543,6 +543,52 @@ npm run build  # pass
 
 ---
 
+## Round 12 — Post-payment `Failed to get session` (strict)
+
+**Scope:** Production `Payment Failed` with `{ success: false, error: "Failed to get session" }` after Stripe checkout (commit `6eed003`).  
+**Build/tests (Round 12 final):** `npm run test` **193/193** pass, `npm run build` pass.
+
+### Round 12 — Pre-remediation audit
+
+| # | Finding | Pre status | Evidence / gap |
+|---|---------|------------|----------------|
+| R12-1 | Post-payment confirm hit full-access `/api/rentals` path → 500 | **Still Open** | `rent-page.tsx` sent `rentalSessionAuthHeaders` → `getEvents` + embeds in catch at `route.ts:124` |
+| R12-2 | `getEvents` threw on schema gaps | **Still Open** | `session-repository.ts:getEvents` re-threw PostgREST errors |
+| R12-3 | Session load embed fallbacks exhausted on partial DB | **Partially Resolved** | `getOneWithSchemaFallback` had 3 selects; no bare `*` fallback |
+| R12-4 | Session code case sensitivity | **Partially Resolved** | `getByCode` did not normalize case |
+| R12-5 | Public view missing pricing fields for checkout mapping | **Partially Resolved** | `toPublicSessionView` omitted `depositAmount` / rates |
+| R12-6 | User-facing message for 500 | **Partially Resolved** | Raw `Failed to get session` shown in UI |
+
+### Round 12 — Remediation (commit `6eed003`)
+
+| Item | Change |
+|------|--------|
+| R12-1 | `rent-page.tsx:208-209` — public session-code GET, no auth headers on confirm |
+| R12-2 | `session-repository.ts:getEvents` — `isSchemaGapError` → `[]` |
+| R12-3 | `getOneWithSchemaFallback` — 4th select `'*'` |
+| R12-4 | `getByCode` — `trim().toUpperCase()` |
+| R12-5 | `toPublicSessionView` — `depositAmount`, `hourlyRate`, `dailyCap`, `startedAt` |
+| R12-6 | `checkout-errors.ts` + test; `route.ts` logs + `SESSION_LOOKUP_ERROR` code |
+
+### Round 12 — Final verification (strict)
+
+| # | Finding | Final status | Evidence |
+|---|---------|--------------|----------|
+| R12-1 | Post-payment `Failed to get session` 500 | **Fully Resolved** | `rent-page.tsx:208-209` public lookup; `route.ts:42-49` public branch |
+| R12-2 | `getEvents` crashes rentals API | **Fully Resolved** | `session-repository.ts:507-524`; `route.ts:62-70` try/catch |
+| R12-3 | Partial DB schema on session load | **Fully Resolved** | `session-repository.ts:271` bare `*` fallback |
+| R12-4 | Session code case mismatch | **Fully Resolved** | `session-repository.ts:298-299`; `rent-page.tsx:208` |
+| R12-5 | Checkout mapping without full access | **Fully Resolved** | `session-access.ts:88-91` |
+| R12-6 | Opaque 500 error in UI | **Fully Resolved** | `checkout-errors.ts`; `checkout-errors.test.ts` |
+| R12-7 | Unlock still uses token in POST body | **Fully Resolved** | `rent-page.tsx:225-235` unchanged; separate from confirm GET |
+| R12-8 | R11 items regressed | **Fully Resolved** | Re-verified `unlock/route.ts:73-155`, `stripe.ts:getCheckoutStatus`, `pwa-api.ts` |
+
+**Round 12 summary:** 8 Fully Resolved, 0 Partially Resolved, 0 Still Open, 0 Deferred.
+
+**Deploy:** `6eed003` on `main` — verify on `app.powerdon.nl` after Vercel deploy.
+
+---
+
 ## Historical rounds (Rounds 3–7)
 
 Earlier remediation rounds (enterprise security, admin dashboard, C3 UUID guard, staff roles) are documented above. Round 7 admin final: 41 Fully Resolved, 5 Partially Resolved, 0 Still Open. Round 8 completes PWA customer app production readiness.
