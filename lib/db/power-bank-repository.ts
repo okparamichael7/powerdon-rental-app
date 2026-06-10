@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/admin'
+import { mutateWithSchemaFallback } from './schema-compat'
 import type { DbPowerBank } from './types'
 
 const UUID_RE =
@@ -90,20 +91,35 @@ export class PowerBankRepository {
     }
 
     const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from('power_banks')
-      .insert({
-        external_id: externalId,
-        status: 'available',
-        current_station_id: ctx?.stationId ?? null,
-        current_slot_number: ctx?.slotNumber ?? null,
-        battery_level: ctx?.batteryLevel ?? null,
-      })
-      .select('id')
-      .single()
-
-    if (error) throw error
-    return data.id
+    try {
+      const row = await mutateWithSchemaFallback<{ id: string }>(
+        {
+          external_id: externalId,
+          // Legacy v0 partial DBs: power_banks.device_id NOT NULL (terminal hex).
+          device_id: externalId,
+          status: 'available',
+          current_station_id: ctx?.stationId ?? null,
+          current_slot_number: ctx?.slotNumber ?? null,
+          battery_level: ctx?.batteryLevel ?? null,
+        },
+        async (payload) => {
+          const { data, error } = await supabase
+            .from('power_banks')
+            .insert(payload)
+            .select('id')
+            .single()
+          return { data, error }
+        },
+      )
+      return row.id
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === '23505') {
+        const existing = await this.getByExternalId(externalId)
+        return existing?.id ?? null
+      }
+      throw error
+    }
   }
 
   async update(id: string, updates: Partial<DbPowerBank>): Promise<void> {

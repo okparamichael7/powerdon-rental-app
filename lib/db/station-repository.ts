@@ -578,14 +578,23 @@ class StationRepository {
     for (const slot of inventory) {
       let powerBankDbId: string | null = null
       if (slot.status === 'occupied' && slot.powerBankId) {
-        powerBankDbId = await powerBankRepository.resolveDbPowerBankId(
-          slot.powerBankId,
-          {
+        try {
+          powerBankDbId = await powerBankRepository.resolveDbPowerBankId(
+            slot.powerBankId,
+            {
+              stationId,
+              slotNumber: slot.slotNumber,
+              batteryLevel: slot.batteryLevel,
+            },
+          )
+        } catch (err) {
+          console.error('[DB] Power bank upsert failed during inventory sync', {
             stationId,
             slotNumber: slot.slotNumber,
-            batteryLevel: slot.batteryLevel,
-          },
-        )
+            terminalId: slot.powerBankId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
 
       await this.updateSlot(stationId, slot.slotNumber, {

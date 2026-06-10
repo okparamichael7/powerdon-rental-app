@@ -107,6 +107,7 @@ export interface DbStationMaintenanceRecord {
 
 export interface DbPowerBank {
   id: string;
+  device_id?: string | null;
   external_id: string;
   model: string | null;
   capacity_mah: number;

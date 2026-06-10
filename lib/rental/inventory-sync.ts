@@ -37,7 +37,12 @@ export async function resolvePickupSlot(
   if (!station?.slots?.length) return null
 
   const occupied = station.slots
-    .filter((s) => s.status === 'occupied' && s.power_bank_id)
+    .filter((s) => {
+      if (s.status !== 'occupied') return false
+      if (s.power_bank_id) return true
+      const meta = s.metadata as { terminal_external_id?: string } | null
+      return Boolean(meta?.terminal_external_id)
+    })
     .sort((a, b) => (b.battery_level ?? 0) - (a.battery_level ?? 0))
 
   if (!occupied.length) return null
